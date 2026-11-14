@@ -108,3 +108,106 @@ async fn lenient_accepts_unknown_client_and_missing_pkce() {
     .await;
     assert_eq!(s, 200);
 }
+
+fn login_form(extra: &[(&'static str, &'static str)]) -> Vec<(&'static str, &'static str)> {
+    let mut f = vec![
+        ("client_id", "example-app"),
+        (
+            "redirect_uri",
+            "http://localhost:3000/api/auth/callback/auth0",
+        ),
+        ("response_type", "code"),
+        ("scope", "openid profile email"),
+        ("state", "st"),
+        ("user", "alice"),
+    ];
+    for &(k, v) in extra {
+        f.retain(|&(a, _)| a != k);
+        f.push((k, v));
+    }
+    f
+}
+
+#[tokio::test]
+async fn login_issues_code_and_redirects() {
+    let (s, h, _) = send(
+        &app(STRICT),
+        post_form("/auth0/authorize", &login_form(&[]), &[]),
+    )
+    .await;
+    assert_eq!(s, 302);
+    let loc = location(&h);
+    assert!(loc.starts_with("http://localhost:3000/api/auth/callback/auth0?code="));
+    assert_eq!(query_param(&loc, "state").unwrap(), "st");
+}
+
+#[tokio::test]
+async fn tampered_hidden_redirect_is_rejected() {
+    let (s, h, _) = send(
+        &app(STRICT),
+        post_form(
+            "/auth0/authorize",
+            &login_form(&[("redirect_uri", "http://evil.example.com/cb")]),
+            &[],
+        ),
+    )
+    .await;
+    assert_eq!(s, 400);
+    assert!(h.get("location").is_none());
+}
+
+#[tokio::test]
+async fn bad_json_rerenders_with_input_kept() {
+    let (s, _, b) = send(
+        &app(STRICT),
+        post_form(
+            "/auth0/authorize",
+            &login_form(&[("override_claims", "{not json")]),
+            &[],
+        ),
+    )
+    .await;
+    assert_eq!(s, 400);
+    assert!(b.contains("Override claims must be a JSON object"));
+    assert!(b.contains("{not json"));
+}
+
+#[tokio::test]
+async fn custom_user_needs_sub() {
+    let (s, _, b) = send(
+        &app(STRICT),
+        post_form(
+            "/auth0/authorize",
+            &login_form(&[("user", "__custom__")]),
+            &[],
+        ),
+    )
+    .await;
+    assert_eq!(s, 400);
+    assert!(b.contains("Custom user needs a sub"));
+    let (s, _, _) = send(
+        &app(STRICT),
+        post_form(
+            "/auth0/authorize",
+            &login_form(&[
+                ("user", "__custom__"),
+                ("custom_sub", "c-1"),
+                ("custom_claims", r#"{"email":"carol@example.com"}"#),
+            ]),
+            &[],
+        ),
+    )
+    .await;
+    assert_eq!(s, 302);
+}
+
+#[tokio::test]
+async fn unknown_user_is_rejected() {
+    let (s, _, b) = send(
+        &app(STRICT),
+        post_form("/auth0/authorize", &login_form(&[("user", "mallory")]), &[]),
+    )
+    .await;
+    assert_eq!(s, 400);
+    assert!(b.contains("Choose a user"));
+}

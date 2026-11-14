@@ -1,15 +1,16 @@
 //! The authorization endpoint: request validation and the login page.
 
 use axum::{
-    extract::{Query, State},
-    http::{HeaderMap, StatusCode},
+    extract::{Form, Query, State},
+    http::{HeaderMap, HeaderValue, StatusCode, header},
     response::{Html, IntoResponse, Response},
 };
 use serde::{Deserialize, Serialize};
 
 use crate::clients::{ResolvedClient, find_client, redirect_uri_matches, register_lenient};
-use crate::error::OAuthError;
-use crate::state::{IssuerCtx, PkceMethod};
+use crate::config::Claims;
+use crate::error::{OAuthError, append_query};
+use crate::state::{CodeGrant, IssuerCtx, PkceMethod, Subject, now_secs};
 use crate::templates::{CONTEXT_VERSION, ErrorContext, LoginContext, STATIC_BASE, UserOption};
 
 /// The query parameters of `GET /authorize` and the hidden fields of the login form.
@@ -193,13 +194,28 @@ pub async fn authorize_get(
     Query(p): Query<AuthorizeParams>,
 ) -> Response {
     match validate(&ctx, &p) {
-        Ok(request) => login_page(&ctx, &request),
+        Ok(request) => login_page(&ctx, &request, StatusCode::OK, None, &KeptInput::default()),
         Err(Rejection::Redirect(error)) => error.into_response(),
         Err(Rejection::Page(status, message)) => error_page(&ctx, status, message),
     }
 }
 
-fn login_page(ctx: &IssuerCtx, request: &ValidRequest) -> Response {
+/// The login form text that a re-rendered page keeps.
+#[derive(Debug, Default)]
+struct KeptInput {
+    custom_sub: String,
+    custom_claims: String,
+    override_claims: String,
+}
+
+/// Renders the login page. `error` is shown on the page; `kept` refills the text fields.
+fn login_page(
+    ctx: &IssuerCtx,
+    request: &ValidRequest,
+    status: StatusCode,
+    error: Option<&str>,
+    kept: &KeptInput,
+) -> Response {
     let selected = request
         .params
         .login_hint
@@ -227,14 +243,14 @@ fn login_page(ctx: &IssuerCtx, request: &ValidRequest) -> Response {
             .collect(),
         selected,
         params: request.params.hidden_fields(),
-        error: None,
-        custom_sub: String::new(),
-        custom_claims: String::new(),
-        override_claims: String::new(),
+        error: error.map(str::to_owned),
+        custom_sub: kept.custom_sub.clone(),
+        custom_claims: kept.custom_claims.clone(),
+        override_claims: kept.override_claims.clone(),
         static_base: STATIC_BASE.to_owned(),
     };
     match ctx.app.templates.render_login(&ctx.id, &login) {
-        Ok(html) => Html(html).into_response(),
+        Ok(html) => (status, Html(html)).into_response(),
         Err(e) => OAuthError::ServerError(format!("login page: {e}")).into_response(),
     }
 }
@@ -249,5 +265,125 @@ fn error_page(ctx: &IssuerCtx, status: StatusCode, message: String) -> Response 
     match ctx.app.templates.render_error(&context) {
         Ok(html) => (status, Html(html)).into_response(),
         Err(e) => OAuthError::ServerError(format!("error page: {e}")).into_response(),
+    }
+}
+
+/// The fields of the login form: the hidden request parameters plus the user's choices.
+#[derive(Debug, Deserialize)]
+pub struct LoginForm {
+    #[serde(flatten)]
+    pub params: AuthorizeParams,
+    pub user: Option<String>,
+    pub custom_sub: Option<String>,
+    pub custom_claims: Option<String>,
+    pub override_claims: Option<String>,
+    pub remember: Option<String>,
+}
+
+/// Parses `text` as a JSON object. Empty text gives an empty object.
+fn parse_claims(text: &str) -> Option<Claims> {
+    if text.trim().is_empty() {
+        return Some(Claims::new());
+    }
+    match serde_json::from_str::<serde_json::Value>(text) {
+        Ok(serde_json::Value::Object(map)) => Some(map),
+        _ => None,
+    }
+}
+
+/// `POST {issuer}/authorize`: the login form submit.
+pub async fn authorize_post(
+    State(ctx): State<IssuerCtx>,
+    _headers: HeaderMap,
+    Form(f): Form<LoginForm>,
+) -> Response {
+    let request = match validate(&ctx, &f.params) {
+        Ok(request) => request,
+        Err(Rejection::Redirect(error)) => return error.into_response(),
+        Err(Rejection::Page(status, message)) => return error_page(&ctx, status, message),
+    };
+    let kept = KeptInput {
+        custom_sub: f.custom_sub.clone().unwrap_or_default(),
+        custom_claims: f.custom_claims.clone().unwrap_or_default(),
+        override_claims: f.override_claims.clone().unwrap_or_default(),
+    };
+    match subject_from_form(&ctx, &f) {
+        Ok(subject) => issue_code(&ctx, &request, subject),
+        Err(message) => {
+            tracing::info!(issuer = %ctx.id, "login rejected: {message}");
+            login_page(
+                &ctx,
+                &request,
+                StatusCode::BAD_REQUEST,
+                Some(message),
+                &kept,
+            )
+        }
+    }
+}
+
+/// Reads who signed in. The error is the message for the login page.
+fn subject_from_form(ctx: &IssuerCtx, f: &LoginForm) -> Result<Subject, &'static str> {
+    let override_claims = f.override_claims.as_deref().unwrap_or_default();
+    let overrides = parse_claims(override_claims).ok_or("Override claims must be a JSON object");
+    let user = f.user.as_deref().unwrap_or_default();
+    if user == "__custom__" {
+        let sub = f.custom_sub.as_deref().unwrap_or_default().trim();
+        if sub.is_empty() {
+            return Err("Custom user needs a sub");
+        }
+        let claims = parse_claims(f.custom_claims.as_deref().unwrap_or_default())
+            .ok_or("Custom claims must be a JSON object")?;
+        overrides?;
+        return Ok(Subject::Custom {
+            sub: sub.to_owned(),
+            claims,
+        });
+    }
+    if !ctx.app.config.user.contains_key(user) {
+        return Err("Choose a user");
+    }
+    Ok(Subject::User {
+        id: user.to_owned(),
+        overrides: overrides?,
+    })
+}
+
+/// Stores a code grant for `subject` and redirects to the client with the code.
+pub(crate) fn issue_code(ctx: &IssuerCtx, req: &ValidRequest, subject: Subject) -> Response {
+    let lifetimes = ctx
+        .issuer()
+        .lifetimes
+        .with_override(&req.client.config.lifetimes);
+    let now = now_secs();
+    let audience = req
+        .params
+        .audience
+        .clone()
+        .or_else(|| req.params.resource.clone());
+    let grant = CodeGrant {
+        issuer_id: ctx.id.clone(),
+        client_id: req.client.client_id.clone(),
+        redirect_uri: req.redirect_uri.clone(),
+        scope: req.scope.clone(),
+        nonce: req.params.nonce.clone(),
+        pkce: req.pkce.clone(),
+        audience,
+        subject,
+        auth_time: now,
+        expires_at: now + lifetimes.code,
+    };
+    let code = match ctx.app.store.insert_code(grant) {
+        Ok(code) => code,
+        Err(e) => return e.into_response(),
+    };
+    let mut pairs = vec![("code", code.as_str())];
+    if let Some(state) = req.params.state.as_deref() {
+        pairs.push(("state", state));
+    }
+    let location = append_query(&req.redirect_uri, &pairs);
+    match HeaderValue::try_from(location) {
+        Ok(value) => (StatusCode::FOUND, [(header::LOCATION, value)]).into_response(),
+        Err(_) => OAuthError::ServerError("invalid redirect location".into()).into_response(),
     }
 }

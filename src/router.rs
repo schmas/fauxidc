@@ -42,7 +42,10 @@ pub fn build_router(state: Arc<AppState>) -> Router {
                 get(discovery::document).layer(cors.clone()),
             )
             .route("/jwks", get(jwks::jwks).layer(cors.clone()))
-            .route("/authorize", get(authorize::authorize_get))
+            .route(
+                "/authorize",
+                get(authorize::authorize_get).post(authorize::authorize_post),
+            )
             .with_state(ctx);
         router = if path == "/" {
             router.merge(sub)
