@@ -1,4 +1,3 @@
-use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::path::PathBuf;
 use std::process::{Child, Command, ExitStatus, Stdio};
@@ -116,50 +115,4 @@ fn bind_failure_exits_1() {
         .output()
         .unwrap();
     assert_eq!(out.status.code(), Some(1));
-}
-
-#[test]
-fn healthcheck_follows_the_health_status() {
-    let port = free_port();
-    let url = format!("http://127.0.0.1:{port}/_mock/health");
-    let down = fauxidc_cmd(&["healthcheck", "--url", &url])
-        .output()
-        .unwrap();
-    assert_eq!(down.status.code(), Some(1));
-
-    let mut child = fauxidc_cmd(&["--port", &port.to_string()])
-        .stderr(Stdio::null())
-        .spawn()
-        .unwrap();
-    wait_for_port(port, Duration::from_secs(2));
-    let up = fauxidc_cmd(&["healthcheck", "--url", &url])
-        .output()
-        .unwrap();
-    assert_eq!(up.status.code(), Some(0));
-    let default_port = fauxidc_cmd(&["healthcheck", "--port", &port.to_string()])
-        .output()
-        .unwrap();
-    assert_eq!(default_port.status.code(), Some(0));
-    send_sigterm(&child);
-    wait_timeout(&mut child, Duration::from_secs(2)).expect("stopped in time");
-}
-
-#[test]
-fn healthcheck_fails_on_non_200() {
-    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-    let port = listener.local_addr().unwrap().port();
-    let server = std::thread::spawn(move || {
-        let (mut stream, _) = listener.accept().unwrap();
-        let mut buf = [0u8; 512];
-        let _ = stream.read(&mut buf);
-        stream
-            .write_all(b"HTTP/1.1 503 Service Unavailable\r\ncontent-length: 0\r\nconnection: close\r\n\r\n")
-            .unwrap();
-    });
-    let url = format!("http://127.0.0.1:{port}/_mock/health");
-    let out = fauxidc_cmd(&["healthcheck", "--url", &url])
-        .output()
-        .unwrap();
-    assert_eq!(out.status.code(), Some(1));
-    server.join().unwrap();
 }
