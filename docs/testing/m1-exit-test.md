@@ -179,40 +179,10 @@ class MeController {
 }
 ```
 
-The auto-configuration protects every endpoint. Do not add a custom `JwtDecoder`.
-The test checks the default JWT validation.
-
-### Run
-
-1. Keep the mock running with `examples/auth0.toml` from part 1, run 1.
-2. Copy the `accessToken` value from `http://localhost:3000/api/auth/session`.
-3. Start the app: `./mvnw spring-boot:run`.
-4. Call the endpoint:
-
-```sh
-curl -i -H "Authorization: Bearer $TOKEN" http://localhost:8080/api/me
-```
-
-Expected: status 200.
+The auto-configuration protects every endpoint.
 
 The access token has the header `typ: at+jwt` (RFC 9068).
-Check that the default validation accepts it.
-If the response is 401, read the `WWW-Authenticate` header.
-Record the Spring Boot version, the Spring Security version and the error text.
-Do not change `typ` in fauxidc to make the test pass.
-A rejection is an interop finding for the spec.
-
-### Known result
-
-Spring Boot 4.1.2 with Spring Security 7.1.2 rejects the token by default:
-
-```
-WWW-Authenticate: Bearer error="invalid_token",
-  error_description="An error occurred while attempting to decode the Jwt:
-  the given typ value needs to be one of [JWT]"
-```
-
-An app can accept `at+jwt` with its own `JwtDecoder`:
+Spring Security 7.x accepts only `typ: JWT` by default, so add a `JwtDecoder` that also allows `at+jwt`:
 
 ```java
 @Bean
@@ -225,7 +195,29 @@ JwtDecoder jwtDecoder() {
 }
 ```
 
-With this decoder, the same token returns 200.
+### Run
+
+1. Keep the mock running with `examples/auth0.toml` from part 1, run 1.
+2. Copy the `accessToken` value from `http://localhost:3000/api/auth/session`.
+3. Start the app: `./mvnw spring-boot:run`.
+4. Call the endpoint:
+
+```sh
+curl -i -H "Authorization: Bearer $TOKEN" http://localhost:8080/api/me
+```
+
+Expected: status 200. This is the pass condition (spec section 14).
+Do not change `typ` in fauxidc to make the test pass.
+
+### Known result without the decoder
+
+Without the custom `JwtDecoder`, Spring Boot 4.1.2 with Spring Security 7.1.2 returns 401:
+
+```
+WWW-Authenticate: Bearer error="invalid_token",
+  error_description="An error occurred while attempting to decode the Jwt:
+  the given typ value needs to be one of [JWT]"
+```
 
 ## Part 3: openidconnect compatibility test
 
