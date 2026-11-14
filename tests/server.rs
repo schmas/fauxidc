@@ -43,3 +43,68 @@ async fn invalid_config_is_a_config_error() {
         Err(fauxidc::error::StartError::Config(_))
     ));
 }
+
+#[derive(Clone, Default)]
+struct Capture(std::sync::Arc<std::sync::Mutex<Vec<u8>>>);
+
+impl std::io::Write for Capture {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        self.0.lock().unwrap().extend_from_slice(buf);
+        Ok(buf.len())
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+impl Capture {
+    fn text(&self) -> String {
+        String::from_utf8_lossy(&self.0.lock().unwrap()).into_owned()
+    }
+
+    fn subscriber(&self) -> impl tracing::Subscriber + Send + Sync + use<> {
+        let w = self.clone();
+        tracing_subscriber::fmt()
+            .with_writer(move || w.clone())
+            .with_ansi(false)
+            .finish()
+    }
+}
+
+#[tokio::test]
+async fn non_loopback_bind_logs_a_warning() {
+    let logs = Capture::default();
+    let _guard = tracing::subscriber::set_default(logs.subscriber());
+    let mut cfg = fauxidc::config::load_str(AUTH0).unwrap().config;
+    cfg.server.bind = "0.0.0.0".into();
+    cfg.server.port = 0;
+    let srv = fauxidc::Server::start_with(
+        cfg,
+        fauxidc::StartOptions {
+            key_pem: Some(KEY.to_pem().into()),
+        },
+    )
+    .await
+    .unwrap();
+    let text = logs.text();
+    assert!(text.contains("non-loopback"), "{text}");
+    assert!(text.contains("listening"), "{text}");
+    assert!(text.contains("issuer_id"), "{text}");
+    srv.shutdown().await.unwrap();
+}
+
+#[tokio::test]
+async fn request_span_logs_path_and_endpoint_but_never_the_query() {
+    let logs = Capture::default();
+    let _guard = tracing::subscriber::set_default(logs.subscriber());
+    let app = app(AUTH0);
+    let (status, _, _) = send(&app, get("/auth0/jwks?client_secret=hunter2&code=abc123")).await;
+    assert_eq!(status, StatusCode::OK);
+    let text = logs.text();
+    assert!(text.contains("request"), "{text}");
+    assert!(text.contains("path=/auth0/jwks"), "{text}");
+    assert!(text.contains("endpoint=\"jwks\""), "{text}");
+    assert!(text.contains("issuer=\"auth0\""), "{text}");
+    assert!(!text.contains("hunter2"), "{text}");
+    assert!(!text.contains("abc123"), "{text}");
+}

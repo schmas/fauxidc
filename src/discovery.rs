@@ -3,10 +3,12 @@
 use axum::{Json, extract::State, http::HeaderMap};
 use serde_json::{Value, json};
 
+use crate::logging::record_endpoint;
 use crate::state::IssuerCtx;
 
 /// Returns the discovery document. `issuer` is fixed; endpoints follow the request.
 pub async fn document(State(ctx): State<IssuerCtx>, headers: HeaderMap) -> Json<Value> {
+    record_endpoint(&ctx.id, "discovery");
     let b = ctx.base_url(&headers);
     Json(json!({
         "issuer": ctx.issuer().issuer_url,

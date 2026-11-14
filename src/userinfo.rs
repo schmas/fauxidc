@@ -10,6 +10,7 @@ use serde_json::Value;
 
 use crate::claims::PROTOCOL_CLAIMS;
 use crate::error::OAuthError;
+use crate::logging::record_endpoint;
 use crate::state::IssuerCtx;
 use crate::tokens::verify_access_token;
 
@@ -26,6 +27,7 @@ fn bearer_token(headers: &HeaderMap) -> Option<&str> {
 
 /// `GET` or `POST /userinfo`: the token claims without protocol claims and `nbf`.
 pub async fn userinfo(State(ctx): State<IssuerCtx>, headers: HeaderMap) -> Response {
+    record_endpoint(&ctx.id, "userinfo");
     match respond(&ctx, &headers).await {
         Ok(response) => response,
         Err(error) => error.into_response(),

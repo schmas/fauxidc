@@ -18,6 +18,7 @@ use crate::claims::{ClaimTarget, build_claims, filter_by_scope};
 use crate::clients::{ResolvedClient, find_client};
 use crate::config::ClientConfig;
 use crate::error::OAuthError;
+use crate::logging::{record_client, record_endpoint};
 use crate::state::{IssuerCtx, PkceMethod, now_secs};
 use crate::tokens::{AccessTokenInput, IdTokenInput, sign_access_token, sign_id_token};
 
@@ -109,6 +110,7 @@ fn authenticate(
             basic_auth,
         ));
     }
+    record_client(&client_id);
     let Some(client) = find_client(ctx, &client_id) else {
         ctx.enforce(false, || format!("unknown client_id: {client_id}"))
             .map_err(|rule| invalid_client(&rule, basic_auth))?;
@@ -161,6 +163,7 @@ pub async fn token(
     headers: HeaderMap,
     Form(f): Form<TokenForm>,
 ) -> Response {
+    record_endpoint(&ctx.id, "token");
     match exchange_code(&ctx, &headers, &f).await {
         Ok(body) => (
             [

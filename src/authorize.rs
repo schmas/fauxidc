@@ -11,6 +11,7 @@ use crate::clients::{ResolvedClient, find_client, redirect_uri_matches, register
 use crate::config::Claims;
 use crate::cookies::{auto_select_name, auto_select_set, read_cookie};
 use crate::error::{OAuthError, append_query};
+use crate::logging::{record_client, record_endpoint};
 use crate::state::{CodeGrant, IssuerCtx, PkceMethod, Subject, now_secs};
 use crate::templates::{CONTEXT_VERSION, ErrorContext, LoginContext, STATIC_BASE, UserOption};
 
@@ -194,6 +195,10 @@ pub async fn authorize_get(
     headers: HeaderMap,
     Query(p): Query<AuthorizeParams>,
 ) -> Response {
+    record_endpoint(&ctx.id, "authorize");
+    if let Some(client_id) = p.client_id.as_deref() {
+        record_client(client_id);
+    }
     match validate(&ctx, &p) {
         Ok(request) => match skip_login(&ctx, &request, &headers) {
             Some(id) => issue_code(
@@ -330,6 +335,10 @@ fn parse_claims(text: &str) -> Option<Claims> {
 
 /// `POST {issuer}/authorize`: the login form submit.
 pub async fn authorize_post(State(ctx): State<IssuerCtx>, Form(f): Form<LoginForm>) -> Response {
+    record_endpoint(&ctx.id, "authorize");
+    if let Some(client_id) = f.params.client_id.as_deref() {
+        record_client(client_id);
+    }
     let request = match validate(&ctx, &f.params) {
         Ok(request) => request,
         Err(Rejection::Redirect(error)) => return error.into_response(),

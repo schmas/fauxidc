@@ -11,6 +11,7 @@ use tokio::task::JoinHandle;
 use crate::config::{Config, SourceMap, validate};
 use crate::error::StartError;
 use crate::keys::{KeyHandle, KeySource};
+use crate::logging::is_loopback_bind;
 use crate::router::build_router;
 use crate::state::AppState;
 
@@ -51,6 +52,15 @@ impl Server {
             key_file,
         })
         .map_err(StartError::Key)?;
+        tracing::info!(%addr, "listening");
+        for (id, issuer) in &config.issuer {
+            tracing::info!(issuer_id = %id, issuer_url = %issuer.issuer_url, "issuer");
+        }
+        if !is_loopback_bind(&config.server.bind) {
+            tracing::warn!(
+                "bound to a non-loopback address: anyone who can reach it can mint tokens"
+            );
+        }
         let state = Arc::new(AppState::new(config, keys)?);
         let router = build_router(state);
         let (tx, rx) = oneshot::channel::<()>();

@@ -10,12 +10,14 @@ use axum::{
     routing::{get, post},
 };
 use tower_http::cors::{Any, CorsLayer};
+use tower_http::trace::{DefaultOnResponse, TraceLayer};
 
 use crate::authorize;
 use crate::discovery;
 use crate::health;
 use crate::issuer::issuer_path;
 use crate::jwks;
+use crate::logging::{record_endpoint, request_span};
 use crate::state::{AppState, IssuerCtx};
 use crate::templates;
 use crate::token_endpoint;
@@ -61,6 +63,9 @@ pub fn build_router(state: Arc<AppState>) -> Router {
             router.nest(&path, sub)
         };
     }
+    let trace = TraceLayer::new_for_http()
+        .make_span_with(request_span)
+        .on_response(DefaultOnResponse::new().level(tracing::Level::INFO));
     router
         .route(
             "/.well-known/oauth-authorization-server/{*issuer_path}",
@@ -71,6 +76,7 @@ pub fn build_router(state: Arc<AppState>) -> Router {
             get(templates::static_file).with_state(state.clone()),
         )
         .route("/_mock/health", get(health::health).with_state(state))
+        .layer(trace)
 }
 
 /// RFC 8414 path insertion: the well-known segment comes before the issuer path.
@@ -90,6 +96,7 @@ async fn rfc8414_discovery(
     });
     match found {
         Some(id) => {
+            record_endpoint(id, "discovery");
             let ctx = IssuerCtx {
                 app: state.clone(),
                 id: id.clone(),
