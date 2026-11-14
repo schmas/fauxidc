@@ -2,7 +2,7 @@
 
 use axum::{
     Form, Json,
-    extract::State,
+    extract::{State, rejection::FormRejection},
     http::{HeaderMap, HeaderValue, header},
     response::{IntoResponse, Response},
 };
@@ -183,9 +183,22 @@ fn check_verifier(
 pub async fn token(
     State(ctx): State<IssuerCtx>,
     headers: HeaderMap,
-    Form(f): Form<TokenForm>,
+    form: Result<Form<TokenForm>, FormRejection>,
 ) -> Response {
     record_endpoint(&ctx.id, "token");
+    let Form(f) = match form {
+        Ok(form) => form,
+        Err(rejection) => {
+            let description = match rejection {
+                FormRejection::InvalidFormContentType(_) => {
+                    "body must be application/x-www-form-urlencoded"
+                }
+                _ => "malformed form body",
+            };
+            tracing::info!(issuer = %ctx.id, "token request rejected: {rejection}");
+            return OAuthError::json("invalid_request", description).into_response();
+        }
+    };
     match exchange_code(&ctx, &headers, &f).await {
         Ok(body) => (
             [

@@ -252,3 +252,22 @@ async fn code_burned_by_bad_redirect_uri_cannot_be_reused() {
     assert_eq!(s, 400);
     assert_eq!(json(&b)["error"], "invalid_grant");
 }
+
+#[tokio::test]
+async fn form_rejection_is_json_invalid_request() {
+    let req = Request::builder()
+        .method("POST")
+        .uri("/auth0/token")
+        .header("host", "localhost:9000")
+        .body(Body::from("grant_type=authorization_code"))
+        .unwrap();
+    let (s, h, b) = send(&app(STRICT), req).await;
+    assert_eq!(s, 400, "{b}");
+    assert!(
+        h["content-type"]
+            .to_str()
+            .unwrap()
+            .starts_with("application/json")
+    );
+    assert_eq!(json(&b)["error"], "invalid_request");
+}
