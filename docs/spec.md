@@ -388,7 +388,7 @@ Rejected, with reason:
 - Template and static overrides.
 - `/_mock/health`, `fauxidc healthcheck`, non-loopback warning, logging.
 - Static image, release workflow, CI with size and startup checks.
-- Exit test: an Auth.js app logs in through both example configs (`auth0.toml` and `okta.toml`). A Spring resource server accepts the access token. The `openidconnect` compatibility test passes.
+- Exit test: an Auth.js app logs in through both example configs (`auth0.toml` and `okta.toml`). A Spring resource server accepts the access token when its JWT decoder allows `typ: at+jwt`. Spring Security's default validator accepts only `JWT`; `docs/testing/m1-exit-test.md` shows the decoder setup. The `openidconnect` compatibility test passes.
 
 ### M2: full OAuth surface for tests
 
