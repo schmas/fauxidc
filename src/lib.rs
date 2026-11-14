@@ -13,5 +13,6 @@ pub mod keys;
 pub mod router;
 pub mod server;
 pub mod state;
+pub mod templates;
 
 pub use server::{RunningServer, Server, StartOptions};

@@ -81,3 +81,76 @@ pub fn post_form(uri: &str, form: &[(&str, &str)], headers: &[(&str, &str)]) -> 
 pub fn json(body: &str) -> Value {
     serde_json::from_str(body).unwrap()
 }
+
+pub const STRICT: &str = r#"[issuer.auth0]
+issuer_url = "http://localhost:9000/auth0/"
+sub_template = "auth0|{user_id}"
+
+[client.example_app]
+client_id = "example-app"
+client_secret = "local"
+redirect_uris = ["http://localhost:3000/api/auth/callback/*"]
+
+[client.spa]
+redirect_uris = ["http://localhost:5173/cb"]
+
+[user.alice]
+label = "Alice Admin"
+claims = { email = "alice@example.com", email_verified = true, given_name = "Alice", family_name = "Admin", name = "Alice Admin", roles = ["admin"] }
+
+[user.bob]
+label = "Bobby Viewer"
+claims = { email = "bob@example.com", name = "Bobby Viewer" }
+"#;
+
+/// `/auth0/authorize` for example-app with `response_type=code`, `scope="openid profile email"`,
+/// `redirect_uri=http://localhost:3000/api/auth/callback/auth0`, `state=st`.
+/// `extra` adds or replaces params.
+pub fn authorize_url(extra: &[(&str, &str)]) -> String {
+    let mut params: Vec<(String, String)> = [
+        ("client_id", "example-app"),
+        ("response_type", "code"),
+        ("scope", "openid profile email"),
+        (
+            "redirect_uri",
+            "http://localhost:3000/api/auth/callback/auth0",
+        ),
+        ("state", "st"),
+    ]
+    .iter()
+    .map(|(k, v)| ((*k).to_owned(), (*v).to_owned()))
+    .collect();
+    for (k, v) in extra {
+        match params.iter_mut().find(|(name, _)| name == k) {
+            Some(pair) => pair.1 = (*v).to_owned(),
+            None => params.push(((*k).to_owned(), (*v).to_owned())),
+        }
+    }
+    format!(
+        "/auth0/authorize?{}",
+        serde_urlencoded::to_string(&params).unwrap()
+    )
+}
+
+/// A fresh empty directory under the system temp dir.
+pub fn tmp_dir() -> PathBuf {
+    let dir = std::env::temp_dir().join(format!("fauxidc-test-{}", uuid::Uuid::new_v4()));
+    std::fs::create_dir_all(&dir).unwrap();
+    dir
+}
+
+/// The `Location` header as a string.
+pub fn location(h: &HeaderMap) -> String {
+    h["location"].to_str().unwrap().to_owned()
+}
+
+/// The value of query parameter `name` in `url`.
+pub fn query_param(url: &str, name: &str) -> Option<String> {
+    let query = url.split_once('?')?.1;
+    let query = query.split('#').next().unwrap_or(query);
+    serde_urlencoded::from_str::<Vec<(String, String)>>(query)
+        .ok()?
+        .into_iter()
+        .find(|(k, _)| k == name)
+        .map(|(_, v)| v)
+}

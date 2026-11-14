@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sign in</title>
+<link rel="stylesheet" href="{{ static_base }}/login.css">
+</head>
+<body>
+<main>
+<h1>Sign in</h1>
+<p class="meta">Client: {{ client_id }} · Issuer: {{ issuer_id }}</p>
+{% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+<form method="post" action="{{ action }}">
+{% for pair in params %}<input type="hidden" name="{{ pair[0] }}" value="{{ pair[1] }}">
+{% endfor %}
+<label>User
+<select name="user">
+{% for u in users %}<option value="{{ u.id }}"{% if selected == u.id %} selected{% endif %}>{{ u.label }}</option>
+{% endfor %}<option value="__custom__"{% if selected == "__custom__" %} selected{% endif %}>Custom…</option>
+</select>
+</label>
+<fieldset>
+<legend>Custom…</legend>
+<label>Subject
+<input type="text" name="custom_sub" value="{{ custom_sub }}">
+</label>
+<label>Claims (JSON)
+<textarea name="custom_claims">{{ custom_claims }}</textarea>
+</label>
+</fieldset>
+<details>
+<summary>Override claims</summary>
+<textarea name="override_claims">{{ override_claims }}</textarea>
+</details>
+<label class="inline"><input type="checkbox" name="remember" value="1"> Remember me and skip this page</label>
+<button type="submit">Sign in</button>
+</form>
+</main>
+</body>
+</html>

@@ -15,6 +15,7 @@ use crate::discovery;
 use crate::issuer::issuer_path;
 use crate::jwks;
 use crate::state::{AppState, IssuerCtx};
+use crate::templates;
 
 /// Builds the router for all configured issuers.
 pub fn build_router(state: Arc<AppState>) -> Router {
@@ -47,10 +48,15 @@ pub fn build_router(state: Arc<AppState>) -> Router {
             router.nest(&path, sub)
         };
     }
-    router.route(
-        "/.well-known/oauth-authorization-server/{*issuer_path}",
-        get(rfc8414_discovery).layer(cors).with_state(state),
-    )
+    router
+        .route(
+            "/.well-known/oauth-authorization-server/{*issuer_path}",
+            get(rfc8414_discovery).layer(cors).with_state(state.clone()),
+        )
+        .route(
+            "/_mock/static/{*path}",
+            get(templates::static_file).with_state(state),
+        )
 }
 
 /// RFC 8414 path insertion: the well-known segment comes before the issuer path.

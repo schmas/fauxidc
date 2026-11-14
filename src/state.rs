@@ -9,6 +9,7 @@ use crate::config::{ClientConfig, Config, IssuerConfig};
 use crate::error::StartError;
 use crate::issuer::endpoint_base;
 use crate::keys::KeyHandle;
+use crate::templates::Templates;
 
 /// In-memory stores. Part 3 adds fields.
 #[derive(Default)]
@@ -22,14 +23,17 @@ pub struct AppState {
     pub config: Arc<Config>,
     pub keys: KeyHandle,
     pub store: Store,
+    pub templates: Templates,
 }
 
 impl AppState {
     pub fn new(config: Config, keys: KeyHandle) -> Result<AppState, StartError> {
+        let templates = Templates::load(&config).map_err(StartError::Templates)?;
         Ok(AppState {
             config: Arc::new(config),
             keys,
             store: Store::default(),
+            templates,
         })
     }
 }
