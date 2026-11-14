@@ -15,6 +15,9 @@ use crate::logging::{record_client, record_endpoint};
 use crate::state::{CodeGrant, IssuerCtx, PkceMethod, Subject, now_secs};
 use crate::templates::{CONTEXT_VERSION, ErrorContext, LoginContext, STATIC_BASE, UserOption};
 
+/// The `user` form value that selects the Custom user.
+pub const CUSTOM_USER: &str = "__custom__";
+
 /// The query parameters of `GET /authorize` and the hidden fields of the login form.
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct AuthorizeParams {
@@ -262,9 +265,12 @@ fn skip_login(ctx: &IssuerCtx, request: &ValidRequest, headers: &HeaderMap) -> O
     read_cookie(headers, &auto_select_name(&ctx.id)).filter(|id| users.contains_key(id))
 }
 
-/// The login form text that a re-rendered page keeps.
+/// The login form input that a re-rendered page keeps.
 #[derive(Debug, Default)]
 struct KeptInput {
+    /// The posted `user`: a user id or `__custom__`.
+    user: Option<String>,
+    remember: bool,
     custom_sub: String,
     custom_claims: String,
     override_claims: String,
@@ -278,11 +284,12 @@ fn login_page(
     error: Option<&str>,
     kept: &KeptInput,
 ) -> Response {
-    let selected = request
-        .params
-        .login_hint
+    let known = |id: &&String| ctx.app.config.user.contains_key(*id);
+    let selected = kept
+        .user
         .as_ref()
-        .filter(|hint| ctx.app.config.user.contains_key(*hint))
+        .filter(|id| *id == CUSTOM_USER || known(id))
+        .or_else(|| request.params.login_hint.as_ref().filter(known))
         .cloned();
     let login = LoginContext {
         context_version: CONTEXT_VERSION,
@@ -309,6 +316,7 @@ fn login_page(
         custom_sub: kept.custom_sub.clone(),
         custom_claims: kept.custom_claims.clone(),
         override_claims: kept.override_claims.clone(),
+        remember: kept.remember,
         static_base: STATIC_BASE.to_owned(),
     };
     match ctx.app.templates.render_login(&ctx.id, &login) {
@@ -365,6 +373,8 @@ pub async fn authorize_post(State(ctx): State<IssuerCtx>, Form(f): Form<LoginFor
         Err(Rejection::Page(status, message)) => return error_page(&ctx, status, message),
     };
     let kept = KeptInput {
+        user: f.user.clone(),
+        remember: f.remember.is_some(),
         custom_sub: f.custom_sub.clone().unwrap_or_default(),
         custom_claims: f.custom_claims.clone().unwrap_or_default(),
         override_claims: f.override_claims.clone().unwrap_or_default(),
@@ -401,7 +411,7 @@ fn subject_from_form(ctx: &IssuerCtx, f: &LoginForm) -> Result<Subject, &'static
     let override_claims = f.override_claims.as_deref().unwrap_or_default();
     let overrides = parse_claims(override_claims).ok_or("Override claims must be a JSON object");
     let user = f.user.as_deref().unwrap_or_default();
-    if user == "__custom__" {
+    if user == CUSTOM_USER {
         let sub = f.custom_sub.as_deref().unwrap_or_default().trim();
         if sub.is_empty() {
             return Err("Custom user needs a sub");

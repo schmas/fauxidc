@@ -162,7 +162,11 @@ async fn bad_json_rerenders_with_input_kept() {
         &app(STRICT),
         post_form(
             "/auth0/authorize",
-            &login_form(&[("override_claims", "{not json")]),
+            &login_form(&[
+                ("override_claims", "{not json"),
+                ("user", "bob"),
+                ("remember", "on"),
+            ]),
             &[],
         ),
     )
@@ -170,6 +174,9 @@ async fn bad_json_rerenders_with_input_kept() {
     assert_eq!(s, 400);
     assert!(b.contains("Override claims must be a JSON object"));
     assert!(b.contains("{not json"));
+    assert!(b.contains(r#"value="bob" selected"#), "{b}");
+    assert!(!b.contains(r#"value="alice" selected"#));
+    assert!(b.contains(r#"name="remember" value="1" checked"#), "{b}");
 }
 
 #[tokio::test]
@@ -185,6 +192,8 @@ async fn custom_user_needs_sub() {
     .await;
     assert_eq!(s, 400);
     assert!(b.contains("Custom user needs a sub"));
+    assert!(b.contains(r#"value="__custom__" selected"#), "{b}");
+    assert!(!b.contains("checked"), "remember was not posted");
     let (s, _, _) = send(
         &app(STRICT),
         post_form(

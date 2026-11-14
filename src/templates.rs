@@ -56,6 +56,8 @@ pub struct LoginContext {
     pub custom_sub: String,
     pub custom_claims: String,
     pub override_claims: String,
+    /// `true` to render the remember box checked.
+    pub remember: bool,
     pub static_base: String,
 }
 
@@ -211,6 +213,7 @@ mod tests {
             custom_sub: String::new(),
             custom_claims: String::new(),
             override_claims: String::new(),
+            remember: false,
             static_base: STATIC_BASE.into(),
         }
     }

@@ -30,6 +30,7 @@ Every context has `context_version` (integer, `1`). Fields are added in a minor 
 | `custom_sub` | string | Prefilled text for the custom subject. |
 | `custom_claims` | string | Prefilled JSON text for the custom claims. |
 | `override_claims` | string | Prefilled JSON text for the override claims. |
+| `remember` | boolean | `true` to render the `remember` checkbox checked, for example after a form error. |
 | `static_base` | string | URL prefix for static files, `/_mock/static`. |
 
 `params` must be posted back unchanged: render each pair as `<input type="hidden" name="{{ pair[0] }}" value="{{ pair[1] }}">`.

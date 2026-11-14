@@ -33,7 +33,7 @@
 <summary>Override claims</summary>
 <textarea name="override_claims">{{ override_claims }}</textarea>
 </details>
-<label class="inline"><input type="checkbox" name="remember" value="1"> Remember me and skip this page</label>
+<label class="inline"><input type="checkbox" name="remember" value="1"{% if remember %} checked{% endif %}> Remember me and skip this page</label>
 <button type="submit">Sign in</button>
 </form>
 </main>
