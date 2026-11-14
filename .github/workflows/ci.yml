@@ -1,0 +1,113 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  fmt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@v1
+        with:
+          # Must match rust-toolchain.toml.
+          toolchain: 1.100.0
+          components: rustfmt
+      - run: cargo fmt --check
+
+  clippy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@v1
+        with:
+          # Must match rust-toolchain.toml.
+          toolchain: 1.100.0
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo clippy --all-targets -- -D warnings
+
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@v1
+        with:
+          # Must match rust-toolchain.toml.
+          toolchain: 1.100.0
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest
+      - run: cargo nextest run
+      - run: cargo test --doc
+
+  deny:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: EmbarkStudios/cargo-deny-action@v2
+
+  msrv:
+    runs-on: ubuntu-latest
+    env:
+      # Overrides rust-toolchain.toml.
+      RUSTUP_TOOLCHAIN: "1.98"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: "1.98"
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo check --lib --bins
+
+  musl:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@v1
+        with:
+          # Must match rust-toolchain.toml.
+          toolchain: 1.100.0
+          targets: x86_64-unknown-linux-musl
+      - uses: Swatinem/rust-cache@v2
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: 0.15.2
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-zigbuild
+      - name: Build release binary
+        run: cargo zigbuild --release --target x86_64-unknown-linux-musl
+      - name: Check binary size, startup and memory
+        run: python3 scripts/check_binary.py target/x86_64-unknown-linux-musl/release/fauxidc
+      - name: Build image from the binary
+        run: |
+          mkdir -p dist/amd64
+          cp target/x86_64-unknown-linux-musl/release/fauxidc dist/amd64/fauxidc
+          docker build --build-arg TARGETARCH=amd64 -t fauxidc:dev .
+      - name: Smoke test image
+        run: |
+          docker run -d --name fx -p 9000:9000 fauxidc:dev
+          trap 'status=$?; if [ "$status" -ne 0 ]; then docker logs fx 2>&1 || true; fi; docker rm -f fx >/dev/null 2>&1 || true' EXIT
+          for _ in $(seq 30); do
+            [ "$(docker inspect -f '{{.State.Health.Status}}' fx)" = healthy ] && break
+            sleep 1
+          done
+          test "$(docker inspect -f '{{.State.Health.Status}}' fx)" = healthy
+          curl -sf localhost:9000/default/.well-known/openid-configuration | grep -q '"issuer":"http://localhost:9000/default"'
+          docker logs fx 2>&1 | grep -q 'zero config'
+          docker logs fx 2>&1 | grep -q 'non-loopback'
+          time docker stop fx

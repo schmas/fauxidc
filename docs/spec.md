@@ -162,7 +162,7 @@ claims = { sub = "00u-alice" }
 
 If no file, no inline config and no `FAUXIDC__*` vars are given:
 
-- One Issuer `default` at `http://localhost:9000/default`, in Lenient mode.
+- One Issuer `default` at `http://localhost:9000/default`, in Lenient mode. The port in this URL follows `server.port`, for example `--port 9100`.
 - One public Client `test`.
 - Two Users `alice` and `bob` with `example.com` emails and full name claims.
 
@@ -388,7 +388,7 @@ Rejected, with reason:
 - Template and static overrides.
 - `/_mock/health`, `fauxidc healthcheck`, non-loopback warning, logging.
 - Static image, release workflow, CI with size and startup checks.
-- Exit test: an Auth.js app logs in through both example configs (`auth0.toml` and `okta.toml`). A Spring resource server accepts the access token. The `openidconnect` compatibility test passes.
+- Exit test: an Auth.js app logs in through both example configs (`auth0.toml` and `okta.toml`). A Spring resource server accepts the access token when its JWT decoder allows `typ: at+jwt`. The default validator in Spring Security 7.x accepts only `JWT`; `docs/testing/m1-exit-test.md` shows the decoder setup. The `openidconnect` compatibility test passes.
 
 ### M2: full OAuth surface for tests
 

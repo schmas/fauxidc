@@ -1,0 +1,22 @@
+[graph]
+# Dev-only duplicates (for example from openidconnect) are accepted.
+# The duplicate rule applies to the non-dev tree.
+exclude-dev = true
+
+[advisories]
+
+[licenses]
+allow = ["MIT", "Apache-2.0", "BSD-2-Clause", "BSD-3-Clause", "ISC"]
+# Per-crate exceptions only; never widen the global allow list.
+exceptions = [
+    # Unicode data tables, licensed (MIT OR Apache-2.0) AND Unicode-3.0.
+    { allow = ["Unicode-3.0"], crate = "unicode-ident" },
+]
+
+[bans]
+multiple-versions = "deny"
+# syn 2 and syn 3 are both proc-macro, build-time only. Dependencies migrate
+# to syn 3 at different times, so the duplicate cannot be removed here.
+skip = [
+    { crate = "syn@2" },
+]

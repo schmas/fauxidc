@@ -2,3 +2,27 @@
 //!
 //! The library API is unstable before 1.0.
 #![forbid(unsafe_code)]
+
+pub mod authorize;
+pub mod claims;
+pub mod cli;
+pub mod clients;
+pub mod config;
+pub mod cookies;
+pub mod discovery;
+pub mod error;
+pub mod health;
+pub mod healthcheck;
+pub mod issuer;
+pub mod jwks;
+pub mod keys;
+pub mod logging;
+pub mod router;
+pub mod server;
+pub mod state;
+pub mod templates;
+pub mod token_endpoint;
+pub mod tokens;
+pub mod userinfo;
+
+pub use server::{RunningServer, Server, StartOptions};
