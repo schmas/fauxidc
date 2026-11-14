@@ -13,6 +13,7 @@ use tower_http::cors::{Any, CorsLayer};
 
 use crate::authorize;
 use crate::discovery;
+use crate::health;
 use crate::issuer::issuer_path;
 use crate::jwks;
 use crate::state::{AppState, IssuerCtx};
@@ -67,8 +68,9 @@ pub fn build_router(state: Arc<AppState>) -> Router {
         )
         .route(
             "/_mock/static/{*path}",
-            get(templates::static_file).with_state(state),
+            get(templates::static_file).with_state(state.clone()),
         )
+        .route("/_mock/health", get(health::health).with_state(state))
 }
 
 /// RFC 8414 path insertion: the well-known segment comes before the issuer path.
