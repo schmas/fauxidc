@@ -10,4 +10,7 @@ pub mod issuer;
 pub mod jwks;
 pub mod keys;
 pub mod router;
+pub mod server;
 pub mod state;
+
+pub use server::{RunningServer, Server, StartOptions};
