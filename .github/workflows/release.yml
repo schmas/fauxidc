@@ -1,0 +1,174 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+# Jobs grant themselves only what they need.
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  release-pr:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: release-plz-pr
+      cancel-in-progress: false
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@v1
+        with:
+          # Must match rust-toolchain.toml.
+          toolchain: 1.100.0
+      - uses: release-plz/action@v0.5
+        with:
+          command: release-pr
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      releases_created: ${{ steps.release-plz.outputs.releases_created }}
+      # The releases output is a JSON array of {package_name, version, tag, ...}.
+      tag: ${{ fromJSON(steps.release-plz.outputs.releases)[0].tag }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@v1
+        with:
+          # Must match rust-toolchain.toml.
+          toolchain: 1.100.0
+      - id: release-plz
+        uses: release-plz/action@v0.5
+        with:
+          command: release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
+  binaries:
+    needs: release
+    if: needs.release.outputs.releases_created == 'true'
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-musl
+            os: ubuntu-latest
+            zigbuild: true
+          - target: aarch64-unknown-linux-musl
+            os: ubuntu-latest
+            zigbuild: true
+          - target: x86_64-apple-darwin
+            os: macos-latest
+            zigbuild: false
+          - target: aarch64-apple-darwin
+            os: macos-latest
+            zigbuild: false
+    env:
+      TAG: ${{ needs.release.outputs.tag }}
+      TARGET: ${{ matrix.target }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.release.outputs.tag }}
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@v1
+        with:
+          # Must match rust-toolchain.toml.
+          toolchain: 1.100.0
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+      - uses: mlugg/setup-zig@v2
+        if: matrix.zigbuild
+        with:
+          version: 0.15.2
+      - uses: taiki-e/install-action@v2
+        if: matrix.zigbuild
+        with:
+          tool: cargo-zigbuild
+      - name: Build with zigbuild
+        if: matrix.zigbuild
+        run: cargo zigbuild --release --target "$TARGET"
+      - name: Build
+        if: ${{ !matrix.zigbuild }}
+        run: cargo build --release --target "$TARGET"
+      - name: Package
+        run: |
+          name="fauxidc-${TAG}-${TARGET}"
+          mkdir "$name"
+          cp "target/${TARGET}/release/fauxidc" LICENSE-MIT LICENSE-APACHE README.md "$name/"
+          tar -czf "${name}.tar.gz" "$name"
+          shasum -a 256 "${name}.tar.gz" > "${name}.tar.gz.sha256"
+      - name: Upload to the GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          name="fauxidc-${TAG}-${TARGET}"
+          gh release upload "$TAG" "${name}.tar.gz" "${name}.tar.gz.sha256" --clobber
+      - name: Keep the Linux binary for the image
+        if: matrix.zigbuild
+        uses: actions/upload-artifact@v7
+        with:
+          name: fauxidc-${{ matrix.target }}
+          path: target/${{ matrix.target }}/release/fauxidc
+          if-no-files-found: error
+
+  image:
+    needs: [release, binaries]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    env:
+      TAG: ${{ needs.release.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.release.outputs.tag }}
+          persist-credentials: false
+      - uses: actions/download-artifact@v8
+        with:
+          name: fauxidc-x86_64-unknown-linux-musl
+          path: dist/amd64
+      - uses: actions/download-artifact@v8
+        with:
+          name: fauxidc-aarch64-unknown-linux-musl
+          path: dist/arm64
+      - name: Set binary mode
+        run: chmod 755 dist/amd64/fauxidc dist/arm64/fauxidc
+      - name: Compute image version
+        run: echo "VERSION=${TAG#v}" >> "$GITHUB_ENV"
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ghcr.io/schmas/fauxidc:${{ env.VERSION }}
+            ghcr.io/schmas/fauxidc:latest
