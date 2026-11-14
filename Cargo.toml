@@ -35,3 +35,6 @@ opt-level = "z"
 codegen-units = 1
 strip = true
 panic = "abort"
+
+[dev-dependencies]
+uuid = { version = "1.29.2", features = ["v4"] }
