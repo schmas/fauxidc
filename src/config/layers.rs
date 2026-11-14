@@ -54,7 +54,7 @@ pub fn inline_layer(text: &str) -> Result<Layer, ConfigError> {
     Ok(Layer::from_table(table, Source::Inline))
 }
 
-const ENV_PREFIX: &str = "FAUXIDC__";
+pub(super) const ENV_PREFIX: &str = "FAUXIDC__";
 
 /// Builds a layer from `FAUXIDC__` environment variables.
 ///

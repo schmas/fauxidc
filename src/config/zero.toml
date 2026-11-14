@@ -1,0 +1,13 @@
+[issuer.default]
+issuer_url = "http://localhost:9000/default"
+lenient = true
+
+[client.test]
+
+[user.alice]
+label = "Alice Example"
+claims = { email = "alice@example.com", email_verified = true, given_name = "Alice", family_name = "Example", name = "Alice Example" }
+
+[user.bob]
+label = "Bobby Example"
+claims = { email = "bob@example.com", email_verified = true, given_name = "Bobby", family_name = "Example", name = "Bobby Example" }
