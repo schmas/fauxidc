@@ -100,6 +100,19 @@ pub fn load(inputs: &LoadInputs) -> Result<Loaded, ConfigErrors> {
         return Err(ConfigErrors(errors));
     }
 
+    finish(merged, zero_config)
+}
+
+/// Loads an inline layer (TOML or JSON) as the only source, then checks the result.
+///
+/// There is no Zero config, no env and no flags. For tests and the library API.
+pub fn load_str(text: &str) -> Result<Loaded, ConfigErrors> {
+    let layer = inline_layer(text).map_err(|e| ConfigErrors(vec![e]))?;
+    finish(layer, false)
+}
+
+/// Turns a merged layer into a checked configuration.
+fn finish(merged: Layer, zero_config: bool) -> Result<Loaded, ConfigErrors> {
     let Layer { table, sources } = merged;
     let config = toml::Value::Table(table)
         .try_into::<Config>()

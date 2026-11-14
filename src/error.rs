@@ -29,3 +29,16 @@ impl fmt::Display for ConfigErrors {
 }
 
 impl std::error::Error for ConfigErrors {}
+
+/// Errors that stop the server from starting.
+#[derive(Debug, thiserror::Error)]
+pub enum StartError {
+    #[error("cannot bind the listener: {0}")]
+    Bind(std::io::Error),
+    #[error("signing key error: {0}")]
+    Key(crate::keys::KeyError),
+    #[error("template error: {0}")]
+    Templates(String),
+    #[error("invalid configuration:\n{0}")]
+    Config(ConfigErrors),
+}

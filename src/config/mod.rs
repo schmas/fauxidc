@@ -8,7 +8,7 @@ pub mod source;
 pub mod validate;
 
 pub use layers::{env_layer, file_layer, flag_layer, inline_layer};
-pub use load::{CliOverrides, LoadInputs, Loaded, load};
+pub use load::{CliOverrides, LoadInputs, Loaded, load, load_str};
 pub use merge::deep_merge;
 pub use show::render;
 pub use source::{KeyPath, Layer, Source, SourceMap};

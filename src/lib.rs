@@ -4,6 +4,9 @@
 #![forbid(unsafe_code)]
 
 pub mod config;
+pub mod discovery;
 pub mod error;
 pub mod issuer;
 pub mod keys;
+pub mod router;
+pub mod state;
