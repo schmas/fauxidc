@@ -205,3 +205,50 @@ async fn token_waits_for_key() {
     publisher.publish(KEY.clone());
     assert_eq!(req.await.unwrap(), 200);
 }
+
+#[tokio::test]
+async fn short_or_missing_verifier_is_invalid_grant() {
+    use base64::Engine as _;
+    use sha2::Digest as _;
+    let app = app(STRICT);
+    // A valid S256 challenge for a verifier that is too short (RFC 7636 4.1: 43 to 128 chars).
+    let short = "abc";
+    let challenge = base64::engine::general_purpose::URL_SAFE_NO_PAD
+        .encode(sha2::Sha256::digest(short.as_bytes()));
+    let pkce = [
+        ("code_challenge", challenge.as_str()),
+        ("code_challenge_method", "S256"),
+    ];
+    let code = login_code(&app, &pkce).await;
+    let j = json(
+        &send(&app, exchange(&code, &[("code_verifier", short)]))
+            .await
+            .2,
+    );
+    assert_eq!(j["error"], "invalid_grant", "{j}");
+    let code = login_code(&app, &pkce).await;
+    let j = json(&send(&app, exchange(&code, &[])).await.2);
+    assert_eq!(j["error"], "invalid_grant", "{j}");
+}
+
+#[tokio::test]
+async fn code_burned_by_bad_redirect_uri_cannot_be_reused() {
+    let app = app(STRICT);
+    let code = login_code(&app, &[]).await;
+    let bad = post_form(
+        "/auth0/token",
+        &[
+            ("grant_type", "authorization_code"),
+            ("code", &code),
+            (
+                "redirect_uri",
+                "http://localhost:3000/api/auth/callback/other",
+            ),
+        ],
+        &[("authorization", &basic("example-app", "local"))],
+    );
+    assert_eq!(json(&send(&app, bad).await.2)["error"], "invalid_grant");
+    let (s, _, b) = send(&app, exchange(&code, &[])).await;
+    assert_eq!(s, 400);
+    assert_eq!(json(&b)["error"], "invalid_grant");
+}

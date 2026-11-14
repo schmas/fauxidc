@@ -112,13 +112,18 @@ fn validate(ctx: &IssuerCtx, p: &AuthorizeParams) -> Result<ValidRequest, Reject
         })
     };
 
-    if p.response_type.as_deref() != Some("code") {
-        let rule = format!(
-            "unsupported response_type: {}",
-            p.response_type.as_deref().unwrap_or("(none)")
-        );
-        tracing::info!(issuer = %ctx.id, "{rule}");
-        return Err(fail("unsupported_response_type", &rule));
+    match p.response_type.as_deref().filter(|v| !v.is_empty()) {
+        Some("code") => {}
+        None => {
+            let rule = "missing response_type";
+            tracing::info!(issuer = %ctx.id, "{rule}");
+            return Err(fail("invalid_request", rule));
+        }
+        Some(other) => {
+            let rule = format!("unsupported response_type: {other}");
+            tracing::info!(issuer = %ctx.id, "{rule}");
+            return Err(fail("unsupported_response_type", &rule));
+        }
     }
 
     let allowed = client
@@ -142,7 +147,8 @@ fn validate(ctx: &IssuerCtx, p: &AuthorizeParams) -> Result<ValidRequest, Reject
     )
     .map_err(|rule| fail("invalid_request", &rule))?;
 
-    ctx.enforce(!ctx.issuer().require_nonce || p.nonce.is_some(), || {
+    let has_nonce = p.nonce.as_deref().is_some_and(|v| !v.is_empty());
+    ctx.enforce(!ctx.issuer().require_nonce || has_nonce, || {
         "nonce required".to_owned()
     })
     .map_err(|rule| fail("invalid_request", &rule))?;
@@ -171,17 +177,31 @@ fn validate(ctx: &IssuerCtx, p: &AuthorizeParams) -> Result<ValidRequest, Reject
     })
 }
 
-/// Reads the PKCE parameters. A challenge without a method uses `plain` (RFC 7636 4.3).
+/// `true` if `value` is 43 to 128 characters of `[A-Za-z0-9-._~]`: the format of a PKCE
+/// `code_verifier` and `code_challenge` (RFC 7636 4.1, 4.2).
+pub(crate) fn valid_pkce_value(value: &str) -> bool {
+    (43..=128).contains(&value.len())
+        && value
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'.' | b'_' | b'~'))
+}
+
+/// Reads the PKCE parameters. Empty values count as absent. A challenge without a method
+/// uses `plain` (RFC 7636 4.3).
 fn parse_pkce(p: &AuthorizeParams) -> Result<Option<(String, PkceMethod)>, String> {
-    let method = match p.code_challenge_method.as_deref() {
+    let method = match p.code_challenge_method.as_deref().filter(|v| !v.is_empty()) {
         None => None,
         Some("S256") => Some(PkceMethod::S256),
         Some("plain") => Some(PkceMethod::Plain),
         Some(other) => return Err(format!("unsupported code_challenge_method: {other}")),
     };
-    match (&p.code_challenge, method) {
+    let challenge = p.code_challenge.as_deref().filter(|v| !v.is_empty());
+    match (challenge, method) {
+        (Some(challenge), _) if !valid_pkce_value(challenge) => {
+            Err("code_challenge must be 43 to 128 characters of [A-Za-z0-9-._~]".to_owned())
+        }
         (Some(challenge), method) => Ok(Some((
-            challenge.clone(),
+            challenge.to_owned(),
             method.unwrap_or(PkceMethod::Plain),
         ))),
         (None, Some(_)) => Err("code_challenge_method without code_challenge".to_owned()),

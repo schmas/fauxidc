@@ -14,6 +14,7 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 
+use crate::authorize::valid_pkce_value;
 use crate::claims::{ClaimTarget, build_claims, filter_by_scope};
 use crate::clients::{ResolvedClient, find_client};
 use crate::config::ClientConfig;
@@ -157,6 +158,27 @@ pub(crate) fn pkce_matches(challenge: &str, method: PkceMethod, verifier: &str) 
     }
 }
 
+/// Checks the `code_verifier` of a token request for a code with a PKCE challenge.
+fn check_verifier(
+    ctx: &IssuerCtx,
+    challenge: &str,
+    method: PkceMethod,
+    verifier: Option<&str>,
+) -> Result<(), OAuthError> {
+    let rule = match verifier.filter(|v| !v.is_empty()) {
+        None => Some("code_verifier missing"),
+        Some(v) if !valid_pkce_value(v) => {
+            Some("code_verifier must be 43 to 128 characters of [A-Za-z0-9-._~]")
+        }
+        Some(v) if !pkce_matches(challenge, method, v) => Some("PKCE verification failed"),
+        Some(_) => None,
+    };
+    ctx.enforce(rule.is_none(), || {
+        rule.unwrap_or("PKCE verification failed").to_owned()
+    })
+    .map_err(|_| OAuthError::json("invalid_grant", "PKCE verification failed"))
+}
+
 /// `POST /token`.
 pub async fn token(
     State(ctx): State<IssuerCtx>,
@@ -189,10 +211,14 @@ async fn exchange_code(
         ));
     }
     let client = authenticate(ctx, headers, f)?;
-    let invalid_grant = |d: &str| OAuthError::json("invalid_grant", d);
+    let invalid_grant = |d: &str| {
+        tracing::info!(issuer = %ctx.id, "{d}");
+        OAuthError::json("invalid_grant", d)
+    };
     let grant = f
         .code
         .as_deref()
+        .filter(|code| !code.is_empty())
         .and_then(|code| ctx.app.store.take_code(code))
         .ok_or_else(|| invalid_grant("code is invalid or was already used"))?;
     if grant.issuer_id != ctx.id || grant.client_id != client.client_id {
@@ -205,14 +231,9 @@ async fn exchange_code(
         f.redirect_uri.as_deref() == Some(grant.redirect_uri.as_str()),
         || "redirect_uri does not match the authorization request".to_owned(),
     )
-    .map_err(|_| invalid_grant("redirect_uri does not match"))?;
+    .map_err(|_| OAuthError::json("invalid_grant", "redirect_uri does not match"))?;
     if let Some((challenge, method)) = &grant.pkce {
-        let ok = f
-            .code_verifier
-            .as_deref()
-            .is_some_and(|v| pkce_matches(challenge, *method, v));
-        ctx.enforce(ok, || "PKCE verification failed".to_owned())
-            .map_err(|_| invalid_grant("PKCE verification failed"))?;
+        check_verifier(ctx, challenge, *method, f.code_verifier.as_deref())?;
     }
     let key = ctx
         .app

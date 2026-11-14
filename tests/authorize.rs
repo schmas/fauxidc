@@ -291,3 +291,85 @@ async fn custom_user_is_not_remembered() {
     .await;
     assert!(h.get("set-cookie").is_none());
 }
+
+#[tokio::test]
+async fn empty_pkce_and_nonce_values_count_as_absent() {
+    let app = app(STRICT);
+    let spa = [
+        ("client_id", "spa"),
+        ("redirect_uri", "http://localhost:5173/cb"),
+    ];
+    let mut empty = spa.to_vec();
+    empty.push(("code_challenge", ""));
+    let (s, h, _) = send(&app, get(&authorize_url(&empty))).await;
+    assert_eq!(s, 302);
+    assert_eq!(
+        query_param(&location(&h), "error_description").unwrap(),
+        "code_challenge required"
+    );
+    empty.push(("code_challenge_method", ""));
+    let (_, h, _) = send(&app, get(&authorize_url(&empty))).await;
+    assert_eq!(
+        query_param(&location(&h), "error_description").unwrap(),
+        "code_challenge required"
+    );
+
+    let nonce_app =
+        common::app(&STRICT.replace("[issuer.auth0]\n", "[issuer.auth0]\nrequire_nonce = true\n"));
+    let (s, h, _) = send(&nonce_app, get(&authorize_url(&[("nonce", "")]))).await;
+    assert_eq!(s, 302);
+    assert_eq!(
+        query_param(&location(&h), "error_description").unwrap(),
+        "nonce required"
+    );
+}
+
+#[tokio::test]
+async fn malformed_code_challenge_is_invalid_request() {
+    let app = app(STRICT);
+    for challenge in ["short", &"a".repeat(129), &format!("{}!", "a".repeat(42))] {
+        let (s, h, _) = send(
+            &app,
+            get(&authorize_url(&[
+                ("code_challenge", challenge),
+                ("code_challenge_method", "S256"),
+            ])),
+        )
+        .await;
+        assert_eq!(s, 302, "{challenge}");
+        assert_eq!(
+            query_param(&location(&h), "error").unwrap(),
+            "invalid_request",
+            "{challenge}"
+        );
+    }
+    let ok = "a".repeat(43) + "-._~";
+    let (s, _, _) = send(
+        &app,
+        get(&authorize_url(&[
+            ("code_challenge", &ok),
+            ("code_challenge_method", "plain"),
+        ])),
+    )
+    .await;
+    assert_eq!(s, 200);
+}
+
+#[tokio::test]
+async fn missing_response_type_is_invalid_request() {
+    let app = app(STRICT);
+    let url = "/auth0/authorize?client_id=example-app&scope=openid&state=st\
+               &redirect_uri=http%3A%2F%2Flocalhost%3A3000%2Fapi%2Fauth%2Fcallback%2Fauth0";
+    let (s, h, _) = send(&app, get(url)).await;
+    assert_eq!(s, 302);
+    assert_eq!(
+        query_param(&location(&h), "error").unwrap(),
+        "invalid_request"
+    );
+    assert_eq!(query_param(&location(&h), "state").unwrap(), "st");
+    let (_, h, _) = send(&app, get(&format!("{url}&response_type="))).await;
+    assert_eq!(
+        query_param(&location(&h), "error").unwrap(),
+        "invalid_request"
+    );
+}
