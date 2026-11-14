@@ -7,7 +7,7 @@ use axum::{
     extract::{Path, State},
     http::HeaderMap,
     response::{IntoResponse, Response},
-    routing::get,
+    routing::{get, post},
 };
 use tower_http::cors::{Any, CorsLayer};
 
@@ -17,6 +17,7 @@ use crate::issuer::issuer_path;
 use crate::jwks;
 use crate::state::{AppState, IssuerCtx};
 use crate::templates;
+use crate::token_endpoint;
 
 /// Builds the router for all configured issuers.
 pub fn build_router(state: Arc<AppState>) -> Router {
@@ -46,6 +47,7 @@ pub fn build_router(state: Arc<AppState>) -> Router {
                 "/authorize",
                 get(authorize::authorize_get).post(authorize::authorize_post),
             )
+            .route("/token", post(token_endpoint::token))
             .with_state(ctx);
         router = if path == "/" {
             router.merge(sub)

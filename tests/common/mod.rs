@@ -154,3 +154,45 @@ pub fn query_param(url: &str, name: &str) -> Option<String> {
         .find(|(k, _)| k == name)
         .map(|(_, v)| v)
 }
+
+/// `Basic base64(id:secret)` for an `Authorization` header.
+pub fn basic(id: &str, secret: &str) -> String {
+    use base64::Engine as _;
+    format!(
+        "Basic {}",
+        base64::engine::general_purpose::STANDARD.encode(format!("{id}:{secret}"))
+    )
+}
+
+/// Decodes the payload of a JWT without verifying it.
+pub fn claims_of(jwt: &str) -> Value {
+    use base64::Engine as _;
+    let payload = jwt.split('.').nth(1).unwrap();
+    let bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD
+        .decode(payload)
+        .unwrap();
+    serde_json::from_slice(&bytes).unwrap()
+}
+
+/// Posts the login form for alice and returns the `code` from the `Location` header.
+/// `extra` adds or replaces form fields.
+pub async fn login_code(app: &Router, extra: &[(&str, &str)]) -> String {
+    let mut form: Vec<(&str, &str)> = vec![
+        ("client_id", "example-app"),
+        (
+            "redirect_uri",
+            "http://localhost:3000/api/auth/callback/auth0",
+        ),
+        ("response_type", "code"),
+        ("scope", "openid profile email"),
+        ("state", "st"),
+        ("user", "alice"),
+    ];
+    for &(k, v) in extra {
+        form.retain(|&(a, _)| a != k);
+        form.push((k, v));
+    }
+    let (s, h, b) = send(app, post_form("/auth0/authorize", &form, &[])).await;
+    assert_eq!(s, 302, "{b}");
+    query_param(&location(&h), "code").unwrap()
+}
