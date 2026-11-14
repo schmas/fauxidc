@@ -1,0 +1,22 @@
+# Example Issuer in the style of a hosted tenant with a trailing-slash URL.
+# Run: fauxidc --config examples/auth0.toml
+# Discovery: http://localhost:9000/auth0/.well-known/openid-configuration
+
+[issuer.auth0]
+issuer_url = "http://localhost:9000/auth0/"
+sub_template = "auth0|{user_id}"
+
+[client.example_app]
+issuer = "*"
+client_id = "example-app"
+client_secret = "local"
+redirect_uris = ["http://localhost:3000/api/auth/callback/*"]
+post_logout_redirect_uris = ["http://localhost:3000/"]
+
+[user.alice]
+label = "Alice Admin"
+claims = { email = "alice@example.com", given_name = "Alice", family_name = "Admin", name = "Alice Admin", email_verified = true, roles = ["admin"] }
+
+[user.bob]
+label = "Bobby Viewer"
+claims = { email = "bob@example.com", given_name = "Bobby", family_name = "Viewer", name = "Bobby Viewer", email_verified = true, roles = ["viewer"] }

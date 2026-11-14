@@ -1,0 +1,15 @@
+# Uses the published image. Start with: docker compose up
+services:
+  fauxidc:
+    image: ghcr.io/schmas/fauxidc:latest
+    ports:
+      - "9000:9000"
+    volumes:
+      - ./auth0.toml:/config/fauxidc.toml:ro
+
+  # Your app can wait until fauxidc is healthy.
+  # app:
+  #   build: .
+  #   depends_on:
+  #     fauxidc:
+  #       condition: service_healthy

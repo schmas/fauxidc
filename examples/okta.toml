@@ -1,0 +1,25 @@
+# Example Issuer in the style of a hosted tenant with a path prefix and no trailing slash.
+# Run: fauxidc --config examples/okta.toml
+# Discovery: http://localhost:9000/oauth2/default/.well-known/openid-configuration
+#
+# Some SDKs expect provider-specific endpoint paths such as /v1/keys.
+# Overrides for those paths come with the `paths` key in M2.
+
+[issuer.okta]
+issuer_url = "http://localhost:9000/oauth2/default"
+sub_template = "00u{user_id}"
+
+[client.example_app]
+issuer = "*"
+client_id = "example-app"
+client_secret = "local"
+redirect_uris = ["http://localhost:3000/api/auth/callback/*"]
+post_logout_redirect_uris = ["http://localhost:3000/"]
+
+[user.alice]
+label = "Alice Admin"
+claims = { email = "alice@example.com", given_name = "Alice", family_name = "Admin", name = "Alice Admin", email_verified = true, roles = ["admin"], preferred_username = "alice@example.com" }
+
+[user.bob]
+label = "Bobby Viewer"
+claims = { email = "bob@example.com", given_name = "Bobby", family_name = "Viewer", name = "Bobby Viewer", email_verified = true, roles = ["viewer"], preferred_username = "bob@example.com" }
