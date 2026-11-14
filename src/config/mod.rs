@@ -44,6 +44,24 @@ pub(crate) mod test_util {
         dir
     }
 
+    /// Returns `rel` inside a new unique temporary directory. The directory is not created.
+    pub fn tmp_path(rel: &str) -> std::path::PathBuf {
+        std::env::temp_dir()
+            .join(format!("fauxidc-test-{}", uuid::Uuid::new_v4()))
+            .join(rel)
+    }
+
+    /// Waits until `p` exists. Polls every 10 ms for at most 2 s, then panics.
+    pub async fn wait_for_file(p: &std::path::Path) {
+        for _ in 0..200 {
+            if p.exists() {
+                return;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+        panic!("file {} did not appear within 2 s", p.display());
+    }
+
     /// Builds load inputs with no files, no flags and an empty working directory.
     pub fn inputs(env: &[(&str, &str)]) -> LoadInputs {
         LoadInputs {

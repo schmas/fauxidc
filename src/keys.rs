@@ -1,5 +1,8 @@
 //! RSA signing key: generation, PEM round trip, JWK and RFC 7638 `kid`.
 
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
+
 use base64::Engine as _;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use jsonwebtoken::{DecodingKey, EncodingKey};
@@ -8,6 +11,7 @@ use rsa::pkcs1::DecodeRsaPrivateKey;
 use rsa::pkcs8::{DecodePrivateKey, EncodePrivateKey, LineEnding};
 use rsa::traits::PublicKeyParts;
 use sha2::{Digest, Sha256};
+use tokio::sync::watch;
 
 const RSA_BITS: usize = 2048;
 
@@ -78,6 +82,128 @@ impl SigningKey {
     }
 }
 
+/// Where the signing key comes from, in priority order.
+#[derive(Debug, Clone, Default)]
+pub struct KeySource {
+    /// PEM text from the environment. Wins over `key_file`.
+    pub pem: Option<String>,
+    /// PEM file. Read if it exists; else a generated key is saved here.
+    pub key_file: Option<PathBuf>,
+}
+
+#[derive(Clone)]
+enum KeyState {
+    Pending,
+    Ready(Arc<SigningKey>),
+    Failed,
+}
+
+/// Cheap, cloneable access to a signing key that may still be generating.
+#[derive(Clone)]
+pub struct KeyHandle {
+    rx: watch::Receiver<KeyState>,
+}
+
+/// Publishes the key (or a failure) to every [`KeyHandle`] clone.
+pub struct KeyPublisher(watch::Sender<KeyState>);
+
+impl KeyPublisher {
+    pub fn publish(self, key: SigningKey) {
+        self.0.send_replace(KeyState::Ready(Arc::new(key)));
+    }
+
+    pub fn fail(self) {
+        self.0.send_replace(KeyState::Failed);
+    }
+}
+
+impl KeyHandle {
+    /// A handle that already holds `key`.
+    pub fn ready(key: SigningKey) -> KeyHandle {
+        let (_tx, rx) = watch::channel(KeyState::Ready(Arc::new(key)));
+        KeyHandle { rx }
+    }
+
+    /// A pending handle and the publisher that completes it.
+    pub fn channel() -> (KeyHandle, KeyPublisher) {
+        let (tx, rx) = watch::channel(KeyState::Pending);
+        (KeyHandle { rx }, KeyPublisher(tx))
+    }
+
+    /// Wait until the key is ready. Fails if generation failed or the publisher was dropped.
+    pub async fn get(&self) -> Result<Arc<SigningKey>, KeyError> {
+        let mut rx = self.rx.clone();
+        let state = rx
+            .wait_for(|s| !matches!(s, KeyState::Pending))
+            .await
+            .map_err(|_| KeyError::Unavailable)?;
+        match &*state {
+            KeyState::Ready(key) => Ok(key.clone()),
+            _ => Err(KeyError::Unavailable),
+        }
+    }
+
+    /// The key if it is ready now.
+    pub fn try_get(&self) -> Option<Arc<SigningKey>> {
+        match &*self.rx.borrow() {
+            KeyState::Ready(key) => Some(key.clone()),
+            _ => None,
+        }
+    }
+
+    /// Resolve the key: `pem`, else an existing `key_file`, else generate in the background
+    /// and save to `key_file`. Must run inside a tokio runtime.
+    pub fn start(source: KeySource) -> Result<KeyHandle, KeyError> {
+        if let Some(pem) = &source.pem {
+            return SigningKey::from_pem(pem).map(KeyHandle::ready);
+        }
+        if let Some(file) = source.key_file.as_deref().filter(|f| f.exists()) {
+            let pem = std::fs::read_to_string(file)
+                .map_err(|e| KeyError::InvalidPem(format!("{}: {e}", file.display())))?;
+            return SigningKey::from_pem(&pem).map(KeyHandle::ready);
+        }
+        let (handle, publisher) = KeyHandle::channel();
+        let dispatch = tracing::dispatcher::get_default(Clone::clone);
+        let key_file = source.key_file;
+        tokio::task::spawn_blocking(move || {
+            tracing::dispatcher::with_default(&dispatch, || match SigningKey::generate() {
+                Ok(key) => {
+                    let pem = key.to_pem().to_owned();
+                    publisher.publish(key);
+                    if let Some(path) = key_file
+                        && let Err(err) = write_key_file(&path, &pem)
+                    {
+                        tracing::warn!(
+                            "cannot write key_file {}: {err}; using the generated key",
+                            path.display()
+                        );
+                    }
+                }
+                Err(err) => {
+                    tracing::error!("cannot generate signing key: {err}");
+                    publisher.fail();
+                }
+            });
+        });
+        Ok(handle)
+    }
+}
+
+fn write_key_file(path: &Path, pem: &str) -> std::io::Result<()> {
+    use std::io::Write as _;
+    if let Some(dir) = path.parent().filter(|d| !d.as_os_str().is_empty()) {
+        std::fs::create_dir_all(dir)?;
+    }
+    let mut options = std::fs::OpenOptions::new();
+    options.write(true).create(true).truncate(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt as _;
+        options.mode(0o600);
+    }
+    options.open(path)?.write_all(pem.as_bytes())
+}
+
 /// RFC 7638 JWK thumbprint (SHA-256, base64url without padding) of an RSA public key.
 pub(crate) fn thumbprint(n_b64: &str, e_b64: &str) -> String {
     let canonical = format!(r#"{{"e":"{e_b64}","kty":"RSA","n":"{n_b64}"}}"#);
@@ -87,6 +213,172 @@ pub(crate) fn thumbprint(n_b64: &str, e_b64: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::test_util::{tmp_path, wait_for_file};
+    use std::sync::{LazyLock, Mutex};
+    use std::time::Duration;
+
+    static TEST_KEY: LazyLock<SigningKey> = LazyLock::new(|| SigningKey::generate().unwrap());
+
+    fn test_key() -> SigningKey {
+        TEST_KEY.clone()
+    }
+
+    struct CaptureWriter(Arc<Mutex<Vec<u8>>>);
+
+    impl std::io::Write for CaptureWriter {
+        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+            self.0.lock().unwrap().extend_from_slice(buf);
+            Ok(buf.len())
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    #[tokio::test]
+    async fn get_waits_for_publish() {
+        let (h, p) = KeyHandle::channel();
+        assert!(h.try_get().is_none());
+        let h2 = h.clone();
+        let waiter = tokio::spawn(async move { h2.get().await.map(|k| k.kid.clone()) });
+        tokio::time::sleep(Duration::from_millis(20)).await;
+        assert!(!waiter.is_finished());
+        let key = test_key();
+        let kid = key.kid.clone();
+        p.publish(key);
+        assert_eq!(waiter.await.unwrap().unwrap(), kid);
+    }
+
+    #[tokio::test]
+    async fn failed_publisher_gives_unavailable() {
+        let (h, p) = KeyHandle::channel();
+        p.fail();
+        assert!(matches!(h.get().await, Err(KeyError::Unavailable)));
+    }
+
+    #[tokio::test]
+    async fn dropped_publisher_gives_unavailable() {
+        let (h, p) = KeyHandle::channel();
+        drop(p);
+        assert!(matches!(h.get().await, Err(KeyError::Unavailable)));
+    }
+
+    #[tokio::test]
+    async fn ready_handle_returns_key() {
+        let key = test_key();
+        let h = KeyHandle::ready(key.clone());
+        assert_eq!(h.get().await.unwrap().kid, key.kid);
+    }
+
+    #[tokio::test]
+    async fn pem_wins_over_file() {
+        let file = tmp_path("key.pem");
+        std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+        std::fs::write(&file, SigningKey::generate().unwrap().to_pem()).unwrap();
+        let env_key = test_key();
+        let h = KeyHandle::start(KeySource {
+            pem: Some(env_key.to_pem().into()),
+            key_file: Some(file),
+        })
+        .unwrap();
+        assert_eq!(h.try_get().unwrap().kid, env_key.kid);
+    }
+
+    #[tokio::test]
+    async fn invalid_pem_fails_start() {
+        assert!(
+            KeyHandle::start(KeySource {
+                pem: Some("bad".into()),
+                key_file: None
+            })
+            .is_err()
+        );
+    }
+
+    #[tokio::test]
+    async fn invalid_key_file_fails_start() {
+        let file = tmp_path("key.pem");
+        std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+        std::fs::write(&file, "bad").unwrap();
+        assert!(
+            KeyHandle::start(KeySource {
+                pem: None,
+                key_file: Some(file)
+            })
+            .is_err()
+        );
+    }
+
+    #[tokio::test]
+    async fn generated_key_is_saved_and_reused() {
+        let file = tmp_path("sub/dir/key.pem");
+        let h = KeyHandle::start(KeySource {
+            pem: None,
+            key_file: Some(file.clone()),
+        })
+        .unwrap();
+        let kid = h.get().await.unwrap().kid.clone();
+        wait_for_file(&file).await; // the write happens after publish
+        // The file may exist before its content is complete; retry the load briefly.
+        let mut reused = None;
+        for _ in 0..200 {
+            if let Ok(h2) = KeyHandle::start(KeySource {
+                pem: None,
+                key_file: Some(file.clone()),
+            }) && let Some(k) = h2.try_get()
+            {
+                reused = Some(k.kid.clone());
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+        assert_eq!(reused.as_deref(), Some(kid.as_str()));
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn saved_key_file_is_private() {
+        use std::os::unix::fs::PermissionsExt;
+        let file = tmp_path("key.pem");
+        let h = KeyHandle::start(KeySource {
+            pem: None,
+            key_file: Some(file.clone()),
+        })
+        .unwrap();
+        h.get().await.unwrap();
+        wait_for_file(&file).await;
+        let mode = std::fs::metadata(&file).unwrap().permissions().mode();
+        assert_eq!(mode & 0o777, 0o600);
+    }
+
+    #[tokio::test]
+    async fn unwritable_key_file_still_gives_a_key_and_warns() {
+        let logs = Arc::new(Mutex::new(Vec::<u8>::new()));
+        let w = logs.clone();
+        let sub = tracing_subscriber::fmt()
+            .with_writer(move || CaptureWriter(w.clone()))
+            .with_ansi(false)
+            .finish();
+        let _guard = tracing::subscriber::set_default(sub);
+        let h = KeyHandle::start(KeySource {
+            pem: None,
+            key_file: Some("/proc/fauxidc/none/key.pem".into()),
+        })
+        .unwrap();
+        assert!(h.get().await.is_ok());
+        let mut text = String::new();
+        for _ in 0..200 {
+            text = String::from_utf8_lossy(&logs.lock().unwrap()).into_owned();
+            if text.contains("cannot write key_file") {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+        assert!(
+            text.contains("WARN") && text.contains("cannot write key_file"),
+            "{text}"
+        );
+    }
 
     // RFC 7638 section 3.1 example key modulus.
     const RFC7638_N: &str = "0vx7agoebGcQSuuPiLJXZptN9nndrQmbXEps2aiAFbWhM78LhWx4cbbfAAtVT86zwu1RK7aPFFxuhDR1L6tSoc_BJECPebWKRXjBZCiFV4n3oknjhMstn64tZ_2W-5JsGY4Hc5n9yBXArwl93lqt7_RN5w6Cf0h4QyQ5v-65YGjQR0_FDW2QvzqY368QQMicAtaSqzs8KJZgnYb9c7d0zgdAZHzu6qMQvRL5hajrn1n91CbOpbISD08qNLyrdkt-bFTWhAI4vMQFh6WeZu0fM4lFd2NcRwr3XPksINHaQ-G_xBniIqbw0Ls1jF44-csFCur-kEgU8awapJzKnqDKgw";
