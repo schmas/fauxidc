@@ -189,11 +189,17 @@ impl KeyHandle {
     }
 }
 
+/// Writes `pem` to `path` atomically: a temp file in the same directory (mode 0600 on unix),
+/// then a rename over the target. The temp file is removed if a step fails.
 fn write_key_file(path: &Path, pem: &str) -> std::io::Result<()> {
     use std::io::Write as _;
-    if let Some(dir) = path.parent().filter(|d| !d.as_os_str().is_empty()) {
+    let dir = path.parent().filter(|d| !d.as_os_str().is_empty());
+    if let Some(dir) = dir {
         std::fs::create_dir_all(dir)?;
     }
+    let mut name = path.file_name().unwrap_or_default().to_os_string();
+    name.push(format!(".tmp.{}", std::process::id()));
+    let tmp = path.with_file_name(name);
     let mut options = std::fs::OpenOptions::new();
     options.write(true).create(true).truncate(true);
     #[cfg(unix)]
@@ -201,7 +207,17 @@ fn write_key_file(path: &Path, pem: &str) -> std::io::Result<()> {
         use std::os::unix::fs::OpenOptionsExt as _;
         options.mode(0o600);
     }
-    options.open(path)?.write_all(pem.as_bytes())
+    let result = options
+        .open(&tmp)
+        .and_then(|mut file| {
+            file.write_all(pem.as_bytes())?;
+            file.sync_all()
+        })
+        .and_then(|()| std::fs::rename(&tmp, path));
+    if result.is_err() {
+        let _ = std::fs::remove_file(&tmp);
+    }
+    result
 }
 
 /// RFC 7638 JWK thumbprint (SHA-256, base64url without padding) of an RSA public key.
@@ -349,6 +365,32 @@ mod tests {
         wait_for_file(&file).await;
         let mode = std::fs::metadata(&file).unwrap().permissions().mode();
         assert_eq!(mode & 0o777, 0o600);
+    }
+
+    #[test]
+    fn key_file_write_replaces_atomically_and_leaves_no_temp_file() {
+        let file = tmp_path("key.pem");
+        let dir = file.parent().unwrap().to_path_buf();
+        write_key_file(&file, "first").unwrap();
+        // A read-only target is replaced by rename; an in-place write would fail.
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o400)).unwrap();
+        }
+        write_key_file(&file, "second").unwrap();
+        assert_eq!(std::fs::read_to_string(&file).unwrap(), "second");
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = std::fs::metadata(&file).unwrap().permissions().mode();
+            assert_eq!(mode & 0o777, 0o600);
+        }
+        let names: Vec<String> = std::fs::read_dir(&dir)
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(names, vec!["key.pem".to_owned()]);
     }
 
     #[tokio::test]
