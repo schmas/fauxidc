@@ -4,6 +4,7 @@
 #![forbid(unsafe_code)]
 
 pub mod authorize;
+pub mod claims;
 pub mod clients;
 pub mod config;
 pub mod cookies;
