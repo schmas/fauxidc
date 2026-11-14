@@ -3,6 +3,7 @@
 //! The library API is unstable before 1.0.
 #![forbid(unsafe_code)]
 
+pub mod clients;
 pub mod config;
 pub mod discovery;
 pub mod error;
