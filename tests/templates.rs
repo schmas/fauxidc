@@ -89,3 +89,36 @@ fn missing_login_template_file_fails_startup() {
         Err(fauxidc::error::StartError::Templates(_))
     ));
 }
+
+#[tokio::test]
+async fn templates_dir_replaces_one_file() {
+    let dir = tmp_dir();
+    std::fs::write(dir.join("login.html"), "CUSTOM {{ issuer_id }}").unwrap();
+    let app = app(&format!(
+        "[server]\ntemplates_dir = \"{}\"\n{STRICT}",
+        dir.display()
+    ));
+    let (_, _, b) = send(&app, get(&authorize_url(&[]))).await;
+    assert_eq!(b, "CUSTOM auth0");
+    let (_, _, b) = send(
+        &app,
+        get("/auth0/authorize?client_id=nope&redirect_uri=http://x/cb&response_type=code"),
+    )
+    .await;
+    assert!(
+        b.contains("unknown client_id"),
+        "embedded error.html still used"
+    );
+}
+
+#[tokio::test]
+async fn per_issuer_login_template() {
+    let dir = tmp_dir();
+    let f = dir.join("a.html");
+    std::fs::write(&f, "ISSUER PAGE").unwrap();
+    let app = app(&STRICT.replace(
+        "[issuer.auth0]\n",
+        &format!("[issuer.auth0]\nlogin_template = \"{}\"\n", f.display()),
+    ));
+    assert_eq!(send(&app, get(&authorize_url(&[]))).await.2, "ISSUER PAGE");
+}

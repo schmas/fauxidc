@@ -11,6 +11,7 @@ use axum::{
 };
 use tower_http::cors::{Any, CorsLayer};
 
+use crate::authorize;
 use crate::discovery;
 use crate::issuer::issuer_path;
 use crate::jwks;
@@ -41,6 +42,7 @@ pub fn build_router(state: Arc<AppState>) -> Router {
                 get(discovery::document).layer(cors.clone()),
             )
             .route("/jwks", get(jwks::jwks).layer(cors.clone()))
+            .route("/authorize", get(authorize::authorize_get))
             .with_state(ctx);
         router = if path == "/" {
             router.merge(sub)

@@ -5,11 +5,49 @@ use std::sync::{Arc, Mutex};
 
 use axum::http::HeaderMap;
 
-use crate::config::{ClientConfig, Config, IssuerConfig};
+use crate::config::{Claims, ClientConfig, Config, IssuerConfig};
 use crate::error::StartError;
 use crate::issuer::endpoint_base;
 use crate::keys::KeyHandle;
 use crate::templates::Templates;
+
+/// The PKCE code challenge method.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PkceMethod {
+    S256,
+    Plain,
+}
+
+/// Who signed in.
+#[derive(Debug, Clone)]
+pub enum Subject {
+    /// A configured user, with claim overrides from the login form.
+    User { id: String, overrides: Claims },
+    /// A custom subject typed on the login page.
+    Custom { sub: String, claims: Claims },
+}
+
+/// What an authorization code stands for.
+#[derive(Debug, Clone)]
+pub struct CodeGrant {
+    pub issuer_id: String,
+    pub client_id: String,
+    pub redirect_uri: String,
+    pub scope: Vec<String>,
+    pub nonce: Option<String>,
+    pub pkce: Option<(String, PkceMethod)>,
+    pub audience: Option<String>,
+    pub subject: Subject,
+    pub auth_time: u64,
+    pub expires_at: u64,
+}
+
+/// The current time in seconds since the Unix epoch.
+pub fn now_secs() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs())
+}
 
 /// In-memory stores. Part 3 adds fields.
 #[derive(Default)]
