@@ -4,11 +4,13 @@ pub mod layers;
 pub mod load;
 pub mod merge;
 pub mod source;
+pub mod validate;
 
 pub use layers::{env_layer, file_layer, flag_layer, inline_layer};
 pub use load::{CliOverrides, LoadInputs, Loaded, load};
 pub use merge::deep_merge;
 pub use source::{KeyPath, Layer, Source, SourceMap};
+pub use validate::validate;
 
 #[cfg(test)]
 pub(crate) mod test_util {

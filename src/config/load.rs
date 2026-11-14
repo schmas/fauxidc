@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use super::layers::ENV_PREFIX;
 use super::types::{Config, LogFormat};
 use super::{
-    Layer, Source, SourceMap, deep_merge, env_layer, file_layer, flag_layer, inline_layer,
+    Layer, Source, SourceMap, deep_merge, env_layer, file_layer, flag_layer, inline_layer, validate,
 };
 use crate::error::{ConfigError, ConfigErrors};
 
@@ -109,7 +109,7 @@ pub fn load(inputs: &LoadInputs) -> Result<Loaded, ConfigErrors> {
                 message: e.to_string(),
             }])
         })?;
-    validate(&config)?;
+    validate(&config, &sources)?;
     Ok(Loaded {
         config,
         sources,
@@ -146,12 +146,6 @@ fn zero_layer() -> Result<Layer, ConfigError> {
         message: e.to_string(),
     })?;
     Ok(Layer::from_table(table, Source::Default))
-}
-
-/// Placeholder until the semantic checks of Task 6 exist.
-#[allow(clippy::unnecessary_wraps)]
-fn validate(_config: &Config) -> Result<(), ConfigErrors> {
-    Ok(())
 }
 
 #[cfg(test)]
@@ -237,5 +231,12 @@ mod tests {
         let mut i = inputs(&[("FAUXIDC__SERVER__X", "1")]);
         i.config_files = vec![f];
         assert_eq!(load(&i).unwrap_err().0.len(), 2);
+    }
+
+    #[test]
+    fn env_without_issuer_fails_validation() {
+        let e = load(&inputs(&[("FAUXIDC__SERVER__PORT", "1")])).unwrap_err();
+        assert_eq!(e.0.len(), 1);
+        assert_eq!(e.0[0].message, "no issuer configured");
     }
 }
