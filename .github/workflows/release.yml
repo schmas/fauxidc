@@ -37,12 +37,15 @@ jobs:
 
   release:
     runs-on: ubuntu-latest
+    concurrency:
+      group: release-plz-release
+      cancel-in-progress: false
     permissions:
       contents: write
     outputs:
       releases_created: ${{ steps.release-plz.outputs.releases_created }}
       # The releases output is a JSON array of {package_name, version, tag, ...}.
-      tag: ${{ fromJSON(steps.release-plz.outputs.releases)[0].tag }}
+      tag: ${{ fromJSON(steps.release-plz.outputs.releases || '[]')[0].tag }}
     steps:
       - uses: actions/checkout@v7
         with:
