@@ -17,5 +17,6 @@ pub mod router;
 pub mod server;
 pub mod state;
 pub mod templates;
+pub mod tokens;
 
 pub use server::{RunningServer, Server, StartOptions};
