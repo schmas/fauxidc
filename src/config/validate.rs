@@ -4,6 +4,7 @@ use axum::http::Uri;
 
 use super::types::Config;
 use super::{KeyPath, Source, SourceMap};
+use crate::authorize::CUSTOM_USER;
 use crate::error::{ConfigError, ConfigErrors};
 use crate::issuer::issuer_path;
 
@@ -217,6 +218,14 @@ fn check_clients(config: &Config, c: &mut Collector<'_>) {
 
 fn check_users(config: &Config, c: &mut Collector<'_>) {
     for (user, cfg) in &config.user {
+        if user == CUSTOM_USER {
+            c.push(
+                &["user", user],
+                format!(
+                    "user id \"{CUSTOM_USER}\" is reserved for the Custom user on the login page"
+                ),
+            );
+        }
         for issuer in cfg
             .issuer
             .keys()
@@ -255,6 +264,13 @@ mod tests {
     #[test]
     fn bad_id() {
         assert!(errs(&format!("{A}[user.Bob]\n"))[0].starts_with("invalid id \"Bob\""));
+    }
+    #[test]
+    fn reserved_custom_user_id() {
+        assert_eq!(
+            errs(&format!("{A}[user.__custom__]\n")),
+            vec!["user id \"__custom__\" is reserved for the Custom user on the login page"]
+        );
     }
     #[test]
     fn missing_url() {

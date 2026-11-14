@@ -35,9 +35,7 @@ pub async fn userinfo(State(ctx): State<IssuerCtx>, headers: HeaderMap) -> Respo
 }
 
 async fn respond(ctx: &IssuerCtx, headers: &HeaderMap) -> Result<Response, OAuthError> {
-    let token = bearer_token(headers).ok_or_else(|| OAuthError::Bearer {
-        description: "missing bearer token".to_owned(),
-    })?;
+    let token = bearer_token(headers).ok_or(OAuthError::BearerMissing)?;
     let key = ctx
         .app
         .keys

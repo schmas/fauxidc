@@ -26,7 +26,12 @@ async fn userinfo_errors() {
     let app = app(&format!(
         "{STRICT}[issuer.other]\nissuer_url = \"http://localhost:9000/other\"\n"
     ));
-    assert_eq!(send(&app, get("/auth0/userinfo")).await.0, 401);
+    let (s, h, _) = send(&app, get("/auth0/userinfo")).await;
+    assert_eq!(s, 401);
+    assert_eq!(
+        h["www-authenticate"], "Bearer",
+        "RFC 6750 3.1: no error code"
+    );
     let (s, h, _) = send(
         &app,
         get_with("/auth0/userinfo", &[("authorization", "Bearer nope")]),

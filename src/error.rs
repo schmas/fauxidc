@@ -71,6 +71,10 @@ pub enum OAuthError {
     /// Resource style (RFC 6750): 401 with a `WWW-Authenticate: Bearer` header.
     #[error("invalid_token: {description}")]
     Bearer { description: String },
+    /// A request with no bearer token: 401 with a bare `WWW-Authenticate: Bearer` challenge
+    /// and no error code (RFC 6750 3.1).
+    #[error("missing bearer token")]
+    BearerMissing,
     /// A missing signing key.
     #[error("server_error: signing key not available")]
     Unavailable,
@@ -163,6 +167,11 @@ impl IntoResponse for OAuthError {
                         .into_response(),
                 }
             }
+            Self::BearerMissing => (
+                StatusCode::UNAUTHORIZED,
+                [(header::WWW_AUTHENTICATE, HeaderValue::from_static("Bearer"))],
+            )
+                .into_response(),
             Self::Unavailable => json_body(
                 StatusCode::SERVICE_UNAVAILABLE,
                 "server_error",

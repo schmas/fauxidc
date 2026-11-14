@@ -100,7 +100,12 @@ pub fn load(inputs: &LoadInputs) -> Result<Loaded, ConfigErrors> {
         return Err(ConfigErrors(errors));
     }
 
-    finish(merged, zero_config)
+    let mut loaded = finish(merged, zero_config)?;
+    if zero_config && let Some(default) = loaded.config.issuer.get_mut("default") {
+        // The Zero config Issuer URL follows the effective port, for example from `--port`.
+        default.issuer_url = format!("http://localhost:{}/default", loaded.config.server.port);
+    }
+    Ok(loaded)
 }
 
 /// Loads an inline layer (TOML or JSON) as the only source, then checks the result.
@@ -187,6 +192,19 @@ mod tests {
         let l = load(&i).unwrap();
         assert!(l.zero_config);
         assert_eq!(l.config.server.bind, "0.0.0.0");
+    }
+
+    #[test]
+    fn zero_config_issuer_url_follows_port_flag() {
+        let mut i = inputs(&[]);
+        i.flags.port = Some(9100);
+        let l = load(&i).unwrap();
+        assert!(l.zero_config);
+        assert_eq!(l.config.server.port, 9100);
+        assert_eq!(
+            l.config.issuer["default"].issuer_url,
+            "http://localhost:9100/default"
+        );
     }
 
     #[test]
