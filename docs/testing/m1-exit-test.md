@@ -80,11 +80,28 @@ import { handlers } from "../../../../auth"
 export const { GET, POST } = handlers
 ```
 
-Create `app/layout.js` and `app/page.js` with any minimal content.
+Create `app/layout.js`. The App Router needs a root layout that renders `<html>` and `<body>`:
+
+```js
+export default function RootLayout({ children }) {
+  return <html><body>{children}</body></html>
+}
+```
+
+Create `app/page.js`:
+
+```js
+export default function Page() {
+  return <p>exit test</p>
+}
+```
+
+The minimal app has these files: `package.json`, `auth.js`, `app/layout.js`, `app/page.js` and `app/api/auth/[...nextauth]/route.js`.
+All files are `.js` files with ES module syntax (`import` / `export`) and JSX. Next.js compiles them. The app needs no `next.config.js`.
 
 ### Run 1: Auth0 provider
 
-1. Start the mock: `cargo run -- --config examples/auth0.toml`.
+1. In a separate terminal, start the mock: `cargo run -- --config examples/auth0.toml`.
 2. Start the app: `EXIT_PROVIDER=auth0 npm run dev`.
 3. Open `http://localhost:3000/api/auth/signin` in a browser and select the provider.
 4. On the mock login page, select Alice Admin and sign in.
@@ -99,7 +116,7 @@ A restart then makes the token invalid.
 ### Run 2: Okta provider
 
 1. Stop the mock and the app.
-2. Start the mock: `cargo run -- --config examples/okta.toml`.
+2. In a separate terminal, start the mock: `cargo run -- --config examples/okta.toml`.
 3. Start the app: `EXIT_PROVIDER=okta npm run dev`.
 4. Do steps 3 to 5 of run 1 again.
 
@@ -111,8 +128,8 @@ You can drive the login with `curl` and a cookie jar.
 
 1. Copy the example config to a temporary directory.
    Add `auto_login = true` to the `[issuer.*]` table. Do not edit `examples/`.
-2. Add `login_hint: "alice"` to `authorization.params` in `auth.js`.
-3. Start the mock with the copied config, and start the app.
+2. In `auth.js`, add `login_hint: "alice"` to `authorization.params` in the `common` object.
+3. In a separate terminal, start the mock with the copied config. Then start the app.
 4. Run the script below with `auth0` or `okta` as the argument.
 
 ```sh
@@ -218,7 +235,7 @@ Run:
 cargo test --test compat_openidconnect
 ```
 
-Expected: the test passes. CI runs it with `cargo test`.
+Expected: the test passes. CI runs it with `cargo nextest run`.
 
 ## Clean up
 

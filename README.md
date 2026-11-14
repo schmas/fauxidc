@@ -21,6 +21,10 @@ Docker, for the published image (the image is not published yet):
 docker run -p 9000:9000 ghcr.io/schmas/fauxidc
 ```
 
+The image `HEALTHCHECK` runs `fauxidc healthcheck`, which probes the configured port.
+To change the port, set it in `/config/fauxidc.toml` or with `FAUXIDC__SERVER__PORT`, not only with a `--port` flag in `CMD`. Else override the `HEALTHCHECK`.
+A `FAUXIDC__*` env var turns off Zero config, so use it together with a config that has an Issuer.
+
 Cargo, for the published crate (not published yet). From a checkout, use `cargo run --` instead:
 
 ```sh
