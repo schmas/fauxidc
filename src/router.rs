@@ -18,6 +18,7 @@ use crate::jwks;
 use crate::state::{AppState, IssuerCtx};
 use crate::templates;
 use crate::token_endpoint;
+use crate::userinfo;
 
 /// Builds the router for all configured issuers.
 pub fn build_router(state: Arc<AppState>) -> Router {
@@ -48,6 +49,10 @@ pub fn build_router(state: Arc<AppState>) -> Router {
                 get(authorize::authorize_get).post(authorize::authorize_post),
             )
             .route("/token", post(token_endpoint::token))
+            .route(
+                "/userinfo",
+                get(userinfo::userinfo).post(userinfo::userinfo),
+            )
             .with_state(ctx);
         router = if path == "/" {
             router.merge(sub)

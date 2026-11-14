@@ -196,3 +196,27 @@ pub async fn login_code(app: &Router, extra: &[(&str, &str)]) -> String {
     assert_eq!(s, 302, "{b}");
     query_param(&location(&h), "code").unwrap()
 }
+
+/// Logs alice in, exchanges the code at `/auth0/token` as example-app and returns the access token.
+/// `extra` adds or replaces login form fields.
+pub async fn access_token_for(app: &Router, extra: &[(&str, &str)]) -> String {
+    let code = login_code(app, extra).await;
+    let (s, _, b) = send(
+        app,
+        post_form(
+            "/auth0/token",
+            &[
+                ("grant_type", "authorization_code"),
+                ("code", &code),
+                (
+                    "redirect_uri",
+                    "http://localhost:3000/api/auth/callback/auth0",
+                ),
+            ],
+            &[("authorization", &basic("example-app", "local"))],
+        ),
+    )
+    .await;
+    assert_eq!(s, 200, "{b}");
+    json(&b)["access_token"].as_str().unwrap().to_owned()
+}
