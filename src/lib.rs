@@ -6,6 +6,7 @@
 pub mod authorize;
 pub mod clients;
 pub mod config;
+pub mod cookies;
 pub mod discovery;
 pub mod error;
 pub mod issuer;

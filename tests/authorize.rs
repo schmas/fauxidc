@@ -211,3 +211,83 @@ async fn unknown_user_is_rejected() {
     assert_eq!(s, 400);
     assert!(b.contains("Choose a user"));
 }
+
+#[tokio::test]
+async fn remember_sets_cookie_and_next_request_skips_page() {
+    let app = app(STRICT);
+    let (_, h, _) = send(
+        &app,
+        post_form("/auth0/authorize", &login_form(&[("remember", "on")]), &[]),
+    )
+    .await;
+    let cookie = h["set-cookie"].to_str().unwrap().to_string();
+    assert!(
+        cookie.starts_with("fauxidc_user_auth0=alice;")
+            && cookie.contains("Path=/auth0")
+            && cookie.contains("HttpOnly")
+    );
+    let (s, h, _) = send(
+        &app,
+        get_with(
+            &authorize_url(&[]),
+            &[("cookie", "fauxidc_user_auth0=alice")],
+        ),
+    )
+    .await;
+    assert_eq!(s, 302);
+    assert!(query_param(&location(&h), "code").is_some());
+}
+
+#[tokio::test]
+async fn prompt_login_ignores_cookie() {
+    let (s, _, _) = send(
+        &app(STRICT),
+        get_with(
+            &authorize_url(&[("prompt", "login")]),
+            &[("cookie", "fauxidc_user_auth0=alice")],
+        ),
+    )
+    .await;
+    assert_eq!(s, 200);
+}
+
+#[tokio::test]
+async fn cookie_for_removed_user_shows_page() {
+    let (s, _, _) = send(
+        &app(STRICT),
+        get_with(
+            &authorize_url(&[]),
+            &[("cookie", "fauxidc_user_auth0=ghost")],
+        ),
+    )
+    .await;
+    assert_eq!(s, 200);
+}
+
+#[tokio::test]
+async fn login_hint_with_auto_login() {
+    let auto = app(&STRICT.replace("[issuer.auth0]\n", "[issuer.auth0]\nauto_login = true\n"));
+    let (s, _, _) = send(&auto, get(&authorize_url(&[("login_hint", "bob")]))).await;
+    assert_eq!(s, 302);
+    let (s, _, b) = send(&app(STRICT), get(&authorize_url(&[("login_hint", "bob")]))).await;
+    assert_eq!(s, 200, "no auto_login: page with bob preselected");
+    assert!(b.contains(r#"value="bob" selected"#));
+}
+
+#[tokio::test]
+async fn custom_user_is_not_remembered() {
+    let (_, h, _) = send(
+        &app(STRICT),
+        post_form(
+            "/auth0/authorize",
+            &login_form(&[
+                ("user", "__custom__"),
+                ("custom_sub", "c-1"),
+                ("remember", "on"),
+            ]),
+            &[],
+        ),
+    )
+    .await;
+    assert!(h.get("set-cookie").is_none());
+}

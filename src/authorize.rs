@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::clients::{ResolvedClient, find_client, redirect_uri_matches, register_lenient};
 use crate::config::Claims;
+use crate::cookies::{auto_select_name, auto_select_set, read_cookie};
 use crate::error::{OAuthError, append_query};
 use crate::state::{CodeGrant, IssuerCtx, PkceMethod, Subject, now_secs};
 use crate::templates::{CONTEXT_VERSION, ErrorContext, LoginContext, STATIC_BASE, UserOption};
@@ -190,14 +191,50 @@ fn parse_pkce(p: &AuthorizeParams) -> Result<Option<(String, PkceMethod)>, Strin
 /// `GET {issuer}/authorize`.
 pub async fn authorize_get(
     State(ctx): State<IssuerCtx>,
-    _headers: HeaderMap,
+    headers: HeaderMap,
     Query(p): Query<AuthorizeParams>,
 ) -> Response {
     match validate(&ctx, &p) {
-        Ok(request) => login_page(&ctx, &request, StatusCode::OK, None, &KeptInput::default()),
+        Ok(request) => match skip_login(&ctx, &request, &headers) {
+            Some(id) => issue_code(
+                &ctx,
+                &request,
+                Subject::User {
+                    id,
+                    overrides: Claims::new(),
+                },
+            ),
+            None => login_page(&ctx, &request, StatusCode::OK, None, &KeptInput::default()),
+        },
         Err(Rejection::Redirect(error)) => error.into_response(),
         Err(Rejection::Page(status, message)) => error_page(&ctx, status, message),
     }
+}
+
+/// The configured user to sign in without the login page, if any.
+///
+/// `prompt=login` always shows the page. Else `auto_login` with a `login_hint` that names a
+/// user wins, then the auto-select cookie.
+fn skip_login(ctx: &IssuerCtx, request: &ValidRequest, headers: &HeaderMap) -> Option<String> {
+    let users = &ctx.app.config.user;
+    let wants_login = request
+        .params
+        .prompt
+        .as_deref()
+        .is_some_and(|v| v.split_whitespace().any(|w| w == "login"));
+    if wants_login {
+        return None;
+    }
+    if ctx.issuer().auto_login
+        && let Some(hint) = request
+            .params
+            .login_hint
+            .as_ref()
+            .filter(|h| users.contains_key(*h))
+    {
+        return Some(hint.clone());
+    }
+    read_cookie(headers, &auto_select_name(&ctx.id)).filter(|id| users.contains_key(id))
 }
 
 /// The login form text that a re-rendered page keeps.
@@ -292,11 +329,7 @@ fn parse_claims(text: &str) -> Option<Claims> {
 }
 
 /// `POST {issuer}/authorize`: the login form submit.
-pub async fn authorize_post(
-    State(ctx): State<IssuerCtx>,
-    _headers: HeaderMap,
-    Form(f): Form<LoginForm>,
-) -> Response {
+pub async fn authorize_post(State(ctx): State<IssuerCtx>, Form(f): Form<LoginForm>) -> Response {
     let request = match validate(&ctx, &f.params) {
         Ok(request) => request,
         Err(Rejection::Redirect(error)) => return error.into_response(),
@@ -308,7 +341,19 @@ pub async fn authorize_post(
         override_claims: f.override_claims.clone().unwrap_or_default(),
     };
     match subject_from_form(&ctx, &f) {
-        Ok(subject) => issue_code(&ctx, &request, subject),
+        Ok(subject) => {
+            let remembered = match (&subject, f.remember.is_some()) {
+                (Subject::User { id, .. }, true) => auto_select_set(&ctx.id, &ctx.path, id),
+                _ => None,
+            };
+            let mut response = issue_code(&ctx, &request, subject);
+            if let Some(cookie) = remembered
+                && response.status() == StatusCode::FOUND
+            {
+                response.headers_mut().append(header::SET_COOKIE, cookie);
+            }
+            response
+        }
         Err(message) => {
             tracing::info!(issuer = %ctx.id, "login rejected: {message}");
             login_page(
