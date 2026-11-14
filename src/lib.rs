@@ -7,6 +7,7 @@ pub mod config;
 pub mod discovery;
 pub mod error;
 pub mod issuer;
+pub mod jwks;
 pub mod keys;
 pub mod router;
 pub mod state;

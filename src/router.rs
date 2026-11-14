@@ -13,6 +13,7 @@ use tower_http::cors::{Any, CorsLayer};
 
 use crate::discovery;
 use crate::issuer::issuer_path;
+use crate::jwks;
 use crate::state::{AppState, IssuerCtx};
 
 /// Builds the router for all configured issuers.
@@ -38,6 +39,7 @@ pub fn build_router(state: Arc<AppState>) -> Router {
                 "/.well-known/oauth-authorization-server",
                 get(discovery::document).layer(cors.clone()),
             )
+            .route("/jwks", get(jwks::jwks).layer(cors.clone()))
             .with_state(ctx);
         router = if path == "/" {
             router.merge(sub)
