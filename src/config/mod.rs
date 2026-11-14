@@ -3,12 +3,14 @@ pub use types::*;
 pub mod layers;
 pub mod load;
 pub mod merge;
+pub mod show;
 pub mod source;
 pub mod validate;
 
 pub use layers::{env_layer, file_layer, flag_layer, inline_layer};
 pub use load::{CliOverrides, LoadInputs, Loaded, load};
 pub use merge::deep_merge;
+pub use show::render;
 pub use source::{KeyPath, Layer, Source, SourceMap};
 pub use validate::validate;
 
