@@ -116,3 +116,18 @@ fn bind_failure_exits_1() {
         .unwrap();
     assert_eq!(out.status.code(), Some(1));
 }
+
+#[test]
+fn healthcheck_against_running_server() {
+    let port = free_port();
+    let mut child = fauxidc_cmd(&["--port", &port.to_string()]).spawn().unwrap();
+    wait_for_port(port, Duration::from_secs(2));
+    assert!(
+        fauxidc_cmd(&["healthcheck", "--port", &port.to_string()])
+            .status()
+            .unwrap()
+            .success()
+    );
+    child.kill().unwrap();
+    child.wait().unwrap();
+}

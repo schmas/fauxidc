@@ -1,13 +1,14 @@
 #![forbid(unsafe_code)]
 
 use std::process::ExitCode;
+use std::time::Duration;
 
 use anyhow::Context;
 use clap::Parser;
 use fauxidc::cli::{Cli, Command};
 use fauxidc::config::{self, LoadInputs, Loaded};
 use fauxidc::error::StartError;
-use fauxidc::{Server, StartOptions, logging};
+use fauxidc::{Server, StartOptions, healthcheck, logging};
 
 const DEFAULT_PORT: u16 = 9000;
 
@@ -28,10 +29,16 @@ async fn run(cli: Cli) -> anyhow::Result<ExitCode> {
         .context("cannot read the working directory")?;
     match (cli.command, config::load(&inputs)) {
         // A config error never fails the healthcheck: it falls back to the default port.
-        (Some(Command::Healthcheck { url: _ }), loaded) => {
-            let _port = loaded.map_or(DEFAULT_PORT, |loaded| loaded.config.server.port);
-            eprintln!("healthcheck not implemented");
-            Ok(ExitCode::from(1))
+        (Some(Command::Healthcheck { url }), loaded) => {
+            let port = loaded.map_or(DEFAULT_PORT, |loaded| loaded.config.server.port);
+            let url = url.unwrap_or_else(|| format!("http://127.0.0.1:{port}/_mock/health"));
+            match healthcheck::check(&url, Duration::from_secs(2)) {
+                Ok(()) => Ok(ExitCode::SUCCESS),
+                Err(message) => {
+                    eprintln!("healthcheck failed: {message}");
+                    Ok(ExitCode::from(1))
+                }
+            }
         }
         (_, Err(errors)) => {
             eprintln!("{errors}");
