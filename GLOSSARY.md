@@ -20,7 +20,7 @@
 
 **Test API**: Endpoints under `/_mock` for automated tests. They issue tokens without a browser and show the request log. They are not part of any standard.
 
-**Session**: Proof that a browser already logged in to one Issuer. It lets `prompt=none` succeed without the login page. It ends at logout or restart.
+**Session**: Proof that a browser already logged in to one Issuer. It lets `prompt=none` succeed without the login page. It also lets a request with `max_age` skip the login page when the Session is younger than `max_age`. It ends at logout or restart.
 
 **Auto-select**: A browser preference to sign in the remembered User and skip the login page next time. It is not a Session: it does not make `prompt=none` succeed. `prompt=login` still shows the page. Logout clears it.
 
