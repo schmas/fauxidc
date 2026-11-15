@@ -28,7 +28,16 @@ pub fn app(toml: &str) -> Router {
 /// Builds the router from an inline TOML config and the given key handle.
 pub fn app_with_keys(toml: &str, keys: KeyHandle) -> Router {
     let loaded = fauxidc::config::load_str(toml).unwrap();
-    let state = AppState::new(loaded.config, keys).unwrap();
+    app_from_parts(loaded.config, keys)
+}
+
+/// Builds the router from a loaded config and a ready shared key.
+pub fn app_from_config(config: fauxidc::config::Config) -> Router {
+    app_from_parts(config, KeyHandle::ready(KEY.clone()))
+}
+
+fn app_from_parts(config: fauxidc::config::Config, keys: KeyHandle) -> Router {
+    let state = AppState::new(config, keys).unwrap();
     build_router(Arc::new(state))
 }
 

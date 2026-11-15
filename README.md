@@ -5,8 +5,19 @@ It ships as a single static binary and needs no external infrastructure.
 
 ## Status
 
-Pre-alpha, milestone M1. Login with the authorization code flow works.
+Pre-alpha, milestone M2. Login with the authorization code flow and the full OAuth surface for tests work.
 See [docs/spec.md](docs/spec.md) for the plan.
+
+M2 features:
+
+- Refresh tokens with `offline_access`, rotation and the reuse check.
+- The `client_credentials` grant.
+- `/endsession` (RP-Initiated Logout) with `logout_param_aliases`.
+- `/introspect` (RFC 7662) and `/revoke` (RFC 7009).
+- Client authentication methods `client_secret_basic`, `client_secret_post` and `none`.
+- `paths` overrides for endpoint paths, published in discovery.
+- CORS on `/token`, `/userinfo` and `/revoke` from the Client `web_origins`.
+- The Test API token endpoint and the Request log.
 
 ## Not for production
 
@@ -52,13 +63,22 @@ To use one of the example configs:
 fauxidc --config examples/auth0.toml
 ```
 
+The two example configs merge. This command serves both Issuers:
+
+```sh
+fauxidc --config examples/auth0.toml --config examples/okta.toml
+```
+
 The `examples/` directory has:
 
-- `auth0.toml`: Issuer `auth0` at `http://localhost:9000/auth0/`.
-- `okta.toml`: Issuer `okta` at `http://localhost:9000/oauth2/default`.
+- `auth0.toml`: Issuer `auth0` at `http://localhost:9000/auth0/`, with the token path `/oauth/token`,
+  the logout path `/v2/logout` and the logout alias `returnTo`.
+- `okta.toml`: Issuer `okta` at `http://localhost:9000/oauth2/default`, with `/v1/*` endpoint paths
+  (for example `/v1/token` and `/v1/keys`).
 - `docker-compose.yml`: runs the published image with `auth0.toml`.
 
-Both configs define the Client `example-app` and the Users `alice` and `bob`.
+Both configs define the confidential Client `example-app`, the public SPA Client `example-spa`
+(redirect URIs `http://localhost:5173/` and `http://localhost:5174/`) and the Users `alice` and `bob`.
 
 ## Configuration
 
@@ -134,15 +154,8 @@ See [conformance/README.md](conformance/README.md) for the known results and how
 
 ## Not yet supported
 
-M1 does not include these. They are planned for M2 and M3.
+M2 does not include these. They are planned for M3.
 
-M2:
-
-- `client_credentials` grant, refresh tokens, rotation and reuse check.
-- `/endsession`, `/introspect`, `/revoke` and more client authentication methods.
-- The `paths` and `logout_param_aliases` Issuer keys. M1 rejects them as unknown keys.
-
-M3:
 
 - Token exchange, Sessions with `prompt` and `max_age`, hot reload, and a debugger page.
 - Per-Issuer keys, ES256 and PS256, key rotation, and `private_key_jwt`.
