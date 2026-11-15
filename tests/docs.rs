@@ -106,3 +106,41 @@ fn templates_doc_states_the_custom_user_override_rules() {
     assert!(t.contains("changes `sub` too"));
     assert!(t.contains("must render the `username` field when `custom_username` is `true`"));
 }
+
+#[test]
+fn agents_md_has_six_sections_and_fits() {
+    let a = read("AGENTS.md");
+    let n = a.lines().count();
+    assert!((80..=120).contains(&n), "{n} lines");
+    let heads: Vec<&str> = a.lines().filter(|l| l.starts_with("## ")).collect();
+    assert_eq!(
+        heads,
+        [
+            "## Project Overview",
+            "## Tech Stack",
+            "## Commands",
+            "## Directory Structure",
+            "## Conventions",
+            "## Rules"
+        ]
+    );
+    assert!(!a.contains("Rejected, with reason"));
+}
+
+#[test]
+fn agents_md_keeps_every_rule() {
+    let a = read("AGENTS.md");
+    for rule in [
+        "TDD",
+        "cargo fmt --check",
+        "clippy",
+        "ADR",
+        "unsafe",
+        "unwrap()",
+        "C toolchain",
+        "real companies",
+        "CDN",
+    ] {
+        assert!(a.contains(rule), "{rule}");
+    }
+}

@@ -27,7 +27,7 @@ The CI job `css` fails when the committed file differs from a fresh build.
 
 - Use [Conventional Commits](https://www.conventionalcommits.org/). Releases and the CHANGELOG are generated from them.
 - Write tests first. Unit tests go next to the code. Integration tests go in `tests/`.
-- A new dependency needs a reason in the PR. See the "Stack" section in [AGENTS.md](AGENTS.md).
+- A new dependency needs a reason in the PR. See the "Tech Stack" section in [AGENTS.md](AGENTS.md) and [docs/spec.md](docs/spec.md) section 13.2.
 - No `unwrap()` or `expect()` outside tests and startup invariants.
 
 ## License

@@ -326,7 +326,7 @@ None in M1 and M2. M3 adds an optional `tls` cargo feature with `rustls` (ring) 
 
 ### 13.2 Stack
 
-`AGENTS.md` has a "Stack" section with this table and the rejected crates. A new dependency needs a reason in the PR.
+`AGENTS.md` lists only the pinned or unusual choices in its "Tech Stack" section. This table and the rejected crates stay here. A new dependency needs a reason in the PR.
 
 | Domain | Crate |
 |---|---|
