@@ -32,6 +32,8 @@ jobs:
       - uses: release-plz/action@v0.5
         with:
           command: release-pr
+          # git-only mode was checked against this version (see release-plz.toml).
+          version: 0.4.3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -59,6 +61,8 @@ jobs:
         uses: release-plz/action@v0.5
         with:
           command: release
+          # git-only mode was checked against this version (see release-plz.toml).
+          version: 0.4.3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -118,7 +122,9 @@ jobs:
         run: |
           name="fauxidc-${TAG}-${TARGET}"
           mkdir "$name"
+          mkdir "$name/examples"
           cp "target/${TARGET}/release/fauxidc" LICENSE-MIT LICENSE-APACHE README.md "$name/"
+          cp examples/*.toml examples/docker-compose.yml "$name/examples/"
           tar -czf "${name}.tar.gz" "$name"
           shasum -a 256 "${name}.tar.gz" > "${name}.tar.gz.sha256"
       - name: Upload to the GitHub release

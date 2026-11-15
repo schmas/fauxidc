@@ -305,8 +305,8 @@ CORS (M2) on `/token`, `/userinfo` and `/revoke`: allowed origins come from the 
 
 ### 12.3 Distribution
 
-- GitHub Releases: static musl binaries (x86_64, aarch64) and macOS binaries.
-- Image `ghcr.io/schmas/fauxidc`, multi-arch, `FROM scratch`, `WORKDIR /config`, `EXPOSE 9000`, bind `0.0.0.0`, `HEALTHCHECK CMD ["/fauxidc","healthcheck"]`. With no mount and no env, it starts Zero config.
+- GitHub Releases: static musl binaries (x86_64, aarch64) and macOS binaries. Each archive has the binary, the licenses, `README.md` and `examples/`.
+- Image `ghcr.io/schmas/fauxidc`, multi-arch, `FROM scratch`, `WORKDIR /config`, `EXPOSE 9000`, entrypoint `fauxidc --bind 0.0.0.0` (a later `--bind` wins), the example configs in `/examples/`, `HEALTHCHECK CMD ["/fauxidc","healthcheck"]`. With no mount and no env, it starts Zero config.
 - No crates.io publish. Install from the GitHub release binaries or the image.
 - No Homebrew tap until someone asks for it.
 

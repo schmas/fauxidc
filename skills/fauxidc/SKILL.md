@@ -13,6 +13,8 @@ A User is a configured person that the login page lists. A Custom user is typed 
 
 ## Start fauxidc
 
+The binaries and the image are available after the first fauxidc release.
+
 Binary from the GitHub releases (targets: x86_64 and aarch64 Linux musl, x86_64 and aarch64 macOS):
 
 ```sh
@@ -21,12 +23,20 @@ tar -xzf fauxidc-*-aarch64-apple-darwin.tar.gz
 ./fauxidc-*-aarch64-apple-darwin/fauxidc --config fauxidc.toml
 ```
 
+From source with Cargo (Rust 1.98 or newer; no crates.io package). Add `--tag v0.1.0` (or another release tag) to pin a version once releases exist:
+
+```sh
+cargo install --git https://github.com/schmas/fauxidc --locked
+```
+
 Docker (the image binds `0.0.0.0` and reads `/config/fauxidc.toml`):
 
 ```sh
 docker run --rm -p 9000:9000 -v "$PWD/fauxidc.toml:/config/fauxidc.toml:ro" ghcr.io/schmas/fauxidc
 ```
 
+The image has the example configs in `/examples/` (`--config /examples/generic.toml`); the release archive has them in `examples/`.
+Arguments to `docker run` add to the entrypoint `fauxidc --bind 0.0.0.0`.
 In a fauxidc checkout, use `cargo run -- --config <file>`.
 
 - `--config` is repeatable. Files merge in order. Without `--config`, fauxidc reads `FAUXIDC_CONFIG`, then `./fauxidc.toml`.
@@ -144,7 +154,8 @@ Each Issuer serves `{issuer}/debugger`, for example `http://localhost:9000/app/d
 - `iss` vs `Host`: the `iss` claim is always the exact `issuer_url`, including a trailing slash.
   The endpoint URLs in discovery follow the request `Host` (ADR 0001). An app in Docker that calls
   `http://fauxidc:9000/...` gets endpoints on `fauxidc:9000`, but `iss` stays `http://localhost:9000/...`.
-  Make the app expect the `issuer_url`, or set `server.public_base_url`.
+  Make the app expect the `issuer_url`, or set `issuer_url` to the URL the app uses (for example `http://fauxidc:9000/app`).
+  `server.public_base_url` changes only the endpoint URLs, never `iss`.
 - Strict mode vs Lenient mode: Issuers are Strict by default. An unknown `client_id`, a wrong `redirect_uri`,
   a missing PKCE for a public Client or a wrong secret fails. With `lenient = true` on the Issuer, these only log a warning,
   an unknown Client is accepted, and a refresh token is always issued. Zero config is Lenient.

@@ -10,7 +10,10 @@ use crate::config::{CliOverrides, LogFormat};
 #[command(
     name = "fauxidc",
     version,
-    about = "OAuth 2.0 / OpenID Connect mock server for local development and tests"
+    about = "OAuth 2.0 / OpenID Connect mock server for local development and tests",
+    // A later --port, --bind or --log-format wins, so `docker run <image> --bind ...`
+    // overrides the `--bind 0.0.0.0` of the image entrypoint.
+    args_override_self = true
 )]
 pub struct Cli {
     /// Config file (repeatable, merged in order)
@@ -69,6 +72,28 @@ mod tests {
                 bind: None,
                 log_format: Some(LogFormat::Json),
             }
+        );
+    }
+
+    /// The image entrypoint passes `--bind 0.0.0.0`; a user flag after it wins, and
+    /// `--config` still appends.
+    #[test]
+    fn a_later_flag_overrides_an_earlier_one() {
+        let cli = Cli::parse_from([
+            "fauxidc",
+            "--bind",
+            "0.0.0.0",
+            "--config",
+            "a.toml",
+            "--bind",
+            "127.0.0.1",
+            "--config",
+            "b.toml",
+        ]);
+        assert_eq!(cli.bind.as_deref(), Some("127.0.0.1"));
+        assert_eq!(
+            cli.config,
+            vec![PathBuf::from("a.toml"), PathBuf::from("b.toml")]
         );
     }
 

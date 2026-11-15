@@ -39,11 +39,20 @@ For completion and key checks in an editor with Taplo or Even Better TOML, add t
 
 ## Docker
 
-The image runs `fauxidc --bind 0.0.0.0` in the working directory `/config`, so it reads `/config/fauxidc.toml` when you mount one.
+The image entrypoint is `fauxidc --bind 0.0.0.0`, in the working directory `/config`, so it reads `/config/fauxidc.toml` when you mount one.
 With no mount and no env var, it starts in Zero config mode.
+Arguments to `docker run` add to the entrypoint. A later `--bind`, `--port` or `--log-format` flag wins.
+The image has the example configs in `/examples/`:
+
+```sh
+docker run --rm -p 9000:9000 ghcr.io/schmas/fauxidc --config /examples/generic.toml
+```
+
+The release archives have the same files in `examples/`.
 
 The image `HEALTHCHECK` runs `fauxidc healthcheck`, which probes the configured port.
-To change the port, set it in `/config/fauxidc.toml` or with `FAUXIDC__SERVER__PORT`, not only with a `--port` flag in `CMD`. Else override the `HEALTHCHECK`.
+To change the port, set it in `/config/fauxidc.toml` or with `FAUXIDC__SERVER__PORT`, not only with a `--port` flag. Else override the `HEALTHCHECK`.
+The healthcheck reads only `/config/fauxidc.toml` and the env vars, not the `--config` flag: a config from `--config` must keep port 9000.
 
 [examples/docker-compose.yml](../examples/docker-compose.yml) runs the published image with `auth0.toml`.
 

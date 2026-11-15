@@ -15,7 +15,7 @@ M2 features:
 - `/introspect` (RFC 7662) and `/revoke` (RFC 7009).
 - Client authentication methods `client_secret_basic`, `client_secret_post` and `none`.
 - `paths` overrides for endpoint paths, published in discovery.
-- CORS on `/token`, `/userinfo` and `/revoke` from the Client `web_origins`.
+- CORS on `/token`, `/userinfo` and `/revoke` from the Client `web_origins`, else from the origins of its `redirect_uris`.
 - The Test API token endpoint and the Request log.
 
 M3 features:

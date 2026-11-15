@@ -189,10 +189,28 @@ fn llms_txt_lists_the_docs() {
 }
 
 #[test]
+fn recipes_work_for_every_install_path() {
+    let r = read("README.md");
+    assert!(r.contains("--config /examples/generic.toml"));
+    assert!(r.contains("raw.githubusercontent.com/schmas/fauxidc/main/examples/generic.toml"));
+    assert!(r.contains("/usr/local/bin"));
+    assert!(r.contains("com.apple.quarantine"));
+    for f in ["README.md", "skills/fauxidc/SKILL.md"] {
+        let t = read(f);
+        assert!(
+            t.contains("cargo install --git https://github.com/schmas/fauxidc --locked"),
+            "{f}"
+        );
+        assert!(t.contains("--tag v0.1.0") && t.contains("1.98"), "{f}");
+    }
+}
+
+#[test]
 fn readme_says_how_to_install_the_skill() {
     let r = read("README.md");
     assert!(r.contains("skills/fauxidc"));
     assert!(r.contains(".claude/skills/") && r.contains("~/.agents/skills/"));
+    assert!(r.contains("~/.claude/skills/"));
 }
 
 /// The lines of `text` outside fenced code blocks.

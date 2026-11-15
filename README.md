@@ -16,6 +16,7 @@ See [SECURITY.md](SECURITY.md).
 
 ## Start in 60 seconds
 
+The image and the binaries are available after the first release.
 Start the server with Docker:
 
 ```sh
@@ -29,10 +30,20 @@ Each archive has a `.sha256` file next to it. This example is for an Apple silic
 ```sh
 gh release download --repo schmas/fauxidc --pattern '*aarch64-apple-darwin.tar.gz'
 tar -xzf fauxidc-*-aarch64-apple-darwin.tar.gz
-./fauxidc-*-aarch64-apple-darwin/fauxidc
+sudo mv ./fauxidc-*-aarch64-apple-darwin/fauxidc /usr/local/bin/   # put it on your PATH
+fauxidc
 ```
 
-From a checkout, use `cargo run --` in place of `fauxidc`.
+If macOS blocks a binary that a browser downloaded, run `xattr -d com.apple.quarantine /usr/local/bin/fauxidc`.
+
+Or build it from source with Cargo (needs Rust 1.98 or newer; there is no crates.io package):
+
+```sh
+cargo install --git https://github.com/schmas/fauxidc --locked
+```
+
+After the first release, add `--tag v0.1.0` (or another release tag) to pin a version.
+The archive also has the `examples/` directory. From a checkout, use `cargo run --` in place of `fauxidc`.
 
 With no config, fauxidc starts in Zero config mode: one Issuer `default` in Lenient mode,
 one public Client `test`, and the Users `alice` and `bob`. In a second terminal:
@@ -51,10 +62,16 @@ Open `http://localhost:9000/default/debugger` and click "Run login flow" to see 
 
 ## Recipes
 
-The recipes use [examples/generic.toml](examples/generic.toml). Start it with:
+The recipes use [examples/generic.toml](examples/generic.toml). Start fauxidc with it:
 
 ```sh
-fauxidc --config examples/generic.toml
+# Docker: the image has the examples in /examples/
+docker run --rm -p 9000:9000 ghcr.io/schmas/fauxidc --config /examples/generic.toml
+# Binary: download the file (the release archive has it in examples/ too)
+curl -sO https://raw.githubusercontent.com/schmas/fauxidc/main/examples/generic.toml
+fauxidc --config generic.toml
+# Checkout
+cargo run -- --config examples/generic.toml
 ```
 
 ### SPA with PKCE
@@ -69,8 +86,8 @@ Configure your OIDC library with these values:
 | Redirect URI | `http://localhost:5173/` |
 | Scope | `openid profile email` (add `offline_access` for a refresh token) |
 
-A public Client needs PKCE (`S256`) in Strict mode. The library does this for you.
-CORS on `/token`, `/userinfo` and `/revoke` allows the origins of the Client `redirect_uris`.
+A public Client needs PKCE in Strict mode. The library sends `S256` for you.
+CORS on `/token`, `/userinfo` and `/revoke` allows the Client `web_origins`, or the origins of its `redirect_uris` when `web_origins` is not set.
 With `auth0-spa-js` and `useRefreshTokens`, see the note in [docs/configuration.md](docs/configuration.md#examples).
 
 ### Backend with a client secret
@@ -130,7 +147,8 @@ To test key rotation, call `POST /_mock/generic/rotate-key`.
 
 The repo has an agent skill, [skills/fauxidc](skills/fauxidc/SKILL.md). It tells a coding agent how to start fauxidc,
 write a config, mint tokens, inject failures and avoid the common pitfalls.
-Install it: copy or symlink the `skills/fauxidc` directory into `.claude/skills/` (one project) or `~/.agents/skills/` (all projects).
+Install it: copy or symlink the `skills/fauxidc` directory into `.claude/skills/` (one project),
+`~/.claude/skills/` (all projects, Claude Code) or `~/.agents/skills/` (other agents that read it).
 
 ```sh
 git clone https://github.com/schmas/fauxidc.git ~/src/fauxidc

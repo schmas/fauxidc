@@ -131,6 +131,17 @@ jobs:
           docker logs fx 2>&1 | grep -q 'zero config'
           docker logs fx 2>&1 | grep -q 'non-loopback'
           time docker stop fx
+      - name: Smoke test image with an example config
+        run: |
+          docker run -d --name fx-generic -p 9001:9000 fauxidc:dev --config /examples/generic.toml
+          trap 'status=$?; if [ "$status" -ne 0 ]; then docker logs fx-generic 2>&1 || true; fi; docker rm -f fx-generic >/dev/null 2>&1 || true' EXIT
+          for _ in $(seq 30); do
+            [ "$(docker inspect -f '{{.State.Health.Status}}' fx-generic)" = healthy ] && break
+            sleep 1
+          done
+          test "$(docker inspect -f '{{.State.Health.Status}}' fx-generic)" = healthy
+          curl -sf localhost:9001/generic/.well-known/openid-configuration | grep -q '"issuer":"http://localhost:9000/generic"'
+          curl -sf localhost:9001/generic/token -u service:local -d grant_type=client_credentials -d scope=api | grep -q access_token
 
   css:
     runs-on: ubuntu-latest
