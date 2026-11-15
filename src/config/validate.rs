@@ -99,6 +99,7 @@ pub fn validate(config: &Config, sources: &SourceMap) -> Result<(), ConfigErrors
 
     check_issuers(config, &mut c);
     check_key_files(config, &mut c);
+    check_tls(config, &mut c);
     check_clients(config, &mut c);
     check_users(config, &mut c);
 
@@ -179,6 +180,36 @@ fn check_issuers(config: &Config, c: &mut Collector<'_>) {
                 );
             }
         }
+    }
+}
+
+/// `[server.tls]`: both files or neither; set files must exist; the build needs the `tls`
+/// feature.
+fn check_tls(config: &Config, c: &mut Collector<'_>) {
+    let tls = &config.server.tls;
+    if tls.cert_file.is_empty() && tls.key_file.is_empty() {
+        return;
+    }
+    if !tls.enabled() {
+        c.push(
+            &["server", "tls"],
+            "server.tls: set both cert_file and key_file, or neither".to_owned(),
+        );
+        return;
+    }
+    for (key, file) in [("cert_file", &tls.cert_file), ("key_file", &tls.key_file)] {
+        if !std::path::Path::new(file).is_file() {
+            c.push(
+                &["server", "tls", key],
+                format!("server.tls.{key}: file \"{file}\" not found"),
+            );
+        }
+    }
+    if !cfg!(feature = "tls") {
+        c.push(
+            &["server", "tls"],
+            "server.tls needs a build with the tls feature (cargo build --features tls)".to_owned(),
+        );
     }
 }
 
@@ -507,6 +538,52 @@ mod tests {
             .map_or_default(|e| e.0.into_iter().map(|e| e.message).collect())
     }
     const A: &str = "[issuer.a]\nissuer_url = \"http://localhost:9000/a/\"\n";
+
+    fn tls(cert: &str, key: &str) -> String {
+        format!("{A}[server.tls]\ncert_file = \"{cert}\"\nkey_file = \"{key}\"\n")
+    }
+
+    #[test]
+    fn tls_needs_both_files() {
+        let e = errs(&tls("tests/fixtures/tls/cert.pem", ""));
+        assert!(
+            e.iter()
+                .any(|m| m.contains("server.tls") && m.contains("both")),
+            "{e:?}"
+        );
+    }
+
+    #[test]
+    fn tls_file_must_exist() {
+        let e = errs(&tls(
+            "tests/fixtures/tls/missing.pem",
+            "tests/fixtures/tls/key.pem",
+        ));
+        assert!(
+            e.iter()
+                .any(|m| m.contains("server.tls.cert_file") && m.contains("missing.pem")),
+            "{e:?}"
+        );
+    }
+
+    #[test]
+    fn tls_with_files_needs_the_feature() {
+        let e = errs(&tls(
+            "tests/fixtures/tls/cert.pem",
+            "tests/fixtures/tls/key.pem",
+        ));
+        if cfg!(feature = "tls") {
+            assert!(e.is_empty(), "{e:?}");
+        } else {
+            assert_eq!(
+                e,
+                vec![
+                    "server.tls needs a build with the tls feature (cargo build --features tls)"
+                        .to_owned()
+                ]
+            );
+        }
+    }
 
     #[test]
     fn unknown_signing_alg_names_the_key() {

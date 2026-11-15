@@ -323,6 +323,7 @@ fn keep_running_values(running: &Config, keys: &Keyring, next: &mut Config) {
     new.log_format = old.log_format;
     new.request_log_size = old.request_log_size;
     new.key_file.clone_from(&old.key_file);
+    new.tls.clone_from(&old.tls);
     for (id, issuer) in &mut next.issuer {
         if let Some((alg, key_file)) = keys.slot_settings(id) {
             issuer.signing_alg = alg;

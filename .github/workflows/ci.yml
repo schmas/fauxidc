@@ -59,6 +59,26 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: EmbarkStudios/cargo-deny-action@v2
+      - name: Check the tree with every feature (tls)
+        uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          arguments: --all-features
+
+  tls:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@v1
+        with:
+          # Must match rust-toolchain.toml.
+          toolchain: 1.100.0
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest
+      - run: cargo clippy --all-targets --features tls -- -D warnings
+      - run: cargo nextest run --features tls
 
   msrv:
     runs-on: ubuntu-latest

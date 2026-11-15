@@ -39,6 +39,18 @@ impl Server {
         opts: StartOptions,
     ) -> Result<RunningServer, StartError> {
         validate(&config, &SourceMap::new()).map_err(StartError::Config)?;
+        #[cfg(feature = "tls")]
+        let tls = if config.server.tls.enabled() {
+            Some(
+                crate::tls::server_config(
+                    std::path::Path::new(&config.server.tls.cert_file),
+                    std::path::Path::new(&config.server.tls.key_file),
+                )
+                .map_err(StartError::Tls)?,
+            )
+        } else {
+            None
+        };
         let listener = TcpListener::bind((config.server.bind.as_str(), config.server.port))
             .await
             .map_err(StartError::Bind)?;
@@ -52,6 +64,13 @@ impl Server {
             key_file,
         })
         .map_err(StartError::Key)?;
+        #[cfg(feature = "tls")]
+        if tls.is_some() {
+            tracing::info!(%addr, scheme = "https", "listening");
+        } else {
+            tracing::info!(%addr, "listening");
+        }
+        #[cfg(not(feature = "tls"))]
         tracing::info!(%addr, "listening");
         for (id, issuer) in &config.issuer {
             tracing::info!(issuer_id = %id, issuer_url = %issuer.issuer_url, "issuer");
@@ -64,14 +83,13 @@ impl Server {
         let state = Arc::new(AppState::new(config, keys)?);
         let (router, reload) = live_router(state);
         let (tx, rx) = oneshot::channel::<()>();
-        let task = tokio::spawn(async move {
-            axum::serve(listener, router)
-                .with_graceful_shutdown(async {
-                    // A dropped sender also stops the server.
-                    let _ = rx.await;
-                })
-                .await
-        });
+        #[cfg(feature = "tls")]
+        let task = match tls {
+            Some(tls) => spawn_serve(crate::tls::TlsListener::new(listener, tls), router, rx),
+            None => spawn_serve(listener, router, rx),
+        };
+        #[cfg(not(feature = "tls"))]
+        let task = spawn_serve(listener, router, rx);
         Ok(RunningServer {
             addr,
             shutdown: tx,
@@ -79,6 +97,26 @@ impl Server {
             reload,
         })
     }
+}
+
+/// Serves `router` on `listener` until `rx` fires or its sender is dropped.
+fn spawn_serve<L>(
+    listener: L,
+    router: axum::Router,
+    rx: oneshot::Receiver<()>,
+) -> JoinHandle<std::io::Result<()>>
+where
+    L: axum::serve::Listener,
+    L::Addr: std::fmt::Debug,
+{
+    tokio::spawn(async move {
+        axum::serve(listener, router)
+            .with_graceful_shutdown(async {
+                // A dropped sender also stops the server.
+                let _ = rx.await;
+            })
+            .await
+    })
 }
 
 /// A server started by [`Server::start`].

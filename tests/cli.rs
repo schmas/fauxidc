@@ -237,3 +237,19 @@ async fn sighup_reloads_config() {
     child.kill().unwrap();
     let _ = child.wait();
 }
+
+#[cfg(not(feature = "tls"))]
+#[test]
+fn tls_config_without_the_feature_exits_2() {
+    let dir = env!("CARGO_MANIFEST_DIR");
+    let f = write_tmp(&format!(
+        "[issuer.auth0]\nissuer_url = \"http://localhost:9000/auth0/\"\n\n[server.tls]\n\
+         cert_file = \"{dir}/tests/fixtures/tls/cert.pem\"\nkey_file = \"{dir}/tests/fixtures/tls/key.pem\"\n"
+    ));
+    let out = fauxidc_cmd(&["--config", f.to_str().unwrap(), "--port", "0"])
+        .output()
+        .unwrap();
+    assert_eq!(out.status.code(), Some(2));
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("tls feature"), "{stderr}");
+}

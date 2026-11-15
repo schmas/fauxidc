@@ -117,7 +117,7 @@ Codes, Sessions, refresh tokens, revocations and the Request log stay valid acro
 A Session for a removed User fails at its next use.
 These keys need a restart; a change logs a warning and has no effect until then:
 `server.port`, `server.bind`, `server.log_format`, `server.request_log_size`, `server.key_file`,
-`issuer.<id>.signing_alg`, `issuer.<id>.key_file`.
+`server.tls`, `issuer.<id>.signing_alg`, `issuer.<id>.key_file`.
 See [ADR 0004](docs/adr/0004-hot-reload-router-swap.md).
 
 A Client can authenticate with `private_key_jwt` (RFC 7523) at `/token`, `/introspect` and `/revoke`.
@@ -132,6 +132,31 @@ scopes = ["api"]
 jwks = { keys = [ { kty = "EC", crv = "P-256", kid = "backend-1", x = "...", y = "..." } ] }
 # or: jwks_uri = "http://localhost:8080/.well-known/jwks.json"
 ```
+
+### TLS
+
+fauxidc can serve HTTPS from PEM files that you provide. This needs a build with the optional `tls` feature
+(`rustls` with the `ring` provider, which needs a C compiler):
+
+```sh
+cargo build --release --features tls
+```
+
+```toml
+[server.tls]
+cert_file = "cert.pem"  # PEM certificate chain, server certificate first
+key_file = "key.pem"    # PEM private key: PKCS#8, PKCS#1 or SEC1
+```
+
+Set both keys or neither. fauxidc does not generate certificates.
+With TLS on, discovery publishes `https://` endpoint URLs (unless `public_base_url` is set); the `iss` stays the exact `issuer_url`.
+A config with `server.tls` fails with exit code 2 in a build without the feature.
+
+```sh
+curl --cacert cert.pem https://localhost:9000/_mock/health
+```
+
+The release binaries and the container image are built without the `tls` feature.
 
 ## Token exchange
 

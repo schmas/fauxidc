@@ -83,9 +83,10 @@ async fn serve(loaded: Loaded, inputs: &LoadInputs) -> anyhow::Result<ExitCode> 
             eprintln!("error: {error}");
             return Ok(match error {
                 StartError::Bind(_) => ExitCode::from(1),
-                StartError::Key(_) | StartError::Config(_) | StartError::Templates(_) => {
-                    ExitCode::from(2)
-                }
+                StartError::Key(_)
+                | StartError::Config(_)
+                | StartError::Templates(_)
+                | StartError::Tls(_) => ExitCode::from(2),
             });
         }
     };

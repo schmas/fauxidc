@@ -36,6 +36,8 @@ pub mod session;
 pub mod state;
 pub mod templates;
 pub mod test_api;
+#[cfg(feature = "tls")]
+pub mod tls;
 pub mod token_check;
 pub mod token_endpoint;
 pub mod token_exchange;

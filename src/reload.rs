@@ -200,7 +200,7 @@ pub fn on_sighup(
 
 /// Human-readable lines for keys that need a restart (plan Ruling 5): `server.port`,
 /// `server.bind`, `server.log_format`, `server.request_log_size`, `server.key_file`,
-/// `issuer.<id>.signing_alg`, `issuer.<id>.key_file`. Format: "<key> changed; it needs a
+/// `server.tls`, `issuer.<id>.signing_alg`, `issuer.<id>.key_file`. Format: "<key> changed; it needs a
 /// restart". An Issuer that is new in `new` gets no line: it gets a key like at startup.
 pub fn restart_only_changes(old: &Config, new: &Config) -> Vec<String> {
     let (o, n) = (&old.server, &new.server);
@@ -213,6 +213,7 @@ pub fn restart_only_changes(old: &Config, new: &Config) -> Vec<String> {
             o.request_log_size != n.request_log_size,
         ),
         ("server.key_file", o.key_file != n.key_file),
+        ("server.tls", o.tls != n.tls),
     ]
     .into_iter()
     .filter(|(_, differs)| *differs)
@@ -258,6 +259,20 @@ mod tests {
                 "server.port changed; it needs a restart".to_owned(),
                 "issuer.a.key_file changed; it needs a restart".to_owned(),
             ]
+        );
+    }
+
+    #[test]
+    fn restart_only_changes_lists_tls() {
+        let old = load_str(BASE).unwrap().config;
+        let mut new = old.clone();
+        new.server.tls = crate::config::TlsConfig {
+            cert_file: "c.pem".into(),
+            key_file: "k.pem".into(),
+        };
+        assert_eq!(
+            restart_only_changes(&old, &new),
+            vec!["server.tls changed; it needs a restart".to_owned()]
         );
     }
 

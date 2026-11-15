@@ -70,6 +70,24 @@ pub struct ServerConfig {
     pub static_dir: String,
     pub log_format: LogFormat,
     pub request_log_size: usize,
+    /// HTTPS from PEM files. Needs a build with the `tls` feature.
+    pub tls: TlsConfig,
+}
+
+/// `[server.tls]`: the PEM certificate chain and private key of the HTTPS listener.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct TlsConfig {
+    pub cert_file: String,
+    pub key_file: String,
+}
+
+impl TlsConfig {
+    /// Whether TLS is on: both files are set.
+    #[must_use]
+    pub fn enabled(&self) -> bool {
+        !self.cert_file.is_empty() && !self.key_file.is_empty()
+    }
 }
 
 impl Default for ServerConfig {
@@ -84,6 +102,7 @@ impl Default for ServerConfig {
             static_dir: String::new(),
             log_format: LogFormat::default(),
             request_log_size: 500,
+            tls: TlsConfig::default(),
         }
     }
 }

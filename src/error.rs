@@ -48,6 +48,9 @@ pub enum StartError {
     Templates(String),
     #[error("invalid configuration:\n{0}")]
     Config(ConfigErrors),
+    /// The TLS certificate or key could not be used (`tls` feature).
+    #[error("TLS error: {0}")]
+    Tls(String),
 }
 
 /// An OAuth error response, in one of the three styles the endpoints use.

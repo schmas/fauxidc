@@ -78,7 +78,12 @@ pub fn endpoint_base(server: &ServerConfig, issuer: &IssuerConfig, headers: &Hea
         let proto = first_value(headers, "x-forwarded-proto").unwrap_or("http");
         format!("{proto}://{host}")
     } else if let Some(host) = headers.get(HOST).and_then(|v| v.to_str().ok()) {
-        format!("http://{host}")
+        let scheme = if server.tls.enabled() {
+            "https"
+        } else {
+            "http"
+        };
+        format!("{scheme}://{host}")
     } else {
         issuer_origin(&issuer.issuer_url)
     };
@@ -161,6 +166,25 @@ mod tests {
                 &hdrs(&[("host", "fauxidc:9000")])
             ),
             "http://fauxidc:9000/auth0"
+        );
+    }
+
+    #[test]
+    fn tls_uses_https_with_the_host() {
+        let server = ServerConfig {
+            tls: crate::config::TlsConfig {
+                cert_file: "c.pem".into(),
+                key_file: "k.pem".into(),
+            },
+            ..Default::default()
+        };
+        assert_eq!(
+            endpoint_base(
+                &server,
+                &iss("http://localhost:9000/auth0/"),
+                &hdrs(&[("host", "localhost:9000")])
+            ),
+            "https://localhost:9000/auth0"
         );
     }
 

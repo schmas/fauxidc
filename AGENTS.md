@@ -28,7 +28,7 @@ The repo is public: use neutral names only (`example-app`, `alice@example.com`, 
 | Time | `std::time` (Unix seconds only) |
 | Locks | `std::sync::Mutex` |
 | Hot reload (M3) | `arc-swap` |
-| TLS (M3, optional) | `rustls` (ring) |
+| TLS (M3, optional, `tls` feature) | `rustls` (ring), `tokio-rustls` |
 | Dev only | `reqwest`, `openidconnect` |
 
 Rejected, with reason:
@@ -61,6 +61,10 @@ cargo test <name>          # single test
 # Lint / format
 cargo fmt --check
 cargo clippy --all-targets -- -D warnings
+
+# Optional tls feature (needs a C compiler for ring)
+cargo clippy --all-targets --features tls -- -D warnings
+cargo test --features tls
 
 # Release build
 cargo build --release

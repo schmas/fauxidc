@@ -19,4 +19,7 @@ multiple-versions = "deny"
 # to syn 3 at different times, so the duplicate cannot be removed here.
 skip = [
     { crate = "syn@2" },
+    # ring 0.17 uses getrandom 0.2. ring is only in the optional tls feature.
+    { crate = "getrandom@0.2", reason = "only through ring in the optional tls feature" },
+    { crate = "windows-sys@0.52", reason = "only through ring in the optional tls feature" },
 ]
