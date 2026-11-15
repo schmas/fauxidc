@@ -13,6 +13,8 @@ pub struct ResolvedClient {
     pub client_id: String,
     pub config: ClientConfig,
     pub lenient_registered: bool,
+    /// `true` for the built-in `debugger` Client.
+    pub builtin: bool,
 }
 
 impl ResolvedClient {
@@ -40,27 +42,72 @@ pub fn find_client(ctx: &IssuerCtx, client_id: &str) -> Option<ResolvedClient> {
             client_id: client_id.to_owned(),
             config: config.clone(),
             lenient_registered: false,
+            builtin: false,
         });
     }
     // A reload can turn the Issuer to Strict while the Store keeps its Lenient
     // registrations; Strict mode must not see them.
-    if !ctx.issuer().lenient {
-        return None;
+    if ctx.issuer().lenient {
+        let store = ctx
+            .app
+            .store
+            .lenient_clients
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some(config) = store.get(&(ctx.id.clone(), client_id.to_owned())) {
+            return Some(ResolvedClient {
+                key: client_id.to_owned(),
+                client_id: client_id.to_owned(),
+                config: config.clone(),
+                lenient_registered: true,
+                builtin: false,
+            });
+        }
     }
-    let store = ctx
-        .app
-        .store
-        .lenient_clients
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
-    store
-        .get(&(ctx.id.clone(), client_id.to_owned()))
-        .map(|config| ResolvedClient {
-            key: client_id.to_owned(),
-            client_id: client_id.to_owned(),
-            config: config.clone(),
-            lenient_registered: true,
-        })
+    (client_id == BUILTIN_DEBUGGER).then(|| builtin_debugger(ctx))
+}
+
+/// The `client_id` of the built-in debugger Client.
+pub const BUILTIN_DEBUGGER: &str = "debugger";
+
+/// The built-in public Client of an Issuer: grant `authorization_code`, PKCE required, default
+/// scopes, no `redirect_uris` (the redirect rule is [`debugger_redirect_ok`]).
+pub fn builtin_debugger(ctx: &IssuerCtx) -> ResolvedClient {
+    ResolvedClient {
+        key: BUILTIN_DEBUGGER.to_owned(),
+        client_id: BUILTIN_DEBUGGER.to_owned(),
+        config: ClientConfig {
+            issuer: ctx.id.clone(),
+            client_id: Some(BUILTIN_DEBUGGER.to_owned()),
+            grant_types: vec!["authorization_code".to_owned()],
+            redirect_uris: Vec::new(),
+            require_pkce: true,
+            ..ClientConfig::default()
+        },
+        lenient_registered: false,
+        builtin: true,
+    }
+}
+
+/// `true` for an absolute http(s) URL whose path is the debugger path of this Issuer plus
+/// `/callback`, with no query, fragment or user info. The host follows the request.
+pub fn debugger_redirect_ok(ctx: &IssuerCtx, redirect_uri: &str) -> bool {
+    if redirect_uri.contains(['?', '#']) {
+        return false;
+    }
+    let Ok(uri) = redirect_uri.parse::<Uri>() else {
+        return false;
+    };
+    let scheme_ok = matches!(uri.scheme_str(), Some("http" | "https"));
+    let authority_ok = uri
+        .authority()
+        .is_some_and(|a| !a.as_str().is_empty() && !a.as_str().contains('@'));
+    let wanted = format!(
+        "{}/callback",
+        ctx.endpoint_href(crate::config::Endpoint::Debugger)
+            .trim_end_matches('/')
+    );
+    scheme_ok && authority_ok && uri.path() == wanted
 }
 
 /// Registers an unknown client as a public client (Lenient mode).
@@ -85,6 +132,7 @@ pub fn register_lenient(ctx: &IssuerCtx, client_id: &str, redirect_uri: &str) ->
         client_id: client_id.to_owned(),
         config,
         lenient_registered: true,
+        builtin: false,
     }
 }
 
@@ -196,6 +244,45 @@ mod tests {
         assert_eq!(find_client(&ctx, "example-app").unwrap().key, "example_app");
         assert!(find_client(&ctx, "example_app").is_none());
         assert!(find_client(&ctx, "only_b").is_none());
+    }
+
+    #[test]
+    fn debugger_redirect_rule() {
+        let ctx = test_ctx(
+            "[issuer.auth0]\nissuer_url=\"http://localhost:9000/auth0/\"\n[issuer.okta]\nissuer_url=\"http://localhost:9000/okta\"\n",
+            "auth0",
+        );
+        assert!(debugger_redirect_ok(
+            &ctx,
+            "http://localhost:9000/auth0/debugger/callback"
+        ));
+        assert!(debugger_redirect_ok(
+            &ctx,
+            "https://fauxidc/auth0/debugger/callback"
+        ));
+        for bad in [
+            "http://localhost:9000/auth0/debugger/callback?x=1",
+            "http://localhost:9000/auth0/debugger/callback#x",
+            "http://localhost:9000/auth0/debugger/callbackx",
+            "http://localhost:9000/okta/debugger/callback",
+            "ftp://localhost:9000/auth0/debugger/callback",
+            "http://u@localhost:9000/auth0/debugger/callback",
+            "/auth0/debugger/callback",
+        ] {
+            assert!(!debugger_redirect_ok(&ctx, bad), "{bad}");
+        }
+    }
+
+    #[test]
+    fn builtin_debugger_is_the_fallback() {
+        let ctx = test_ctx("[issuer.a]\nissuer_url=\"http://h/a\"\n", "a");
+        let c = find_client(&ctx, BUILTIN_DEBUGGER).unwrap();
+        assert!(c.builtin && c.is_public() && c.config.require_pkce);
+        let ctx = test_ctx(
+            "[issuer.a]\nissuer_url=\"http://h/a\"\n[client.debugger]\nredirect_uris=[\"http://x/cb\"]\n",
+            "a",
+        );
+        assert!(!find_client(&ctx, BUILTIN_DEBUGGER).unwrap().builtin);
     }
 
     #[test]

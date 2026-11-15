@@ -104,6 +104,7 @@ fn issuer_router(ctx: &IssuerCtx, cors: &CorsLayer) -> Router {
         issuer_id: ctx.id.clone(),
         endpoint,
     };
+    let debugger_path = ctx.endpoint_path(Endpoint::Debugger).trim_end_matches('/');
     Router::new()
         .route(
             "/.well-known/openid-configuration",
@@ -154,6 +155,14 @@ fn issuer_router(ctx: &IssuerCtx, cors: &CorsLayer) -> Router {
         .route(
             ctx.endpoint_path(Endpoint::Debugger),
             guarded(get(debugger::page).post(debugger::decode), fail("debugger")),
+        )
+        .route(
+            &format!("{debugger_path}/start"),
+            guarded(get(debugger::start), fail("debugger")),
+        )
+        .route(
+            &format!("{debugger_path}/callback"),
+            guarded(get(debugger::callback), fail("debugger")),
         )
         .with_state(ctx.clone())
 }

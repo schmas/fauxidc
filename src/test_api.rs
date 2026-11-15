@@ -174,6 +174,7 @@ async fn respond(ctx: &IssuerCtx, req: TestTokenRequest) -> Result<serde_json::V
             ..ClientConfig::default()
         },
         lenient_registered: false,
+        builtin: false,
     });
     let scope: Vec<String> = req
         .scope

@@ -8,7 +8,9 @@ use axum::{
 use serde::{Deserialize, Serialize};
 
 use crate::claims::{ClaimTarget, build_claims};
-use crate::clients::{ResolvedClient, find_client, redirect_uri_matches, register_lenient};
+use crate::clients::{
+    ResolvedClient, debugger_redirect_ok, find_client, redirect_uri_matches, register_lenient,
+};
 use crate::config::{Claims, Endpoint};
 use crate::cookies::{auto_select_name, auto_select_set, read_cookie, session_name, session_set};
 use crate::error::{OAuthError, append_query};
@@ -96,6 +98,31 @@ fn page(message: String) -> Rejection {
     Rejection::Page(StatusCode::BAD_REQUEST, message)
 }
 
+/// The redirect URI rule: the built-in debugger Client accepts only the debugger callback, in
+/// both modes; any other Client needs a registered match (through `enforce`).
+fn check_redirect_uri(
+    ctx: &IssuerCtx,
+    client: &ResolvedClient,
+    redirect_uri: &str,
+) -> Result<(), String> {
+    if client.builtin {
+        if debugger_redirect_ok(ctx, redirect_uri) {
+            return Ok(());
+        }
+        let rule = format!("redirect_uri is not the debugger callback: {redirect_uri}");
+        tracing::info!(issuer = %ctx.id, "{rule}");
+        return Err(rule);
+    }
+    let registered = client
+        .config
+        .redirect_uris
+        .iter()
+        .any(|r| redirect_uri_matches(r, redirect_uri));
+    ctx.enforce(registered, || {
+        format!("redirect_uri not registered: {redirect_uri}")
+    })
+}
+
 fn validate(ctx: &IssuerCtx, p: &AuthorizeParams) -> Result<ValidRequest, Rejection> {
     let Some(client_id) = p.client_id.as_deref().filter(|v| !v.is_empty()) else {
         return Err(page("missing client_id".into()));
@@ -112,15 +139,7 @@ fn validate(ctx: &IssuerCtx, p: &AuthorizeParams) -> Result<ValidRequest, Reject
         register_lenient(ctx, client_id, redirect_uri)
     };
 
-    let registered = client
-        .config
-        .redirect_uris
-        .iter()
-        .any(|r| redirect_uri_matches(r, redirect_uri));
-    ctx.enforce(registered, || {
-        format!("redirect_uri not registered: {redirect_uri}")
-    })
-    .map_err(page)?;
+    check_redirect_uri(ctx, &client, redirect_uri).map_err(page)?;
 
     let fail = |error: &'static str, description: &str| {
         Rejection::Redirect(OAuthError::Redirect {
@@ -177,6 +196,13 @@ fn validate(ctx: &IssuerCtx, p: &AuthorizeParams) -> Result<ValidRequest, Reject
         || "code_challenge required".to_owned(),
     )
     .map_err(|rule| fail("invalid_request", &rule))?;
+    if client.builtin {
+        ctx.enforce(
+            pkce.as_ref().is_none_or(|(_, m)| *m == PkceMethod::S256),
+            || "the debugger Client needs code_challenge_method S256".to_owned(),
+        )
+        .map_err(|rule| fail("invalid_request", &rule))?;
+    }
 
     let has_nonce = p.nonce.as_deref().is_some_and(|v| !v.is_empty());
     ctx.enforce(!ctx.issuer().require_nonce || has_nonce, || {

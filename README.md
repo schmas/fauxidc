@@ -165,6 +165,22 @@ curl -s http://localhost:9000/auth0/token -u gateway:gw \
   -d audience=https://orders.example.com
 ```
 
+## Debugger
+
+Each Issuer serves a debugger page at `{issuer}/debugger` (the `paths.debugger` key changes the path).
+
+- Paste a JWT and submit the form. The page shows the header and the payload,
+  checks the signature against the Issuer keys (by `kid`), and shows `exp` as "expires in N s" or "expired N s ago".
+- "Run login flow" (`{issuer}/debugger/start?scope=...`, default scope `openid profile email`) runs the
+  authorization code flow with PKCE (S256). The page then shows the decoded tokens.
+
+The flow uses the built-in public Client `debugger`. It needs no config. Its only allowed redirect URI is the
+debugger callback of the same Issuer (`{issuer}/debugger/callback`), on any host. A configured Client with
+`client_id = "debugger"` replaces it. The PKCE verifier stays on the server for 600 s.
+
+The page also shows "Signed in as <label> · change" when the Auto-select cookie names a configured User.
+The "change" link (`{issuer}/debugger?forget=1`) clears the cookie.
+
 ## Templates
 
 You can replace the login page, the error page and the signed-out page. See [docs/templates.md](docs/templates.md).

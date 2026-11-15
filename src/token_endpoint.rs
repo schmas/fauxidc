@@ -177,13 +177,31 @@ async fn exchange_code(
     let ClientAuth { client, .. } =
         authenticate_client(ctx, headers, Endpoint::Token, f.credentials()).await?;
     require_grant(ctx, &client, "authorization_code")?;
+    redeem_code(
+        ctx,
+        &client,
+        f.code.as_deref().unwrap_or_default(),
+        f.redirect_uri.as_deref(),
+        f.code_verifier.as_deref(),
+    )
+    .await
+}
+
+/// The code grant after client authentication: take the code, check Issuer, Client, expiry,
+/// `redirect_uri`, PKCE, then `issue_user_tokens`. `exchange_code` calls it; the debugger
+/// callback calls it with the built-in Client.
+pub(crate) async fn redeem_code(
+    ctx: &IssuerCtx,
+    client: &ResolvedClient,
+    code: &str,
+    redirect_uri: Option<&str>,
+    verifier: Option<&str>,
+) -> Result<Value, OAuthError> {
     let invalid_grant = |d: &str| {
         tracing::info!(issuer = %ctx.id, "{d}");
         OAuthError::json("invalid_grant", d)
     };
-    let grant = f
-        .code
-        .as_deref()
+    let grant = Some(code)
         .filter(|code| !code.is_empty())
         .and_then(|code| ctx.app.store.take_code(code))
         .ok_or_else(|| invalid_grant("code is invalid or was already used"))?;
@@ -193,13 +211,12 @@ async fn exchange_code(
     if now_secs() >= grant.expires_at {
         return Err(invalid_grant("code expired"));
     }
-    ctx.enforce(
-        f.redirect_uri.as_deref() == Some(grant.redirect_uri.as_str()),
-        || "redirect_uri does not match the authorization request".to_owned(),
-    )
+    ctx.enforce(redirect_uri == Some(grant.redirect_uri.as_str()), || {
+        "redirect_uri does not match the authorization request".to_owned()
+    })
     .map_err(|_| OAuthError::json("invalid_grant", "redirect_uri does not match"))?;
     if let Some((challenge, method)) = &grant.pkce {
-        check_verifier(ctx, challenge, *method, f.code_verifier.as_deref())?;
+        check_verifier(ctx, challenge, *method, verifier)?;
     }
     let keys = ctx.keys().await?;
 
@@ -207,7 +224,7 @@ async fn exchange_code(
         ctx,
         &keys.active,
         &UserGrant {
-            client: &client,
+            client,
             subject: &grant.subject,
             scope: &grant.scope,
             audience: grant.audience.as_deref(),

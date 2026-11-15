@@ -79,6 +79,18 @@ pub struct Store {
     pub sessions: SessionStore,
     /// Injected failures by `(Issuer id, endpoint)`.
     pub failures: Mutex<HashMap<(String, String), Injected>>,
+    /// Debugger login flows by `state`.
+    pub debugger_flows: Mutex<HashMap<String, DebuggerFlow>>,
+}
+
+/// A debugger login flow that waits for its callback.
+#[derive(Debug, Clone)]
+pub struct DebuggerFlow {
+    pub issuer_id: String,
+    /// The PKCE `code_verifier`; it never leaves the server.
+    pub verifier: String,
+    pub redirect_uri: String,
+    pub expires_at: u64,
 }
 
 /// When a refresh token was first used, and when it expires.
@@ -214,6 +226,26 @@ impl Store {
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
             .retain(|(id, _), _| id != issuer_id);
+    }
+
+    /// Stores a debugger flow under `state`. Drops expired flows.
+    pub fn insert_flow(&self, state: String, f: DebuggerFlow) {
+        let mut flows = self
+            .debugger_flows
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        let now = now_secs();
+        flows.retain(|_, f| f.expires_at > now);
+        flows.insert(state, f);
+    }
+
+    /// Removes and returns the flow of `state`. A state works once; an expired flow gives `None`.
+    pub fn take_flow(&self, state: &str) -> Option<DebuggerFlow> {
+        self.debugger_flows
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .remove(state)
+            .filter(|f| f.expires_at > now_secs())
     }
 
     /// Removes and returns the grant for `code`. A code works once.
@@ -517,6 +549,22 @@ mod tests {
         store.inject("okta", "token", Some(f));
         store.inject("okta", "token", None);
         assert!(store.take_failure("okta", "token").is_none());
+    }
+
+    #[test]
+    fn debugger_flow_is_single_use_and_expires() {
+        let store = Store::default();
+        let flow = |expires_at| DebuggerFlow {
+            issuer_id: "auth0".into(),
+            verifier: "v".into(),
+            redirect_uri: "r".into(),
+            expires_at,
+        };
+        store.insert_flow("s".into(), flow(now_secs() + 60));
+        assert!(store.take_flow("s").is_some());
+        assert!(store.take_flow("s").is_none());
+        store.insert_flow("old".into(), flow(1));
+        assert!(store.take_flow("old").is_none());
     }
 
     #[test]

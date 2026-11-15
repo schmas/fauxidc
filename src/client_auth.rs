@@ -131,6 +131,7 @@ fn lenient_client(ctx: &IssuerCtx, client_id: &str) -> ResolvedClient {
             ..ClientConfig::default()
         },
         lenient_registered: false,
+        builtin: false,
     }
 }
 
