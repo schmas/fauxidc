@@ -40,6 +40,11 @@ pub struct TokenForm {
     pub resource: Option<String>,
     pub client_assertion_type: Option<String>,
     pub client_assertion: Option<String>,
+    pub subject_token: Option<String>,
+    pub subject_token_type: Option<String>,
+    pub actor_token: Option<String>,
+    pub actor_token_type: Option<String>,
+    pub requested_token_type: Option<String>,
 }
 
 impl TokenForm {
@@ -150,6 +155,9 @@ async fn dispatch(
         Some("authorization_code") => exchange_code(ctx, headers, f).await,
         Some("refresh_token") => crate::refresh::refresh_grant(ctx, headers, f).await,
         Some("client_credentials") => crate::client_credentials::grant(ctx, headers, f).await,
+        Some(crate::token_exchange::GRANT_TOKEN_EXCHANGE) => {
+            crate::token_exchange::grant(ctx, headers, f).await
+        }
         Some(other) => Err(OAuthError::json(
             "unsupported_grant_type",
             format!("unsupported grant_type: {other}"),

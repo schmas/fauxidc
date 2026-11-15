@@ -341,7 +341,12 @@ fn valid_origin(origin: &str) -> bool {
     })
 }
 
-const GRANT_TYPES: [&str; 3] = ["authorization_code", "refresh_token", "client_credentials"];
+const GRANT_TYPES: [&str; 4] = [
+    "authorization_code",
+    "refresh_token",
+    "client_credentials",
+    crate::token_exchange::GRANT_TOKEN_EXCHANGE,
+];
 
 /// An Issuer id that would shadow `/_mock/static/{*path}` in the Test API route.
 const RESERVED_ISSUER_ID: &str = "static";
@@ -740,6 +745,12 @@ mod tests {
     fn client_m2_fields_are_checked() {
         let base = format!("{A}[client.c]\n");
         assert!(!errs(&format!("{base}grant_types = [\"password\"]\n")).is_empty());
+        assert!(
+            errs(&format!(
+                "{base}grant_types = [\"urn:ietf:params:oauth:grant-type:token-exchange\"]\n"
+            ))
+            .is_empty()
+        );
         assert!(
             !errs(&format!(
                 "{base}post_logout_redirect_uris = [\"not a url\"]\n"

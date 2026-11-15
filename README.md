@@ -121,6 +121,36 @@ jwks = { keys = [ { kty = "EC", crv = "P-256", kid = "backend-1", x = "...", y =
 # or: jwks_uri = "http://localhost:8080/.well-known/jwks.json"
 ```
 
+## Token exchange
+
+`/token` supports RFC 8693 token exchange (`grant_type=urn:ietf:params:oauth:grant-type:token-exchange`).
+The Client must authenticate and must list the grant in `grant_types`. It is not a default grant.
+`subject_token_type` is `urn:ietf:params:oauth:token-type:access_token`, `...:id_token` or `...:jwt`.
+
+- Strict mode: the subject token must be a JWT from any fauxidc Issuer. fauxidc checks the signature
+  (key by `kid` from the key set of the Issuer that `iss` names), `exp`, and the revocation list.
+  A refresh token is never accepted. Any other token gives `invalid_request`.
+- Lenient mode: fauxidc tries the same check. If it fails, fauxidc logs a warning and uses the claims unverified.
+  A value that is not a JWT fails in both modes.
+
+The result is an access token of this Issuer, with no id_token and no refresh token.
+It has `sub` and the User claims of the subject token. `aud` is `audience`, else `resource`,
+else the Client `audience`, else the `client_id`. `scope` is the `scope` parameter, else the subject token `scope`.
+
+```toml
+[client.gateway]
+client_secret = "gw"
+grant_types = ["urn:ietf:params:oauth:grant-type:token-exchange"]
+```
+
+```sh
+curl -s http://localhost:9000/auth0/token -u gateway:gw \
+  -d grant_type=urn:ietf:params:oauth:grant-type:token-exchange \
+  -d subject_token_type=urn:ietf:params:oauth:token-type:access_token \
+  -d subject_token="$ACCESS_TOKEN" \
+  -d audience=https://orders.example.com
+```
+
 ## Templates
 
 You can replace the login page, the error page and the signed-out page. See [docs/templates.md](docs/templates.md).
@@ -191,7 +221,7 @@ See [conformance/README.md](conformance/README.md) for the known results and how
 
 M2 does not include these. They are planned for M3.
 
-- Token exchange, Sessions with `prompt` and `max_age`, hot reload, and a debugger page.
+- Sessions with `prompt` and `max_age`, hot reload, and a debugger page.
 - Per-Issuer keys, ES256 and PS256, key rotation, and `private_key_jwt`.
 - Injected failures and an optional TLS feature.
 

@@ -282,3 +282,18 @@ pub fn now() -> u64 {
         .unwrap()
         .as_secs()
 }
+
+pub use fauxidc::config::SigningAlg;
+
+/// Base64url without padding.
+pub fn b64url(bytes: &[u8]) -> String {
+    use base64::Engine as _;
+    base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(bytes)
+}
+
+/// A JWT signed by `key`: header `alg` = the key's algorithm, `kid` = the key's `kid`.
+pub fn sign_with(key: &SigningKey, claims: &Value) -> String {
+    let mut header = jsonwebtoken::Header::new(key.alg.jwt());
+    header.kid = Some(key.kid.clone());
+    jsonwebtoken::encode(&header, claims, &key.encoding).unwrap()
+}

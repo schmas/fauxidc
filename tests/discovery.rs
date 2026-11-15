@@ -147,7 +147,12 @@ async fn m2_grants_and_offline_access_are_published() {
     );
     assert_eq!(
         d["grant_types_supported"],
-        json!(["authorization_code", "refresh_token", "client_credentials"])
+        json!([
+            "authorization_code",
+            "refresh_token",
+            "client_credentials",
+            "urn:ietf:params:oauth:grant-type:token-exchange"
+        ])
     );
     assert!(
         d["scopes_supported"]

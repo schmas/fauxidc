@@ -33,6 +33,7 @@ pub mod templates;
 pub mod test_api;
 pub mod token_check;
 pub mod token_endpoint;
+pub mod token_exchange;
 pub mod tokens;
 pub mod userinfo;
 
