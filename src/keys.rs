@@ -1,4 +1,4 @@
-//! RSA signing key: generation, PEM round trip, JWK and RFC 7638 `kid`.
+//! Signing keys (RS256, PS256, ES256): generation, PEM round trip, JWK and RFC 7638 `kid`.
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -6,12 +6,16 @@ use std::sync::Arc;
 use base64::Engine as _;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use jsonwebtoken::{DecodingKey, EncodingKey};
+use p256::elliptic_curve::Generate as _;
+use p256::elliptic_curve::sec1::ToSec1Point as _;
 use rsa::PrivateKey;
 use rsa::pkcs1::DecodeRsaPrivateKey;
 use rsa::pkcs8::{DecodePrivateKey, EncodePrivateKey, LineEnding};
 use rsa::traits::PublicKeyParts;
 use sha2::{Digest, Sha256};
 use tokio::sync::watch;
+
+use crate::config::SigningAlg;
 
 const RSA_BITS: usize = 2048;
 
@@ -26,10 +30,11 @@ pub enum KeyError {
     Unavailable,
 }
 
-/// RS256 signing key with its public JWK and RFC 7638 `kid`.
+/// A signing key with its algorithm, public JWK and RFC 7638 `kid`.
 #[derive(Clone)]
 pub struct SigningKey {
     pub kid: String,
+    pub alg: SigningAlg,
     pub encoding: EncodingKey,
     pub decoding: DecodingKey,
     pub jwk: serde_json::Value,
@@ -37,19 +42,60 @@ pub struct SigningKey {
 }
 
 impl SigningKey {
-    /// Generate a new RSA 2048 key using the OS random number generator.
+    /// Generate a new RS256 key (RSA 2048) using the OS random number generator.
     pub fn generate() -> Result<SigningKey, KeyError> {
-        let key = PrivateKey::new(&mut getrandom::SysRng, RSA_BITS)
-            .map_err(|e| KeyError::Generate(e.to_string()))?;
-        Self::from_private_key(&key)
+        Self::generate_for(SigningAlg::RS256)
     }
 
-    /// Load a key from a PKCS#8 (`PRIVATE KEY`) or PKCS#1 (`RSA PRIVATE KEY`) PEM.
+    /// Generate a new key for `alg`: RSA 2048 for RS256 and PS256, P-256 for ES256.
+    pub fn generate_for(alg: SigningAlg) -> Result<SigningKey, KeyError> {
+        match alg {
+            SigningAlg::RS256 | SigningAlg::PS256 => {
+                let key = PrivateKey::new(&mut getrandom::SysRng, RSA_BITS)
+                    .map_err(|e| KeyError::Generate(e.to_string()))?;
+                Self::from_rsa(&key, alg)
+            }
+            SigningAlg::ES256 => {
+                let key = p256::SecretKey::try_generate_from_rng(&mut getrandom::SysRng)
+                    .map_err(|e| KeyError::Generate(e.to_string()))?;
+                Self::from_ec(&key)
+            }
+        }
+    }
+
+    /// Load an RS256 key from a PKCS#8 (`PRIVATE KEY`) or PKCS#1 (`RSA PRIVATE KEY`) PEM.
     pub fn from_pem(pem: &str) -> Result<SigningKey, KeyError> {
-        let key = PrivateKey::from_pkcs8_pem(pem)
-            .or_else(|_| PrivateKey::from_pkcs1_pem(pem))
-            .map_err(|e| KeyError::InvalidPem(e.to_string()))?;
-        Self::from_private_key(&key)
+        Self::from_pem_for(pem, SigningAlg::RS256)
+    }
+
+    /// Load a key for `alg`. RS256 and PS256: a PKCS#8 or PKCS#1 RSA PEM. ES256: a PKCS#8
+    /// (`PRIVATE KEY`) or SEC1 (`EC PRIVATE KEY`) P-256 PEM. A PEM of the wrong key type is
+    /// [`KeyError::InvalidPem`] naming the expected type.
+    pub fn from_pem_for(pem: &str, alg: SigningAlg) -> Result<SigningKey, KeyError> {
+        match alg {
+            SigningAlg::RS256 | SigningAlg::PS256 => {
+                let key = PrivateKey::from_pkcs8_pem(pem)
+                    .or_else(|_| PrivateKey::from_pkcs1_pem(pem))
+                    .map_err(|e| {
+                        KeyError::InvalidPem(format!(
+                            "expected an RSA private key for {}: {e}",
+                            alg.as_str()
+                        ))
+                    })?;
+                Self::from_rsa(&key, alg)
+            }
+            SigningAlg::ES256 => {
+                let key = p256::SecretKey::from_pkcs8_pem(pem)
+                    .map_err(|e| e.to_string())
+                    .or_else(|_| p256::SecretKey::from_sec1_pem(pem).map_err(|e| e.to_string()))
+                    .map_err(|e| {
+                        KeyError::InvalidPem(format!(
+                            "expected a P-256 EC private key for ES256: {e}"
+                        ))
+                    })?;
+                Self::from_ec(&key)
+            }
+        }
     }
 
     /// The key as a PKCS#8 PEM.
@@ -57,7 +103,7 @@ impl SigningKey {
         &self.pkcs8_pem
     }
 
-    fn from_private_key(key: &PrivateKey) -> Result<SigningKey, KeyError> {
+    fn from_rsa(key: &PrivateKey, alg: SigningAlg) -> Result<SigningKey, KeyError> {
         let pkcs8_pem = key
             .to_pkcs8_pem(LineEnding::LF)
             .map_err(|e| KeyError::InvalidPem(e.to_string()))?
@@ -70,10 +116,41 @@ impl SigningKey {
         let decoding = DecodingKey::from_rsa_components(&n, &e)
             .map_err(|e| KeyError::InvalidPem(e.to_string()))?;
         let jwk = serde_json::json!({
-            "kty": "RSA", "use": "sig", "alg": "RS256", "kid": kid, "n": n, "e": e,
+            "kty": "RSA", "use": "sig", "alg": alg.as_str(), "kid": kid, "n": n, "e": e,
         });
         Ok(SigningKey {
             kid,
+            alg,
+            encoding,
+            decoding,
+            jwk,
+            pkcs8_pem,
+        })
+    }
+
+    fn from_ec(key: &p256::SecretKey) -> Result<SigningKey, KeyError> {
+        let pkcs8_pem = p256::pkcs8::EncodePrivateKey::to_pkcs8_pem(key, LineEnding::LF)
+            .map_err(|e| KeyError::InvalidPem(e.to_string()))?
+            .to_string();
+        let point = key.public_key().to_sec1_point(false);
+        // Uncompressed SEC1 point: 0x04 || x (32 bytes) || y (32 bytes).
+        let bytes = point.as_bytes();
+        let (Some(xb), Some(yb)) = (bytes.get(1..33), bytes.get(33..65)) else {
+            return Err(KeyError::InvalidPem("unexpected EC point encoding".into()));
+        };
+        let x = URL_SAFE_NO_PAD.encode(xb);
+        let y = URL_SAFE_NO_PAD.encode(yb);
+        let kid = ec_thumbprint(&x, &y);
+        let encoding = EncodingKey::from_ec_pem(pkcs8_pem.as_bytes())
+            .map_err(|e| KeyError::InvalidPem(e.to_string()))?;
+        let decoding = DecodingKey::from_ec_components(&x, &y)
+            .map_err(|e| KeyError::InvalidPem(e.to_string()))?;
+        let jwk = serde_json::json!({
+            "kty": "EC", "use": "sig", "alg": "ES256", "crv": "P-256", "kid": kid, "x": x, "y": y,
+        });
+        Ok(SigningKey {
+            kid,
+            alg: SigningAlg::ES256,
             encoding,
             decoding,
             jwk,
@@ -223,6 +300,12 @@ fn write_key_file(path: &Path, pem: &str) -> std::io::Result<()> {
 /// RFC 7638 JWK thumbprint (SHA-256, base64url without padding) of an RSA public key.
 pub(crate) fn thumbprint(n_b64: &str, e_b64: &str) -> String {
     let canonical = format!(r#"{{"e":"{e_b64}","kty":"RSA","n":"{n_b64}"}}"#);
+    URL_SAFE_NO_PAD.encode(Sha256::digest(canonical.as_bytes()))
+}
+
+/// RFC 7638 JWK thumbprint (SHA-256, base64url without padding) of a P-256 public key.
+pub(crate) fn ec_thumbprint(x_b64: &str, y_b64: &str) -> String {
+    let canonical = format!(r#"{{"crv":"P-256","kty":"EC","x":"{x_b64}","y":"{y_b64}"}}"#);
     URL_SAFE_NO_PAD.encode(Sha256::digest(canonical.as_bytes()))
 }
 
@@ -457,6 +540,90 @@ mod tests {
         let mut v = jsonwebtoken::Validation::new(jsonwebtoken::Algorithm::RS256);
         v.validate_aud = false;
         assert!(jsonwebtoken::decode::<serde_json::Value>(&t, &k.decoding, &v).is_ok());
+    }
+
+    #[test]
+    fn es256_key_round_trips_and_has_ec_jwk() {
+        let k = SigningKey::generate_for(SigningAlg::ES256).unwrap();
+        assert_eq!(k.alg, SigningAlg::ES256);
+        assert_eq!(
+            (
+                k.jwk["kty"].as_str(),
+                k.jwk["crv"].as_str(),
+                k.jwk["alg"].as_str()
+            ),
+            (Some("EC"), Some("P-256"), Some("ES256"))
+        );
+        assert_eq!(k.jwk["kid"], k.kid.as_str());
+        assert_eq!(
+            URL_SAFE_NO_PAD
+                .decode(k.jwk["x"].as_str().unwrap())
+                .unwrap()
+                .len(),
+            32
+        );
+        let k2 = SigningKey::from_pem_for(k.to_pem(), SigningAlg::ES256).unwrap();
+        assert_eq!(k.kid, k2.kid);
+    }
+
+    #[test]
+    fn ec_kid_is_rfc7638_thumbprint() {
+        // RFC 7638 has no EC vector; RFC 8037 does not cover P-256. Use the JWK from RFC 7517 A.1.
+        assert_eq!(
+            ec_thumbprint(
+                "MKBCTNIcKUSDii11ySs3526iDZ8AiTo7Tu6KPAqv7D4",
+                "4Etl6SRW2YiLUrN5vfvVHuhp7x8PxltmWWlbbM4IFyM"
+            ),
+            "cn-I_WNMClehiVp51i_0VpOENW1upEerA8sEam5hn-s"
+        );
+    }
+
+    #[test]
+    fn ps256_key_uses_rsa_jwk_with_ps256_alg() {
+        let k = SigningKey::from_pem_for(TEST_KEY.to_pem(), SigningAlg::PS256).unwrap();
+        assert_eq!(
+            (k.jwk["kty"].as_str(), k.jwk["alg"].as_str()),
+            (Some("RSA"), Some("PS256"))
+        );
+        assert_eq!(k.kid, TEST_KEY.kid); // same RSA key, same thumbprint
+    }
+
+    #[test]
+    fn wrong_pem_type_is_rejected() {
+        let ec = SigningKey::generate_for(SigningAlg::ES256).unwrap();
+        assert!(matches!(
+            SigningKey::from_pem_for(ec.to_pem(), SigningAlg::RS256),
+            Err(KeyError::InvalidPem(_))
+        ));
+        assert!(matches!(
+            SigningKey::from_pem_for(TEST_KEY.to_pem(), SigningAlg::ES256),
+            Err(KeyError::InvalidPem(_))
+        ));
+    }
+
+    #[test]
+    fn every_alg_signs_and_verifies() {
+        for alg in [SigningAlg::RS256, SigningAlg::ES256, SigningAlg::PS256] {
+            let k = if alg == SigningAlg::ES256 {
+                SigningKey::generate_for(alg).unwrap()
+            } else {
+                SigningKey::from_pem_for(TEST_KEY.to_pem(), alg).unwrap()
+            };
+            let mut h = jsonwebtoken::Header::new(alg.jwt());
+            h.kid = Some(k.kid.clone());
+            let t = jsonwebtoken::encode(
+                &h,
+                &serde_json::json!({"sub":"x","exp":4_000_000_000u64}),
+                &k.encoding,
+            )
+            .unwrap();
+            let mut v = jsonwebtoken::Validation::new(alg.jwt());
+            v.validate_aud = false;
+            assert!(
+                jsonwebtoken::decode::<serde_json::Value>(&t, &k.decoding, &v).is_ok(),
+                "{alg:?}"
+            );
+        }
     }
 
     #[test]

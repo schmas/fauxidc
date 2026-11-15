@@ -26,6 +26,37 @@ pub enum LogFormat {
     Json,
 }
 
+/// The JWS algorithm an Issuer signs its tokens with.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub enum SigningAlg {
+    #[default]
+    RS256,
+    ES256,
+    PS256,
+}
+
+impl SigningAlg {
+    /// The JOSE name, for example `"ES256"`.
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            SigningAlg::RS256 => "RS256",
+            SigningAlg::ES256 => "ES256",
+            SigningAlg::PS256 => "PS256",
+        }
+    }
+
+    /// The `jsonwebtoken` algorithm.
+    #[must_use]
+    pub fn jwt(self) -> jsonwebtoken::Algorithm {
+        match self {
+            SigningAlg::RS256 => jsonwebtoken::Algorithm::RS256,
+            SigningAlg::ES256 => jsonwebtoken::Algorithm::ES256,
+            SigningAlg::PS256 => jsonwebtoken::Algorithm::PS256,
+        }
+    }
+}
+
 /// Server-wide settings.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]

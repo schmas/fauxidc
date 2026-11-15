@@ -38,7 +38,7 @@ pub fn lifetime_secs(secs: u64) -> i64 {
 const ACCESS_TOKEN_TYP: &str = "at+jwt";
 
 fn sign(key: &SigningKey, typ: &str, claims: &Claims) -> Result<String, OAuthError> {
-    let mut header = Header::new(Algorithm::RS256);
+    let mut header = Header::new(key.alg.jwt());
     header.typ = Some(typ.to_owned());
     header.kid = Some(key.kid.clone());
     jsonwebtoken::encode(&header, claims, &key.encoding)
@@ -220,6 +220,15 @@ mod tests {
             c["exp"].as_u64().unwrap() - c["iat"].as_u64().unwrap(),
             3600
         );
+    }
+
+    #[test]
+    fn id_token_header_alg_follows_key() {
+        let k = SigningKey::generate_for(crate::config::SigningAlg::ES256).unwrap();
+        let t = sign_id_token(&k, id_input("http://h/a")).unwrap();
+        let (h, _) = decode_unverified(&t);
+        assert_eq!(h["alg"], "ES256");
+        assert_eq!(h["kid"], k.kid.as_str());
     }
 
     #[test]

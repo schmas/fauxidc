@@ -621,6 +621,7 @@ dependencies = [
  "jsonwebtoken",
  "minijinja",
  "openidconnect",
+ "p256",
  "reqwest",
  "rsa 0.10.0",
  "rust-embed",
