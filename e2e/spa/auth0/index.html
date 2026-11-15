@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>example-spa (auth0-spa-js)</title>
+<script src="/lib/auth0-spa-js.js"></script>
+</head>
+<body>
+<h2>example-spa with auth0-spa-js</h2>
+<button id="login">Log in</button>
+<button id="refresh">Refresh</button>
+<button id="logout">Log out</button>
+<p>Status: <span id="status">loading</span></p>
+<p>Access token jti: <span id="token"></span></p>
+<p id="error"></p>
+<script>
+  const statusEl = document.getElementById("status");
+  const tokenEl = document.getElementById("token");
+  const errorEl = document.getElementById("error");
+
+  function jtiOf(jwt) {
+    const payload = jwt.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
+    return JSON.parse(atob(payload)).jti;
+  }
+
+  async function render(client) {
+    if (await client.isAuthenticated()) {
+      const user = await client.getUser();
+      statusEl.textContent = "logged-in:" + user.email;
+      tokenEl.textContent = jtiOf(await client.getTokenSilently());
+    } else {
+      statusEl.textContent = "logged-out";
+      tokenEl.textContent = "";
+    }
+  }
+
+  (async () => {
+    const client = await auth0.createAuth0Client({
+      domain: "http://localhost:9000/auth0",
+      clientId: "example-spa",
+      authorizationParams: {
+        redirect_uri: "http://localhost:5173/",
+        scope: "openid profile email offline_access",
+      },
+      useRefreshTokens: true,
+      // "memory" runs token calls in a Web Worker that accepts only the exact
+      // path /oauth/token on the domain origin. The Issuer here has the path
+      // prefix /auth0, so the worker refuses /auth0/oauth/token.
+      // "localstorage" makes the token calls from the page.
+      cacheLocation: "localstorage",
+    });
+    const params = new URLSearchParams(location.search);
+    if (params.has("code") && params.has("state")) {
+      await client.handleRedirectCallback();
+      history.replaceState({}, "", "/");
+    }
+    document.getElementById("login").onclick = () => client.loginWithRedirect();
+    document.getElementById("refresh").onclick = async () => {
+      try {
+        tokenEl.textContent = jtiOf(await client.getTokenSilently({ cacheMode: "off" }));
+      } catch (e) {
+        errorEl.textContent = String(e);
+      }
+    };
+    document.getElementById("logout").onclick = () =>
+      client.logout({ logoutParams: { returnTo: "http://localhost:5173/" } });
+    await render(client);
+  })().catch((e) => {
+    statusEl.textContent = "logged-out";
+    errorEl.textContent = String(e);
+  });
+</script>
+</body>
+</html>

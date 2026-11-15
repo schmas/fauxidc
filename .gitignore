@@ -1,3 +1,6 @@
 /target/
 /.agents/
 /dist/
+/e2e/spa/node_modules/
+/e2e/spa/test-results/
+/e2e/spa/playwright-report/

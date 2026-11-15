@@ -111,3 +111,32 @@ jobs:
           docker logs fx 2>&1 | grep -q 'zero config'
           docker logs fx 2>&1 | grep -q 'non-loopback'
           time docker stop fx
+
+  spa-e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@v1
+        with:
+          # Must match rust-toolchain.toml.
+          toolchain: 1.100.0
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v7
+        with:
+          node-version: lts/*
+          cache: npm
+          cache-dependency-path: e2e/spa/package-lock.json
+      - run: cargo build
+      - name: Install SPA test dependencies
+        working-directory: e2e/spa
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+      - name: Run SPA exit test
+        working-directory: e2e/spa
+        run: npx playwright test
+      - if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report
+          path: e2e/spa/playwright-report
