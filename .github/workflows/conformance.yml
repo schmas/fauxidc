@@ -2,9 +2,11 @@ name: Conformance
 
 # Runs the OpenID Foundation conformance suite plans "Basic OP" and "Config OP".
 # See conformance/README.md.
+# It also runs on pull requests, because `conformance` is a required check on main.
 on:
   push:
     branches: [main]
+  pull_request:
   workflow_dispatch:
 
 permissions:
