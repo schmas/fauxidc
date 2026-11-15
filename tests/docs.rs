@@ -45,6 +45,22 @@ fn no_crates_io_publish() {
     }
 }
 
+#[test]
+fn spec_states_the_m4_rules() {
+    let s = read("docs/spec.md");
+    for needle in [
+        "foreign `Origin` header gives 403 `access_denied`",
+        "More than one `audience` or more than one `resource` parameter gives 400 `invalid_request`",
+        "At most 256 TLS handshakes run at once",
+        "`fauxidc_debugger_<issuer id>`",
+        "at most once every 10 s per URL",
+        "`https://` when `server.tls` is set",
+    ] {
+        assert!(s.contains(needle), "{needle}");
+    }
+    assert!(!s.contains("Otherwise they use `http://` + the request `Host` header"));
+}
+
 const DISCLAIMER: &str = "fauxidc was designed and built with AI coding agents (Claude Code), under human direction and review. Every change passes the test suite, clippy, and the OpenID conformance suite in CI. Report problems in GitHub issues.";
 
 #[test]

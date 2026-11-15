@@ -57,7 +57,7 @@ Conformance proof: CI runs the OpenID Foundation conformance suite ("Basic OP" a
 - Default endpoint paths below the Issuer path: `/authorize`, `/token`, `/userinfo`, `/jwks`, `/endsession`, `/introspect`, `/revoke`, `/debugger`.
 - `paths` overrides any endpoint path per Issuer (M2). Example: `token = "/oauth/token"`. Discovery publishes the override.
 - Discovery is served at `{issuer path}/.well-known/openid-configuration` and `{issuer path}/.well-known/oauth-authorization-server`. The RFC 8414 form `/.well-known/oauth-authorization-server{issuer path}` is also served. All three return the same document (M1).
-- Endpoint URLs in discovery use `server.public_base_url` if set (per-Issuer override allowed). Otherwise they use `http://` + the request `Host` header. One process can then serve a browser at `localhost:9000` and a container at `fauxidc:9000`, with one fixed `iss`.
+- Endpoint URLs in discovery use `server.public_base_url` if set (per-Issuer override allowed). Otherwise they use the listener scheme + the request `Host` header: `https://` when `server.tls` is set, else `http://`. One process can then serve a browser at `localhost:9000` and a container at `fauxidc:9000`, with one fixed `iss`.
 - `X-Forwarded-Proto` / `X-Forwarded-Host` are used only when `server.trust_forwarded_headers = true`. Without `X-Forwarded-Proto`, the scheme is `https` when `server.tls` is set, else `http`.
 - `logout_param_aliases` maps provider parameter names to standard ones (M2). Example: `returnTo = "post_logout_redirect_uri"`.
 
@@ -208,6 +208,7 @@ Our own merge, about 200 lines. Parse each source to `toml::Value`, deep-merge, 
 
 - M2: `client_secret_basic`, `client_secret_post`, `none`.
 - M3: `private_key_jwt` with a Client `jwks` or `jwks_uri`.
+- `jwks_uri` (M4): the fetched set is cached for 60 s. An unknown `kid` refetches it, at most once every 10 s per URL. A key with a `use` other than `sig` is not used to verify an assertion.
 - Discovery lists only the supported methods.
 
 ## 7. Keys and signing
@@ -215,7 +216,7 @@ Our own merge, about 200 lines. Parse each source to `toml::Value`, deep-merge, 
 - RS256 in M1. One key shared by all Issuers, with one `kid`.
 - Key source order: `FAUXIDC_KEY_PEM`, then `server.key_file` if the file exists, then generate.
 - Generation runs on a background task after the listener binds. JWKS, `/token` and the Test API token endpoint wait for the key. Discovery does not wait. If `key_file` is set and writable, the generated key is saved there.
-- M3: per-Issuer keys, ES256 and PS256. `POST /_mock/{issuer-id}/rotate-key` adds a new active key and keeps the old one in JWKS. `?retire=true` removes the old key. An Issuer keeps at most 10 keys; a rotation above the cap removes the oldest key.
+- M3: per-Issuer keys, ES256 and PS256. `POST /_mock/{issuer-id}/rotate-key` adds a new active key and keeps the old one in JWKS. `?retire=true` removes the old key. An Issuer keeps at most 10 keys; a rotation above the cap removes the oldest key. M4: a request with an `Origin` header that is not the server's own origin (scheme + `Host`) gets 403 `access_denied`, so a web page cannot rotate the keys. A request without `Origin` is not affected.
 
 ## 8. Users and claims
 
@@ -250,7 +251,7 @@ Later wins:
 ## 9. Tokens
 
 - id_token: JWT, signed.
-- Access token: always a JWT in RFC 9068 shape (`typ: at+jwt`). `aud` comes from the `audience` / `resource` parameter, else the Client `audience`, else `client_id`.
+- Access token: always a JWT in RFC 9068 shape (`typ: at+jwt`). `aud` comes from the `audience` / `resource` parameter, else the Client `audience`, else `client_id`. More than one `audience` or more than one `resource` parameter gives 400 `invalid_request` (M4), in both modes and for every grant type.
 - Refresh token: signed JWT. It carries the User id plus any Claim overrides or Custom user claims. On refresh, claims are merged again from the current config (M2).
 - Rotation (M2): on by default per Client. Using an old refresh token again returns `invalid_grant`, unless it is within `refresh_reuse_leeway_secs` (default 0). No family revocation.
 - `client_credentials` (M2): `sub = client_id`, claims from Client `access_claims`. No id_token and no refresh token.
@@ -273,11 +274,11 @@ Paths are below the Issuer path unless they start with `/_mock`.
 | `/endsession` | `id_token_hint` optional. In Strict mode, `post_logout_redirect_uri` must match the Client, which is found by `client_id` or `id_token_hint`. With no redirect: "signed out" page. `state` passed through. Clears the Session and the Auto-select cookie. Aliases apply. | M2 |
 | `/introspect` | Requires an authenticated confidential Client of the same Issuer. | M2 |
 | `/revoke` | Confidential Clients, or public Clients by `client_id` for their own tokens. Limitation: a revoked JWT stays valid for resource servers that verify it locally. Only `/introspect` sees the revocation. | M2 |
-| `/debugger` | Decodes a pasted JWT and checks it against this Issuer's JWKS. Runs a code + PKCE flow with a built-in `debugger` Client and shows the decoded tokens. | M3 |
+| `/debugger` | Decodes a pasted JWT and checks it against this Issuer's JWKS. Runs a code + PKCE flow with a built-in `debugger` Client and shows the decoded tokens. M4: the built-in Client allows only the exact callback URL that `/debugger/start` builds, and needs PKCE S256 in both modes. `/debugger/start` sets the cookie `fauxidc_debugger_<issuer id>` with the flow `state`; without the matching cookie the callback gives 400. The server keeps at most 10 000 pending flows and drops the one that expires first. | M3, M4 |
 | `GET /_mock/health` | Health check. | M1 |
 | `POST /_mock/{issuer-id}/token` | Issues tokens without a browser: User id, extra claims, `expires_in` (negative allowed). | M2 |
 | `GET /_mock/requests?issuer=&path=`, `DELETE /_mock/requests` | Request log. Ring buffer of `request_log_size`, raw bodies. | M2 |
-| `POST /_mock/{issuer-id}/rotate-key` | Key rotation. | M3 |
+| `POST /_mock/{issuer-id}/rotate-key` | Key rotation. A foreign `Origin` header gives 403 `access_denied` (M4). | M3, M4 |
 | `POST /_mock/{issuer-id}/fail-next` | Injected failure: `{endpoint, status, error, count, delay_ms}`. | M3 |
 
 CORS (M2) on `/token`, `/userinfo` and `/revoke`: allowed origins come from the Client `web_origins`. If `web_origins` is not set, the origins of its redirect URIs are allowed.
@@ -312,7 +313,7 @@ CORS (M2) on `/token`, `/userinfo` and `/revoke`: allowed origins come from the 
 
 ### 12.4 TLS
 
-None in M1 and M2. M3 adds an optional `tls` cargo feature with `rustls` (ring) and `tokio-rustls`, off by default. The default build, the release binaries and the image do not include it.
+None in M1 and M2. M3 adds an optional `tls` cargo feature with `rustls` (ring) and `tokio-rustls`, off by default. The default build, the release binaries and the image do not include it. At most 256 TLS handshakes run at once (M4); more clients wait until one ends.
 
 ## 13. Project standards
 
