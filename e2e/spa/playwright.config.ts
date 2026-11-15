@@ -5,6 +5,8 @@ import { defineConfig, devices } from "@playwright/test";
 // desktop runs are manual (docs/testing/m2-exit-test.md).
 export default defineConfig({
   testDir: "./tests",
+  // Checks a server that already listens on port 9000 (reuseExistingServer).
+  globalSetup: "./global-setup.ts",
   timeout: 60_000,
   forbidOnly: !!process.env.CI,
   retries: 0,
@@ -16,8 +18,9 @@ export default defineConfig({
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: [
     {
+      // server-check.mjs fails with a clear message when another server holds port 9000.
       command:
-        "cargo run --manifest-path ../../Cargo.toml -- --config ../../examples/auth0.toml --config ../../examples/okta.toml",
+        "node server-check.mjs && cargo run --manifest-path ../../Cargo.toml -- --config ../../examples/auth0.toml --config ../../examples/okta.toml",
       url: "http://localhost:9000/_mock/health",
       timeout: 180_000,
       reuseExistingServer: !process.env.CI,

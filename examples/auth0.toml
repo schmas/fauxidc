@@ -21,6 +21,17 @@ client_id = "example-spa"
 redirect_uris = ["http://localhost:5173/", "http://localhost:5174/"]
 post_logout_redirect_uris = ["http://localhost:5173/", "http://localhost:5174/"]
 
+# A backend Client that authenticates with private_key_jwt (RFC 7523) and may
+# use token exchange (RFC 8693). Put its public key in `jwks`, or use
+# `jwks_uri`. Remove the `#` to use it.
+# [client.backend]
+# issuer = "*"
+# client_id = "backend"
+# grant_types = ["client_credentials", "urn:ietf:params:oauth:grant-type:token-exchange"]
+# scopes = ["api"]
+# jwks = { keys = [ { kty = "EC", crv = "P-256", kid = "backend-1", x = "...", y = "..." } ] }
+# # or: jwks_uri = "http://localhost:8080/.well-known/jwks.json"
+
 [user.alice]
 label = "Alice Admin"
 claims = { email = "alice@example.com", given_name = "Alice", family_name = "Admin", name = "Alice Admin", email_verified = true, roles = ["admin"] }

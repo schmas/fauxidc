@@ -5,8 +5,8 @@ It ships as a single static binary and needs no external infrastructure.
 
 ## Status
 
-Pre-alpha, milestone M2. Login with the authorization code flow and the full OAuth surface for tests work.
-See [docs/spec.md](docs/spec.md) for the plan.
+Pre-alpha, milestone M3. Login with the authorization code flow, the full OAuth surface for tests
+and the M3 advanced features work. See [docs/spec.md](docs/spec.md) for the plan.
 
 M2 features:
 
@@ -18,6 +18,20 @@ M2 features:
 - `paths` overrides for endpoint paths, published in discovery.
 - CORS on `/token`, `/userinfo` and `/revoke` from the Client `web_origins`.
 - The Test API token endpoint and the Request log.
+
+M3 features:
+
+- Per-Issuer keys with `RS256`, `ES256` or `PS256`, and key rotation through the Test API.
+- `private_key_jwt` client authentication (RFC 7523) with a Client `jwks` or `jwks_uri`.
+- Token exchange (RFC 8693).
+- Sessions: `prompt=none`, `prompt=login`, `max_age` and `auth_time`.
+- Hot reload of the config files, also on SIGHUP.
+- The `/debugger` page: decode a JWT, or run a code + PKCE flow and see the tokens.
+- Injected failures through the Test API.
+- An optional `tls` cargo feature for HTTPS.
+
+The exit test runbooks are in `docs/testing/`: [M1](docs/testing/m1-exit-test.md),
+[M2](docs/testing/m2-exit-test.md) and [M3](docs/testing/m3-exit-test.md).
 
 ## Not for production
 
@@ -170,6 +184,10 @@ The Client must authenticate and must list the grant in `grant_types`. It is not
 - Lenient mode: fauxidc tries the same check. If it fails, fauxidc logs a warning and uses the claims unverified.
   A value that is not a JWT fails in both modes.
 
+A public Client (auth method `none`) can use token exchange when it lists the grant.
+fauxidc does not check the requested `scope` against the subject token or the Client `scopes`.
+In Lenient mode a subject token that fails the check is still accepted, unverified, with a warning.
+
 The result is an access token of this Issuer, with no id_token and no refresh token.
 It has `sub` and the User claims of the subject token. `aud` is `audience`, else `resource`,
 else the Client `audience`, else the `client_id`. `scope` is the `scope` parameter, else the subject token `scope`.
@@ -201,10 +219,14 @@ Each Issuer serves a debugger page at `{issuer}/debugger` (the `paths.debugger` 
 
 The flow uses the built-in public Client `debugger`. It needs no config. Its only allowed redirect URI is the
 debugger callback of the same Issuer (`{issuer}/debugger/callback`), on any host. A configured Client with
-`client_id = "debugger"` replaces it. The PKCE verifier stays on the server for 600 s.
+`client_id = "debugger"` replaces it. In Lenient mode, a Client registered at runtime with the id `debugger`
+also replaces it. The PKCE verifier stays on the server for 600 s.
 
 The page also shows "Signed in as <label> · change" when the Auto-select cookie names a configured User.
 The "change" link (`{issuer}/debugger?forget=1`) clears the cookie.
+
+You can replace the page with a `debugger.html` template. The default template writes its links with the `href`
+filter; see [docs/templates.md](docs/templates.md).
 
 ## Templates
 
@@ -295,13 +317,20 @@ CI runs two plans of the OpenID Foundation conformance suite against fauxidc on 
 Each run uploads the suite's result export as the `conformance-results` artifact.
 See [conformance/README.md](conformance/README.md) for the known results and how to run the suite locally.
 
-## Not yet supported
+## Not supported
 
-M2 does not include these. They are planned for M3.
+These are not planned (spec non-goals):
 
-- Sessions with `prompt` and `max_age`, hot reload, and a debugger page.
-- Per-Issuer keys, ES256 and PS256, key rotation, and `private_key_jwt`.
-- Injected failures and an optional TLS feature.
+- Production use.
+- Provider management APIs, for example the Auth0 Management API or the Okta Users API.
+- RFC 7591 dynamic client registration, RFC 9126 PAR, RFC 9449 DPoP, RFC 8628 device flow,
+  front-channel and back-channel logout.
+- The implicit grant and the password grant.
+
+Current limits:
+
+- `jwks_uri` must be an `http://` URL.
+- The `tls` feature uses the PEM files you give. fauxidc does not generate certificates.
 
 ## License
 
