@@ -70,6 +70,8 @@ scripts/conformance.sh                             # OpenID conformance suite (c
   Compatibility tests use the `openidconnect` crate.
 - Errors: typed `thiserror` errors in the lib, `anyhow` only in `main.rs`. `OAuthError` implements `IntoResponse`.
 - Commits: Conventional Commits. `release-plz` builds versions and the CHANGELOG from them.
+- Changes reach `main` only through a PR. The ruleset `protect-main` blocks direct pushes for everyone, admins included.
+  A PR needs no approval, but the CI jobs and `conformance` must pass. Branch names: `<type>/<slug>`, for example `chore/conformance-on-pull-requests`.
 - A change in `assets/templates/` or `assets/css/` runs `scripts/build-css.sh` and commits the new
   `assets/static/fauxidc.css` in the same commit. The CI job `css` checks it.
 - A change to the config structs regenerates `schema/fauxidc.schema.json` in the same commit. A test checks it.
@@ -86,6 +88,7 @@ scripts/conformance.sh                             # OpenID conformance suite (c
 
 ### Never
 
+- A direct push to `main`. Open a PR.
 - `unsafe` code (`#![forbid(unsafe_code)]`).
 - `unwrap()` / `expect()` outside tests and startup invariants (clippy denies them).
 - Crates that need a C toolchain in the default build. The release build is a static musl binary.
