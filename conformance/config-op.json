@@ -1,0 +1,7 @@
+{
+  "alias": "fauxidc",
+  "description": "fauxidc Config OP",
+  "server": {
+    "discoveryUrl": "https://fauxidc/conformance/.well-known/openid-configuration"
+  }
+}

@@ -1,0 +1,11 @@
+# TLS front for fauxidc in the conformance run. Config OP requires https endpoints;
+# fauxidc serves plain HTTP in M2. `tls internal` uses Caddy's own local CA.
+{
+	# Java sends no SNI for a host name without a dot, such as `fauxidc`.
+	default_sni fauxidc
+}
+
+https://fauxidc {
+	tls internal
+	reverse_proxy host.docker.internal:9000
+}

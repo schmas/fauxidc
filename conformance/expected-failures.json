@@ -1,0 +1,58 @@
+[
+  {
+    "test-name": "oidcc-prompt-none-logged-in",
+    "variant": "*",
+    "configuration-filename": "*basic.json",
+    "current-block": "Second authorization: Verify authorization endpoint response",
+    "condition": "CheckIfAuthorizationEndpointError",
+    "expected-result": "failure"
+  },
+  {
+    "test-name": "oidcc-id-token-hint",
+    "variant": "*",
+    "configuration-filename": "*basic.json",
+    "current-block": "Second authorization: Verify authorization endpoint response",
+    "condition": "CheckIfAuthorizationEndpointError",
+    "expected-result": "failure"
+  },
+  {
+    "test-name": "oidcc-scope-email",
+    "variant": "*",
+    "configuration-filename": "*basic.json",
+    "current-block": "Verify authorization endpoint response",
+    "condition": "EnsureIdTokenDoesNotContainEmailForScopeEmail",
+    "expected-result": "warning"
+  },
+  {
+    "test-name": "oidcc-alternate-happy-flow",
+    "variant": "*",
+    "configuration-filename": "*basic.json",
+    "current-block": "Verify authorization endpoint response",
+    "condition": "EnsureIdTokenDoesNotContainEmailForScopeEmail",
+    "expected-result": "warning"
+  },
+  {
+    "test-name": "oidcc-ensure-request-with-acr-values-succeeds",
+    "variant": "*",
+    "configuration-filename": "*basic.json",
+    "current-block": "Verify authorization endpoint response",
+    "condition": "ValidateIdTokenACRClaimAgainstAcrValuesRequest",
+    "expected-result": "warning"
+  },
+  {
+    "test-name": "oidcc-codereuse-30seconds",
+    "variant": "*",
+    "configuration-filename": "*basic.json",
+    "current-block": "Testing if access token was revoked after authorization code reuse (the AS 'should' have revoked the access token)",
+    "condition": "EnsureHttpStatusCodeIs4xx",
+    "expected-result": "warning"
+  },
+  {
+    "test-name": "oidcc-claims-essential",
+    "variant": "*",
+    "configuration-filename": "*basic.json",
+    "current-block": "",
+    "condition": "EnsureUserInfoContainsName",
+    "expected-result": "warning"
+  }
+]

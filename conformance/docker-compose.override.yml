@@ -1,0 +1,14 @@
+# Compose override for the conformance suite's docker-compose-prebuilt.yml.
+# Adds a TLS front named `fauxidc` on the suite network. FAUXIDC_CONFORMANCE_DIR must be
+# an absolute path to this directory (compose resolves relative paths against the suite).
+services:
+  fauxidc-tls:
+    image: caddy:2.11.9-alpine
+    volumes:
+      - ${FAUXIDC_CONFORMANCE_DIR}/Caddyfile:/etc/caddy/Caddyfile:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      default:
+        aliases:
+          - fauxidc

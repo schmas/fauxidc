@@ -1,0 +1,65 @@
+# fauxidc config for the OpenID Foundation conformance suite (see README.md here).
+# Caddy terminates TLS as https://fauxidc and proxies to this server on port 9000.
+# Run: scripts/conformance.sh
+
+[server]
+port = 9000
+# Caddy reaches fauxidc through the Docker host gateway, not through loopback.
+bind = "0.0.0.0"
+public_base_url = "https://fauxidc"
+
+[issuer.conformance]
+issuer_url = "https://fauxidc/conformance"
+# Strict mode; the suite drives the login page.
+lenient = false
+auto_login = false
+
+[client.conformance_1]
+client_id = "conformance-1"
+client_secret = "conformance-secret-1"
+redirect_uris = ["https://localhost.emobix.co.uk:8443/test/a/fauxidc/callback"]
+scopes = ["openid", "profile", "email", "address", "phone", "offline_access"]
+
+[client.conformance_2]
+client_id = "conformance-2"
+client_secret = "conformance-secret-2"
+redirect_uris = ["https://localhost.emobix.co.uk:8443/test/a/fauxidc/callback"]
+scopes = ["openid", "profile", "email", "address", "phone", "offline_access"]
+
+[client.conformance_post]
+client_id = "conformance-post"
+client_secret = "conformance-secret-post"
+redirect_uris = ["https://localhost.emobix.co.uk:8443/test/a/fauxidc/callback"]
+scopes = ["openid", "profile", "email", "address", "phone", "offline_access"]
+
+# Every OIDC Core 5.1 standard claim, so the scope modules find all of them.
+[user.alice]
+label = "Alice Example"
+
+[user.alice.claims]
+name = "Alice Example"
+given_name = "Alice"
+family_name = "Example"
+middle_name = "Marie"
+nickname = "ali"
+preferred_username = "alice"
+profile = "https://www.example.com/alice"
+picture = "https://www.example.com/alice.png"
+website = "https://www.example.com/"
+gender = "female"
+birthdate = "1990-01-01"
+zoneinfo = "Europe/Paris"
+locale = "en-US"
+updated_at = 1700000000
+email = "alice@example.com"
+email_verified = true
+phone_number = "+1 555 0100"
+phone_number_verified = true
+
+[user.alice.claims.address]
+formatted = "1 Example Street, Example City, EX 00000, Exampleland"
+street_address = "1 Example Street"
+locality = "Example City"
+region = "EX"
+postal_code = "00000"
+country = "Exampleland"
