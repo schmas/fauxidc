@@ -13,16 +13,29 @@ use fauxidc::{Server, StartOptions, healthcheck, logging};
 
 const DEFAULT_PORT: u16 = 9000;
 
-#[tokio::main(flavor = "current_thread")]
-async fn main() -> ExitCode {
+fn main() -> ExitCode {
+    let runtime = match tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+    {
+        Ok(runtime) => runtime,
+        Err(error) => {
+            eprintln!("error: cannot build the tokio runtime: {error}");
+            return ExitCode::from(1);
+        }
+    };
     let cli = Cli::parse();
-    match run(cli).await {
+    let code = match runtime.block_on(run(cli)) {
         Ok(code) => code,
         Err(error) => {
             eprintln!("error: {error:#}");
             ExitCode::from(1)
         }
-    }
+    };
+    // Dropping the runtime waits for blocking tasks, such as a signing key still being
+    // generated. The process is done, so it does not wait for them.
+    runtime.shutdown_background();
+    code
 }
 
 async fn run(cli: Cli) -> anyhow::Result<ExitCode> {

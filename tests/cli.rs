@@ -83,8 +83,25 @@ fn config_check_ok() {
 fn serve_starts_and_stops_on_sigterm() {
     let (mut child, _addr) = start_server(&[]);
     send_sigterm(&child);
-    let status = wait_timeout(&mut child, Duration::from_secs(2)).expect("stopped in time");
+    let status = wait_timeout(&mut child, Duration::from_secs(10)).expect("stopped in time");
     assert!(status.success());
+}
+
+/// SIGTERM right after `listening` must not wait for the background key generation: the
+/// runtime used to wait for that blocking task when it dropped, which took over a second in a
+/// debug build and more on a loaded runner.
+#[test]
+#[cfg(unix)]
+fn sigterm_does_not_wait_for_key_generation() {
+    for _ in 0..5 {
+        let (mut child, _addr) = start_server(&[]);
+        let start = Instant::now();
+        send_sigterm(&child);
+        let status = wait_timeout(&mut child, Duration::from_secs(10)).expect("stopped");
+        let took = start.elapsed();
+        assert!(status.success());
+        assert!(took < Duration::from_millis(500), "shutdown took {took:?}");
+    }
 }
 
 #[test]
