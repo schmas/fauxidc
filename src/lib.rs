@@ -11,6 +11,7 @@ pub mod client_credentials;
 pub mod clients;
 pub mod config;
 pub mod cookies;
+pub mod cors;
 pub mod discovery;
 pub mod endsession;
 pub mod error;

@@ -14,6 +14,7 @@ use tower_http::trace::{DefaultOnResponse, TraceLayer};
 
 use crate::authorize;
 use crate::config::Endpoint;
+use crate::cors::client_cors_layer;
 use crate::discovery;
 use crate::endsession;
 use crate::health;
@@ -41,6 +42,7 @@ pub fn build_router(state: Arc<AppState>) -> Router {
             id: id.clone(),
             path: path.clone(),
         };
+        let client_cors = client_cors_layer(&state.config, id);
         let sub: Router = Router::new()
             .route(
                 "/.well-known/openid-configuration",
@@ -60,17 +62,22 @@ pub fn build_router(state: Arc<AppState>) -> Router {
             )
             .route(
                 ctx.endpoint_path(Endpoint::Token),
-                post(token_endpoint::token),
+                post(token_endpoint::token).layer(client_cors.clone()),
             )
             .route(
                 ctx.endpoint_path(Endpoint::Userinfo),
-                get(userinfo::userinfo).post(userinfo::userinfo),
+                get(userinfo::userinfo)
+                    .post(userinfo::userinfo)
+                    .layer(client_cors.clone()),
             )
             .route(
                 ctx.endpoint_path(Endpoint::Endsession),
                 get(endsession::endsession_get).post(endsession::endsession_post),
             )
-            .route(ctx.endpoint_path(Endpoint::Revoke), post(revoke::revoke))
+            .route(
+                ctx.endpoint_path(Endpoint::Revoke),
+                post(revoke::revoke).layer(client_cors),
+            )
             .route(
                 ctx.endpoint_path(Endpoint::Introspect),
                 post(introspect::introspect),
