@@ -182,16 +182,11 @@ async fn exchange_code(
     if let Some((challenge, method)) = &grant.pkce {
         check_verifier(ctx, challenge, *method, f.code_verifier.as_deref())?;
     }
-    let key = ctx
-        .app
-        .keys
-        .get()
-        .await
-        .map_err(|_| OAuthError::Unavailable)?;
+    let keys = ctx.keys().await?;
 
     issue_user_tokens(
         ctx,
-        &key,
+        &keys.active,
         &UserGrant {
             client: &client,
             subject: &grant.subject,

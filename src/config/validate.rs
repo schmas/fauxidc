@@ -2,7 +2,7 @@
 
 use axum::http::Uri;
 
-use super::types::{Config, EndpointPaths};
+use super::types::{Config, EndpointPaths, SigningAlg};
 use super::{KeyPath, Source, SourceMap};
 use crate::authorize::CUSTOM_USER;
 use crate::error::{ConfigError, ConfigErrors};
@@ -98,6 +98,7 @@ pub fn validate(config: &Config, sources: &SourceMap) -> Result<(), ConfigErrors
     }
 
     check_issuers(config, &mut c);
+    check_key_files(config, &mut c);
     check_clients(config, &mut c);
     check_users(config, &mut c);
 
@@ -178,6 +179,48 @@ fn check_issuers(config: &Config, c: &mut Collector<'_>) {
                 );
             }
         }
+    }
+}
+
+/// One key file holds one key: a `key_file` shared by the server and Issuers, or by several
+/// Issuers, needs the same `signing_alg` for all of them. The server key is RS256.
+fn check_key_files(config: &Config, c: &mut Collector<'_>) {
+    let mut entries: Vec<(&str, String, SigningAlg)> = vec![(
+        config.server.key_file.as_str(),
+        "server.key_file".to_owned(),
+        SigningAlg::RS256,
+    )];
+    for (id, issuer) in &config.issuer {
+        entries.push((
+            issuer.key_file.as_str(),
+            format!("issuer.{id}.key_file"),
+            issuer.signing_alg,
+        ));
+    }
+    entries.retain(|(file, _, _)| !file.is_empty());
+    let mut files: Vec<&str> = entries.iter().map(|(file, _, _)| *file).collect();
+    files.sort_unstable();
+    files.dedup();
+    for file in files {
+        let group: Vec<&(&str, String, SigningAlg)> =
+            entries.iter().filter(|(f, _, _)| *f == file).collect();
+        if group.iter().all(|(_, _, alg)| *alg == group[0].2) {
+            continue;
+        }
+        let names: Vec<&str> = group.iter().map(|(_, key, _)| key.as_str()).collect();
+        let last: Vec<&str> = names
+            .last()
+            .copied()
+            .unwrap_or_default()
+            .split('.')
+            .collect();
+        c.push(
+            &last,
+            format!(
+                "{} use the same key file \"{file}\" with different signing_alg values; one file holds one key",
+                names.join(" and ")
+            ),
+        );
     }
 }
 
@@ -419,6 +462,41 @@ mod tests {
     }
     const A: &str = "[issuer.a]\nissuer_url = \"http://localhost:9000/a/\"\n";
 
+    #[test]
+    fn unknown_signing_alg_names_the_key() {
+        let err = crate::config::load_str(&format!("{A}signing_alg = \"HS256\"\n"))
+            .err()
+            .unwrap()
+            .to_string();
+        assert!(
+            err.contains("signing_alg") && err.contains("HS256"),
+            "{err}"
+        );
+    }
+    #[test]
+    fn shared_key_file_needs_the_same_signing_alg() {
+        let e = errs(&format!(
+            "{A}key_file = \"k.pem\"\nsigning_alg = \"ES256\"\n\
+             [issuer.b]\nissuer_url = \"http://localhost:9000/b/\"\nkey_file = \"k.pem\"\nsigning_alg = \"PS256\"\n"
+        ));
+        assert_eq!(e.len(), 1, "{e:?}");
+        assert!(
+            e[0].contains("issuer.a.key_file") && e[0].contains("issuer.b.key_file"),
+            "{e:?}"
+        );
+        let same = errs(&format!(
+            "{A}key_file = \"k.pem\"\nsigning_alg = \"ES256\"\n\
+             [issuer.b]\nissuer_url = \"http://localhost:9000/b/\"\nkey_file = \"k.pem\"\nsigning_alg = \"ES256\"\n"
+        ));
+        assert!(same.is_empty(), "{same:?}");
+        let server = errs(&format!(
+            "[server]\nkey_file = \"k.pem\"\n{A}key_file = \"k.pem\"\nsigning_alg = \"ES256\"\n"
+        ));
+        assert!(
+            server.len() == 1 && server[0].contains("server.key_file"),
+            "{server:?}"
+        );
+    }
     #[test]
     fn ok_minimal() {
         assert!(errs(A).is_empty());

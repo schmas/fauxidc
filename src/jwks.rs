@@ -1,19 +1,18 @@
-//! The JWKS endpoint: serves the public signing key.
+//! The JWKS endpoint: serves the public keys of the Issuer's key set.
 
 use axum::{
     Json,
     extract::State,
     response::{IntoResponse, Response},
 };
-use serde_json::json;
 
-use crate::{error::OAuthError, logging::record_endpoint, state::IssuerCtx};
+use crate::{logging::record_endpoint, state::IssuerCtx};
 
-/// `GET /jwks`: waits for the signing key, then serves it as a JWK set.
+/// `GET /jwks`: waits for the Issuer's first key, then serves its key set, the active key first.
 pub async fn jwks(State(ctx): State<IssuerCtx>) -> Response {
     record_endpoint(&ctx.id, "jwks");
-    match ctx.app.keys.get().await {
-        Ok(key) => Json(json!({ "keys": [key.jwk] })).into_response(),
-        Err(_) => OAuthError::Unavailable.into_response(),
+    match ctx.keys().await {
+        Ok(set) => Json(set.jwks()).into_response(),
+        Err(e) => e.into_response(),
     }
 }

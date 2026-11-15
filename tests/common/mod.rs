@@ -247,3 +247,21 @@ pub async fn access_token_for(app: &Router, extra: &[(&str, &str)]) -> String {
         .unwrap()
         .to_owned()
 }
+
+/// A JSON POST with `Host: localhost:9000`.
+pub fn post_json(uri: &str, body: &Value) -> Request<Body> {
+    Request::builder()
+        .method("POST")
+        .uri(uri)
+        .header("content-type", "application/json")
+        .header("host", "localhost:9000")
+        .body(Body::from(body.to_string()))
+        .unwrap()
+}
+
+/// Posts `body` to the Test API of `issuer`, asserts 200 and returns the JSON response.
+pub async fn test_token(app: &Router, issuer: &str, body: Value) -> Value {
+    let (s, _, b) = send(app, post_json(&format!("/_mock/{issuer}/token"), &body)).await;
+    assert_eq!(s, 200, "{b}");
+    json(&b)
+}

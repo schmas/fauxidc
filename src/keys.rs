@@ -1,7 +1,8 @@
 //! Signing keys (RS256, PS256, ES256): generation, PEM round trip, JWK and RFC 7638 `kid`.
 
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, PoisonError};
 
 use base64::Engine as _;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
@@ -15,7 +16,7 @@ use rsa::traits::PublicKeyParts;
 use sha2::{Digest, Sha256};
 use tokio::sync::watch;
 
-use crate::config::SigningAlg;
+use crate::config::{Config, SigningAlg};
 
 const RSA_BITS: usize = 2048;
 
@@ -228,22 +229,34 @@ impl KeyHandle {
         }
     }
 
-    /// Resolve the key: `pem`, else an existing `key_file`, else generate in the background
-    /// and save to `key_file`. Must run inside a tokio runtime.
+    /// Resolve an RS256 key: `pem`, else an existing `key_file`, else generate in the
+    /// background and save to `key_file`. Must run inside a tokio runtime.
     pub fn start(source: KeySource) -> Result<KeyHandle, KeyError> {
+        Self::start_for(source, SigningAlg::RS256)
+    }
+
+    /// Like [`KeyHandle::start`], for a key of `alg`.
+    pub fn start_for(source: KeySource, alg: SigningAlg) -> Result<KeyHandle, KeyError> {
         if let Some(pem) = &source.pem {
-            return SigningKey::from_pem(pem).map(KeyHandle::ready);
+            return SigningKey::from_pem_for(pem, alg).map(KeyHandle::ready);
         }
         if let Some(file) = source.key_file.as_deref().filter(|f| f.exists()) {
             let pem = std::fs::read_to_string(file)
                 .map_err(|e| KeyError::InvalidPem(format!("{}: {e}", file.display())))?;
-            return SigningKey::from_pem(&pem).map(KeyHandle::ready);
+            return SigningKey::from_pem_for(&pem, alg)
+                .map(KeyHandle::ready)
+                .map_err(|e| match e {
+                    KeyError::InvalidPem(m) => {
+                        KeyError::InvalidPem(format!("{}: {m}", file.display()))
+                    }
+                    other => other,
+                });
         }
         let (handle, publisher) = KeyHandle::channel();
         let dispatch = tracing::dispatcher::get_default(Clone::clone);
         let key_file = source.key_file;
         tokio::task::spawn_blocking(move || {
-            tracing::dispatcher::with_default(&dispatch, || match SigningKey::generate() {
+            tracing::dispatcher::with_default(&dispatch, || match SigningKey::generate_for(alg) {
                 Ok(key) => {
                     let pem = key.to_pem().to_owned();
                     publisher.publish(key);
@@ -263,6 +276,169 @@ impl KeyHandle {
             });
         });
         Ok(handle)
+    }
+}
+
+/// The keys of one Issuer: the active key signs; older keys still verify (by `kid`).
+#[derive(Clone)]
+pub struct KeySet {
+    pub active: Arc<SigningKey>,
+    pub previous: Vec<Arc<SigningKey>>,
+}
+
+impl KeySet {
+    /// A set with one key.
+    pub fn single(key: Arc<SigningKey>) -> KeySet {
+        KeySet {
+            active: key,
+            previous: Vec::new(),
+        }
+    }
+
+    /// The JWK set: `{"keys": [active, previous[0], ..]}`.
+    pub fn jwks(&self) -> serde_json::Value {
+        let keys: Vec<&serde_json::Value> = self.iter().map(|k| &k.jwk).collect();
+        serde_json::json!({ "keys": keys })
+    }
+
+    /// Every key, the active key first.
+    pub fn iter(&self) -> impl Iterator<Item = &Arc<SigningKey>> {
+        std::iter::once(&self.active).chain(self.previous.iter())
+    }
+
+    /// The key with this `kid`; `None` gives the active key.
+    pub fn find(&self, kid: Option<&str>) -> Option<&Arc<SigningKey>> {
+        match kid {
+            None => Some(&self.active),
+            Some(kid) => self.iter().find(|k| k.kid == kid),
+        }
+    }
+
+    /// Decodes and verifies `token`: the key by header `kid` (none: the active key), the header
+    /// `alg` must equal the key's `alg`. `configure` adds the caller's checks to the
+    /// [`jsonwebtoken::Validation`]; it cannot change the algorithm. Errors are short text.
+    pub fn verify(
+        &self,
+        token: &str,
+        configure: impl FnOnce(&mut jsonwebtoken::Validation),
+    ) -> Result<(jsonwebtoken::Header, crate::config::Claims), String> {
+        let header =
+            jsonwebtoken::decode_header(token).map_err(|_| "malformed token".to_owned())?;
+        let key = self
+            .find(header.kid.as_deref())
+            .ok_or_else(|| "unknown kid".to_owned())?;
+        if header.alg != key.alg.jwt() {
+            return Err(format!(
+                "alg {:?} does not match the key alg {}",
+                header.alg,
+                key.alg.as_str()
+            ));
+        }
+        let mut validation = jsonwebtoken::Validation::new(key.alg.jwt());
+        configure(&mut validation);
+        validation.algorithms = vec![key.alg.jwt()];
+        jsonwebtoken::decode::<crate::config::Claims>(token, &key.decoding, &validation)
+            .map(|data| (header, data.claims))
+            .map_err(|e| e.to_string())
+    }
+}
+
+struct Slot {
+    handle: KeyHandle,
+    set: Option<Arc<KeySet>>,
+}
+
+impl Slot {
+    /// The set, built from the handle's key on first use. `None` while the key is pending.
+    fn current(&mut self) -> Option<Arc<KeySet>> {
+        if self.set.is_none() {
+            let key = self.handle.try_get()?;
+            self.set = Some(Arc::new(KeySet::single(key)));
+        }
+        self.set.clone()
+    }
+}
+
+/// One [`KeySet`] per Issuer id.
+pub struct Keyring {
+    /// The server key, which RS256 Issuers without a `key_file` share.
+    server: KeyHandle,
+    slots: Mutex<HashMap<String, Slot>>,
+}
+
+impl Keyring {
+    /// One slot per Issuer of `config`. An RS256 Issuer with an empty `key_file` shares
+    /// `server`. Any other Issuer gets its own key: from `key_file` if the file exists, else
+    /// generated in the background and saved to `key_file` when it is set. Issuers with the
+    /// same `key_file` share one key; a `key_file` equal to `server.key_file` uses `server`.
+    /// Must run inside a tokio runtime when an Issuer needs its own key.
+    pub fn start(config: &Config, server: KeyHandle) -> Result<Keyring, KeyError> {
+        let mut by_file: HashMap<&str, KeyHandle> = HashMap::new();
+        if !config.server.key_file.is_empty() {
+            by_file.insert(config.server.key_file.as_str(), server.clone());
+        }
+        let mut slots = HashMap::new();
+        for (id, issuer) in &config.issuer {
+            let handle = if issuer.key_file.is_empty() {
+                if issuer.signing_alg == SigningAlg::RS256 {
+                    server.clone()
+                } else {
+                    KeyHandle::start_for(KeySource::default(), issuer.signing_alg)?
+                }
+            } else if let Some(handle) = by_file.get(issuer.key_file.as_str()) {
+                handle.clone()
+            } else {
+                let handle = KeyHandle::start_for(
+                    KeySource {
+                        pem: None,
+                        key_file: Some(PathBuf::from(&issuer.key_file)),
+                    },
+                    issuer.signing_alg,
+                )?;
+                by_file.insert(issuer.key_file.as_str(), handle.clone());
+                handle
+            };
+            slots.insert(id.clone(), Slot { handle, set: None });
+        }
+        Ok(Keyring {
+            server,
+            slots: Mutex::new(slots),
+        })
+    }
+
+    fn lock(&self) -> std::sync::MutexGuard<'_, HashMap<String, Slot>> {
+        self.slots.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
+    /// Waits for the Issuer's first key. Unknown Issuer id: [`KeyError::Unavailable`].
+    pub async fn key_set(&self, issuer_id: &str) -> Result<Arc<KeySet>, KeyError> {
+        let handle = {
+            let mut slots = self.lock();
+            let slot = slots.get_mut(issuer_id).ok_or(KeyError::Unavailable)?;
+            if let Some(set) = slot.current() {
+                return Ok(set);
+            }
+            slot.handle.clone()
+        };
+        handle.get().await?;
+        self.try_key_set(issuer_id).ok_or(KeyError::Unavailable)
+    }
+
+    /// The Issuer's key set if its first key is ready now.
+    pub fn try_key_set(&self, issuer_id: &str) -> Option<Arc<KeySet>> {
+        self.lock().get_mut(issuer_id)?.current()
+    }
+
+    /// `true` when every Issuer has its first key.
+    pub fn all_ready(&self) -> bool {
+        self.lock()
+            .values()
+            .all(|slot| slot.set.is_some() || slot.handle.try_get().is_some())
+    }
+
+    /// The server key handle.
+    pub fn server(&self) -> &KeyHandle {
+        &self.server
     }
 }
 
@@ -313,7 +489,7 @@ pub(crate) fn ec_thumbprint(x_b64: &str, y_b64: &str) -> String {
 mod tests {
     use super::*;
     use crate::config::test_util::{tmp_path, wait_for_file};
-    use std::sync::{LazyLock, Mutex};
+    use std::sync::LazyLock;
     use std::time::Duration;
 
     static TEST_KEY: LazyLock<SigningKey> = LazyLock::new(|| SigningKey::generate().unwrap());
@@ -624,6 +800,70 @@ mod tests {
                 "{alg:?}"
             );
         }
+    }
+
+    #[test]
+    fn key_set_finds_by_kid_and_lists_active_first() {
+        let a = Arc::new(test_key());
+        let b = Arc::new(SigningKey::generate_for(SigningAlg::ES256).unwrap());
+        let set = KeySet {
+            active: b.clone(),
+            previous: vec![a.clone()],
+        };
+        assert_eq!(set.find(Some(&a.kid)).unwrap().kid, a.kid);
+        assert_eq!(set.find(None).unwrap().kid, b.kid);
+        assert!(set.find(Some("nope")).is_none());
+        let kids: Vec<_> = set.jwks()["keys"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|k| k["kid"].as_str().unwrap().to_owned())
+            .collect();
+        assert_eq!(kids, vec![b.kid.clone(), a.kid.clone()]);
+    }
+
+    #[test]
+    fn key_set_rejects_alg_mismatch_and_none() {
+        let rsa =
+            Arc::new(SigningKey::from_pem_for(test_key().to_pem(), SigningAlg::PS256).unwrap());
+        let set = KeySet::single(rsa.clone());
+        // RS256 header with the kid of the PS256 key: rejected although the RSA key could verify it.
+        let mut h = jsonwebtoken::Header::new(jsonwebtoken::Algorithm::RS256);
+        h.kid = Some(rsa.kid.clone());
+        let t = jsonwebtoken::encode(
+            &h,
+            &serde_json::json!({"exp": 4_000_000_000u64}),
+            &test_key().encoding,
+        )
+        .unwrap();
+        assert!(set.verify(&t, |_| {}).is_err());
+        let none = format!(
+            "{}.{}.",
+            URL_SAFE_NO_PAD.encode(r#"{"alg":"none"}"#),
+            URL_SAFE_NO_PAD.encode(r#"{"exp":4000000000}"#)
+        );
+        assert!(set.verify(&none, |_| {}).is_err());
+    }
+
+    #[test]
+    fn key_set_verifies_with_the_kid_key() {
+        let old = Arc::new(test_key());
+        let new = Arc::new(SigningKey::generate_for(SigningAlg::ES256).unwrap());
+        let set = KeySet {
+            active: new,
+            previous: vec![old.clone()],
+        };
+        let mut h = jsonwebtoken::Header::new(jsonwebtoken::Algorithm::RS256);
+        h.kid = Some(old.kid.clone());
+        let t = jsonwebtoken::encode(
+            &h,
+            &serde_json::json!({"sub": "x", "exp": 4_000_000_000u64}),
+            &old.encoding,
+        )
+        .unwrap();
+        let (header, claims) = set.verify(&t, |v| v.validate_aud = false).unwrap();
+        assert_eq!(header.kid.as_deref(), Some(old.kid.as_str()));
+        assert_eq!(claims["sub"], "x");
     }
 
     #[test]

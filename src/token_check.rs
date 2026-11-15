@@ -1,7 +1,7 @@
 //! Decodes tokens this Issuer signed, for `/revoke` and `/introspect`.
 
 use crate::config::Claims;
-use crate::keys::SigningKey;
+use crate::keys::KeySet;
 use crate::refresh::{REFRESH_TOKEN_TYP, RefreshClaims, verify_refresh_token};
 use crate::tokens::verify_access_token;
 
@@ -51,14 +51,14 @@ impl OwnToken {
 /// A token this Issuer signed and that has not expired: an access token (`typ: at+jwt`, via
 /// `verify_access_token`) or a refresh token (`typ: rt+jwt`, via `verify_refresh_token`).
 /// Anything else, including ID tokens, is `None`.
-pub fn decode_own_token(key: &SigningKey, issuer_url: &str, token: &str) -> Option<OwnToken> {
+pub fn decode_own_token(keys: &KeySet, issuer_url: &str, token: &str) -> Option<OwnToken> {
     let header = jsonwebtoken::decode_header(token).ok()?;
     if header.typ.as_deref() == Some(REFRESH_TOKEN_TYP) {
-        verify_refresh_token(key, issuer_url, token)
+        verify_refresh_token(keys, issuer_url, token)
             .ok()
             .map(OwnToken::Refresh)
     } else {
-        verify_access_token(key, issuer_url, token)
+        verify_access_token(keys, issuer_url, token)
             .ok()
             .map(OwnToken::Access)
     }
@@ -67,6 +67,7 @@ pub fn decode_own_token(key: &SigningKey, issuer_url: &str, token: &str) -> Opti
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::keys::SigningKey;
     use crate::refresh::sign_refresh_token;
     use crate::state::{Subject, now_secs};
     use crate::tokens::{AccessTokenInput, IdTokenInput, sign_access_token, sign_id_token};
@@ -77,6 +78,10 @@ mod tests {
         use std::sync::OnceLock;
         static KEY: OnceLock<SigningKey> = OnceLock::new();
         KEY.get_or_init(|| SigningKey::generate().unwrap()).clone()
+    }
+
+    fn set() -> crate::keys::KeySet {
+        crate::keys::KeySet::single(std::sync::Arc::new(key()))
     }
 
     #[test]
@@ -94,7 +99,7 @@ mod tests {
             },
         )
         .unwrap();
-        let t = decode_own_token(&key(), ISS, &at).unwrap();
+        let t = decode_own_token(&set(), ISS, &at).unwrap();
         assert!(matches!(t, OwnToken::Access(_)));
         assert_eq!(t.client_id(), "example-app");
         assert!(!t.jti().is_empty() && t.exp() > now_secs());
@@ -119,7 +124,7 @@ mod tests {
             },
         )
         .unwrap();
-        let t = decode_own_token(&key(), ISS, &rt).unwrap();
+        let t = decode_own_token(&set(), ISS, &rt).unwrap();
         assert!(matches!(t, OwnToken::Refresh(_)));
         assert_eq!((t.jti(), t.client_id()), ("j-1", "example-app"));
 
@@ -135,8 +140,8 @@ mod tests {
             },
         )
         .unwrap();
-        assert!(decode_own_token(&key(), ISS, &idt).is_none());
-        assert!(decode_own_token(&key(), ISS, "abc").is_none());
-        assert!(decode_own_token(&key(), "http://localhost:9000/okta/", &at).is_none());
+        assert!(decode_own_token(&set(), ISS, &idt).is_none());
+        assert!(decode_own_token(&set(), ISS, "abc").is_none());
+        assert!(decode_own_token(&set(), "http://localhost:9000/okta/", &at).is_none());
     }
 }

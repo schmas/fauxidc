@@ -77,13 +77,8 @@ fn form_access_token(headers: &HeaderMap, body: &[u8]) -> Option<String> {
 }
 
 async fn respond(ctx: &IssuerCtx, token: &str) -> Result<Response, OAuthError> {
-    let key = ctx
-        .app
-        .keys
-        .get()
-        .await
-        .map_err(|_| OAuthError::Unavailable)?;
-    let mut claims = verify_access_token(&key, &ctx.issuer().issuer_url, token)?;
+    let keys = ctx.keys().await?;
+    let mut claims = verify_access_token(&keys, &ctx.issuer().issuer_url, token)?;
     for name in PROTOCOL_CLAIMS {
         claims.remove(*name);
     }

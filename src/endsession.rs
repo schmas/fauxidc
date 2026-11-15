@@ -126,10 +126,11 @@ async fn endsession(ctx: &IssuerCtx, raw: Vec<(String, String)>) -> Response {
     let hint = match p.id_token_hint.as_deref() {
         None => None,
         Some(token) => {
-            let Ok(key) = ctx.app.keys.get().await else {
-                return OAuthError::Unavailable.into_response();
+            let keys = match ctx.keys().await {
+                Ok(keys) => keys,
+                Err(e) => return e.into_response(),
             };
-            match verify_id_token_hint(&key, &ctx.issuer().issuer_url, token) {
+            match verify_id_token_hint(&keys, &ctx.issuer().issuer_url, token) {
                 Ok(claims) => Some(claims),
                 Err(e) => {
                     tracing::info!(issuer = %ctx.id, "{e}");

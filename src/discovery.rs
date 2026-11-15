@@ -26,7 +26,7 @@ pub async fn document(State(ctx): State<IssuerCtx>, headers: HeaderMap) -> Json<
         "response_modes_supported": ["query"],
         "grant_types_supported": ["authorization_code", "refresh_token", "client_credentials"],
         "subject_types_supported": ["public"],
-        "id_token_signing_alg_values_supported": ["RS256"],
+        "id_token_signing_alg_values_supported": [ctx.issuer().signing_alg.as_str()],
         "token_endpoint_auth_methods_supported": ["client_secret_basic", "client_secret_post", "none"],
         "request_parameter_supported": false,
         "request_uri_parameter_supported": false,

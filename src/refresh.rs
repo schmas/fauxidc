@@ -1,13 +1,13 @@
 //! The refresh token format (`typ: rt+jwt`) and the `refresh_token` grant.
 
 use axum::http::HeaderMap;
-use jsonwebtoken::{Algorithm, Header, Validation};
+use jsonwebtoken::Header;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::client_auth::{ClientAuth, authenticate_client};
 use crate::error::OAuthError;
-use crate::keys::SigningKey;
+use crate::keys::{KeySet, SigningKey};
 use crate::state::{IssuerCtx, Subject, now_secs};
 use crate::token_endpoint::{RefreshMode, TokenForm, UserGrant, issue_user_tokens, require_grant};
 
@@ -37,19 +37,19 @@ pub struct RefreshClaims {
     pub subject: Subject,
 }
 
-/// Signs a refresh token (RS256, `typ: rt+jwt`).
+/// Signs a refresh token (the key's `alg`, `typ: rt+jwt`).
 pub fn sign_refresh_token(key: &SigningKey, claims: &RefreshClaims) -> Result<String, OAuthError> {
-    let mut header = Header::new(Algorithm::RS256);
+    let mut header = Header::new(key.alg.jwt());
     header.typ = Some(REFRESH_TOKEN_TYP.to_owned());
     header.kid = Some(key.kid.clone());
     jsonwebtoken::encode(&header, claims, &key.encoding)
         .map_err(|e| OAuthError::ServerError(format!("token signing failed: {e}")))
 }
 
-/// RS256, header `typ` must be `rt+jwt`, `iss` must equal `issuer_url`, `exp` checked with leeway 0.
-/// Every failure is `OAuthError::json("invalid_grant", ..)`.
+/// A key of `keys` (by `kid`, `alg` must match), header `typ` must be `rt+jwt`, `iss` must equal
+/// `issuer_url`, `exp` checked with leeway 0. Every failure is `OAuthError::json("invalid_grant", ..)`.
 pub fn verify_refresh_token(
-    key: &SigningKey,
+    keys: &KeySet,
     issuer_url: &str,
     token: &str,
 ) -> Result<RefreshClaims, OAuthError> {
@@ -59,14 +59,15 @@ pub fn verify_refresh_token(
     if header.typ.as_deref() != Some(REFRESH_TOKEN_TYP) {
         return Err(invalid("not a refresh token"));
     }
-    let mut validation = Validation::new(Algorithm::RS256);
-    validation.leeway = 0;
-    validation.validate_aud = false;
-    validation.set_issuer(&[issuer_url]);
-    validation.set_required_spec_claims(&["exp", "iss"]);
-    jsonwebtoken::decode::<RefreshClaims>(token, &key.decoding, &validation)
-        .map(|data| data.claims)
-        .map_err(|e| invalid(&e.to_string()))
+    let (_, claims) = keys
+        .verify(token, |v| {
+            v.leeway = 0;
+            v.validate_aud = false;
+            v.set_issuer(&[issuer_url]);
+            v.set_required_spec_claims(&["exp", "iss"]);
+        })
+        .map_err(|e| invalid(&e))?;
+    serde_json::from_value(Value::Object(claims)).map_err(|e| invalid(&e.to_string()))
 }
 
 /// The `refresh_token` grant: verifies the refresh token, applies rotation and the reuse
@@ -92,13 +93,8 @@ pub async fn refresh_grant(
         tracing::info!(issuer = %ctx.id, "{d}");
         OAuthError::json("invalid_grant", d)
     };
-    let key = ctx
-        .app
-        .keys
-        .get()
-        .await
-        .map_err(|_| OAuthError::Unavailable)?;
-    let claims = verify_refresh_token(&key, &ctx.issuer().issuer_url, presented)
+    let keys = ctx.keys().await?;
+    let claims = verify_refresh_token(&keys, &ctx.issuer().issuer_url, presented)
         .inspect_err(|e| tracing::info!(issuer = %ctx.id, "refresh token rejected: {e}"))?;
     if claims.client_id != client.client_id {
         return Err(invalid_grant(
@@ -146,7 +142,7 @@ pub async fn refresh_grant(
     };
     issue_user_tokens(
         ctx,
-        &key,
+        &keys.active,
         &UserGrant {
             client: &client,
             subject: &claims.subject,
@@ -176,6 +172,10 @@ mod tests {
         KEY.get_or_init(|| SigningKey::generate().unwrap()).clone()
     }
 
+    fn set() -> crate::keys::KeySet {
+        crate::keys::KeySet::single(std::sync::Arc::new(key()))
+    }
+
     fn claims(exp: u64) -> RefreshClaims {
         RefreshClaims {
             iss: ISS.into(),
@@ -196,9 +196,21 @@ mod tests {
     }
 
     #[test]
+    fn es256_refresh_token_round_trip() {
+        let k = std::sync::Arc::new(
+            SigningKey::generate_for(crate::config::SigningAlg::ES256).unwrap(),
+        );
+        let t = sign_refresh_token(&k, &claims(now_secs() + 60)).unwrap();
+        let header = jsonwebtoken::decode_header(&t).unwrap();
+        assert_eq!(header.alg, jsonwebtoken::Algorithm::ES256);
+        let set = crate::keys::KeySet::single(k);
+        assert_eq!(verify_refresh_token(&set, ISS, &t).unwrap().jti, "j-1");
+    }
+
+    #[test]
     fn sign_verify_round_trip() {
         let t = sign_refresh_token(&key(), &claims(now_secs() + 60)).unwrap();
-        let c = verify_refresh_token(&key(), ISS, &t).unwrap();
+        let c = verify_refresh_token(&set(), ISS, &t).unwrap();
         assert_eq!(c.jti, "j-1");
         assert_eq!(c.token_aud.as_deref(), Some("https://api.example.com"));
         assert!(matches!(c.subject, Subject::User { ref id, .. } if id == "alice"));
@@ -207,7 +219,7 @@ mod tests {
     #[test]
     fn verify_rejects_other_issuer() {
         let t = sign_refresh_token(&key(), &claims(now_secs() + 60)).unwrap();
-        let e = verify_refresh_token(&key(), "http://localhost:9000/okta/", &t).unwrap_err();
+        let e = verify_refresh_token(&set(), "http://localhost:9000/okta/", &t).unwrap_err();
         assert!(matches!(
             e,
             OAuthError::Json {
@@ -232,7 +244,7 @@ mod tests {
             },
         )
         .unwrap();
-        let e = verify_refresh_token(&key(), ISS, &at).unwrap_err();
+        let e = verify_refresh_token(&set(), ISS, &at).unwrap_err();
         assert!(matches!(
             e,
             OAuthError::Json {
@@ -245,7 +257,7 @@ mod tests {
     #[test]
     fn verify_rejects_expired() {
         let t = sign_refresh_token(&key(), &claims(now_secs() - 1)).unwrap();
-        let e = verify_refresh_token(&key(), ISS, &t).unwrap_err();
+        let e = verify_refresh_token(&set(), ISS, &t).unwrap_err();
         assert!(matches!(
             e,
             OAuthError::Json {

@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use crate::config::{Claims, ClientConfig, Config, Endpoint, IssuerConfig};
 use crate::error::{OAuthError, StartError};
 use crate::issuer::endpoint_base;
-use crate::keys::KeyHandle;
+use crate::keys::{KeyHandle, KeySet, Keyring};
 use crate::request_log::RequestLog;
 use crate::templates::Templates;
 
@@ -143,15 +143,18 @@ impl Store {
 /// State shared by all handlers.
 pub struct AppState {
     pub config: Arc<Config>,
-    pub keys: KeyHandle,
+    pub keys: Arc<Keyring>,
     pub store: Store,
     pub templates: Templates,
     pub request_log: RequestLog,
 }
 
 impl AppState {
+    /// Builds the state. `keys` is the server key; [`Keyring::start`] gives each Issuer its
+    /// key set from it. Must run inside a tokio runtime when an Issuer needs its own key.
     pub fn new(config: Config, keys: KeyHandle) -> Result<AppState, StartError> {
         let templates = Templates::load(&config).map_err(StartError::Templates)?;
+        let keys = Arc::new(Keyring::start(&config, keys).map_err(StartError::Key)?);
         let request_log = RequestLog::new(config.server.request_log_size);
         Ok(AppState {
             config: Arc::new(config),
@@ -177,6 +180,15 @@ impl IssuerCtx {
     /// The router only creates a context for an id that is in the configuration.
     pub fn issuer(&self) -> &IssuerConfig {
         &self.app.config.issuer[&self.id]
+    }
+
+    /// The key set of this Issuer. Waits for its first key.
+    pub async fn keys(&self) -> Result<Arc<KeySet>, OAuthError> {
+        self.app
+            .keys
+            .key_set(&self.id)
+            .await
+            .map_err(|_| OAuthError::Unavailable)
     }
 
     /// The URL that endpoint paths are appended to, without a trailing slash.

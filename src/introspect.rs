@@ -69,14 +69,9 @@ async fn respond(
         .as_deref()
         .filter(|t| !t.is_empty())
         .ok_or_else(|| OAuthError::json("invalid_request", "token is missing"))?;
-    let key = ctx
-        .app
-        .keys
-        .get()
-        .await
-        .map_err(|_| OAuthError::Unavailable)?;
+    let keys = ctx.keys().await?;
     let inactive = json!({ "active": false });
-    let Some(own) = decode_own_token(&key, &ctx.issuer().issuer_url, token) else {
+    let Some(own) = decode_own_token(&keys, &ctx.issuer().issuer_url, token) else {
         return Ok(inactive);
     };
     if ctx.app.store.is_revoked(own.jti()) {

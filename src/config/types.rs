@@ -103,6 +103,11 @@ pub struct IssuerConfig {
     pub lifetimes: Lifetimes,
     pub paths: EndpointPaths,
     pub logout_param_aliases: BTreeMap<String, String>,
+    /// The JWS algorithm of this Issuer's tokens.
+    pub signing_alg: SigningAlg,
+    /// PEM file of this Issuer's own key. Empty: an RS256 Issuer uses the server key, any
+    /// other Issuer gets a generated key that is not saved.
+    pub key_file: String,
 }
 
 /// The endpoints of an Issuer that have a configurable path.

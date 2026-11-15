@@ -58,16 +58,11 @@ pub async fn grant(
     }
     claims.insert("sub".to_owned(), json!(client.client_id));
 
-    let key = ctx
-        .app
-        .keys
-        .get()
-        .await
-        .map_err(|_| OAuthError::Unavailable)?;
+    let keys = ctx.keys().await?;
     let issuer = ctx.issuer();
     let lifetimes = issuer.lifetimes.with_override(&client.config.lifetimes);
     let access_token = sign_access_token(
-        &key,
+        &keys.active,
         AccessTokenInput {
             issuer_url: &issuer.issuer_url,
             client_id: &client.client_id,
