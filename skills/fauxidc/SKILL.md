@@ -109,7 +109,7 @@ curl -s http://localhost:9000/_mock/app/token \
 - `POST /_mock/{issuer-id}/rotate-key` adds a new signing key. `?retire=true` also removes the old keys.
 
 A real code flow without a browser: POST the login form to `/authorize` with the authorize parameters and `user=alice`.
-The 302 `Location` has the code:
+The 302 `Location` has the code. With `response_mode=form_post`, the answer is a 200 HTML page with the code in a hidden `code` input instead.
 
 ```sh
 curl -s -D - -o /dev/null -X POST http://localhost:9000/app/authorize \

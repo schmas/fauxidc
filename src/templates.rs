@@ -27,6 +27,7 @@ const LOGIN: &str = "login.html";
 const ERROR: &str = "error.html";
 const SIGNED_OUT: &str = "signed_out.html";
 const DEBUGGER: &str = "debugger.html";
+const FORM_POST: &str = "form_post.html";
 
 #[derive(RustEmbed)]
 #[folder = "assets/templates"]
@@ -96,6 +97,20 @@ pub struct SignedOutContext {
     pub static_base: String,
 }
 
+/// The context of `form_post.html`: the `/authorize` response for `response_mode=form_post`.
+/// Version 2.
+#[derive(Debug, Clone, Serialize)]
+pub struct FormPostContext {
+    pub context_version: u32,
+    pub issuer_id: String,
+    /// The validated `redirect_uri` of the request; the form posts here.
+    pub redirect_uri: String,
+    /// The response parameters, in order: `code` and `state`, or `error`, `error_description`
+    /// and `state`. `state` is present only when the request sent it.
+    pub fields: Vec<(String, String)>,
+    pub static_base: String,
+}
+
 /// One decoded JWT on the debugger page.
 #[derive(Debug, Clone, Serialize)]
 pub struct DecodedJwt {
@@ -149,7 +164,7 @@ impl Templates {
         env.set_auto_escape_callback(|_| AutoEscape::Html);
         env.add_filter("href", href);
         let dir = &config.server.templates_dir;
-        for name in [LOGIN, ERROR, SIGNED_OUT, DEBUGGER] {
+        for name in [LOGIN, ERROR, SIGNED_OUT, DEBUGGER, FORM_POST] {
             let source = if dir.is_empty() {
                 None
             } else {
@@ -198,6 +213,11 @@ impl Templates {
     /// Renders the debugger page.
     pub fn render_debugger(&self, ctx: &DebuggerContext) -> Result<String, String> {
         self.render(DEBUGGER, ctx)
+    }
+
+    /// Renders the auto-submit page of `response_mode=form_post`.
+    pub fn render_form_post(&self, ctx: &FormPostContext) -> Result<String, String> {
+        self.render(FORM_POST, ctx)
     }
 
     fn render(&self, name: &str, ctx: &impl Serialize) -> Result<String, String> {
@@ -408,6 +428,52 @@ mod tests {
             .render_debugger(&debugger_ctx())
             .unwrap();
         assert_eq!(html, "own auth0");
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    fn form_post_ctx() -> FormPostContext {
+        FormPostContext {
+            context_version: CONTEXT_VERSION,
+            issuer_id: "auth0".into(),
+            redirect_uri: "http://localhost:3000/cb?a=1&b=\"".into(),
+            fields: vec![
+                ("code".into(), "c1".into()),
+                ("state".into(), "\"><script>x</script>".into()),
+            ],
+            static_base: STATIC_BASE.into(),
+        }
+    }
+
+    #[test]
+    fn form_post_page_renders_and_escapes() {
+        let templates = Templates::load(&config("")).unwrap();
+        let html = templates.render_form_post(&form_post_ctx()).unwrap();
+        assert!(html.contains(
+            "<form method=\"post\" action=\"http://localhost:3000/cb?a=1&amp;b=&quot;\" class="
+        ));
+        assert!(html.contains("<input type=\"hidden\" name=\"code\" value=\"c1\">"));
+        assert!(
+            html.contains("name=\"state\" value=\"&quot;&gt;&lt;script&gt;x&lt;&#x2f;script&gt;\"")
+        );
+        assert!(!html.contains("<script>x"));
+        assert!(html.contains("<button type=\"submit\""));
+        assert!(html.contains("href=\"/_mock/static/fauxidc.css\""));
+    }
+
+    #[test]
+    fn form_post_template_can_be_overridden() {
+        let dir = std::env::temp_dir().join(format!("fauxidc-unit-fp-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("form_post.html"), "own {{ redirect_uri }}").unwrap();
+        let cfg = config(&format!(
+            "[server]\ntemplates_dir = \"{}\"\n",
+            dir.display()
+        ));
+        let html = Templates::load(&cfg)
+            .unwrap()
+            .render_form_post(&form_post_ctx())
+            .unwrap();
+        assert!(html.starts_with("own http:"), "{html}");
         std::fs::remove_dir_all(dir).unwrap();
     }
 

@@ -45,6 +45,7 @@ See [`GLOSSARY.md`](../GLOSSARY.md). Main terms: Issuer, Issuer URL, Issuer id, 
 | RFC 8693 token exchange | M3 |
 | RFC 7523 `private_key_jwt` client auth | M3 |
 | RFC 7523 section 2.1 jwt-bearer grant (On-Behalf-Of) | after M4 |
+| OAuth 2.0 Form Post Response Mode (`response_mode=form_post`) | after M4 |
 
 Conformance proof: CI runs the OpenID Foundation conformance suite ("Basic OP" and "Config OP" plans) from M2. The README links the results.
 
@@ -274,7 +275,7 @@ Paths are below the Issuer path unless they start with `/_mock`.
 |---|---|---|
 | `/.well-known/openid-configuration`, `/.well-known/oauth-authorization-server` (both forms) | Discovery. CORS `*`. | M1 |
 | `/jwks` | JWKS. CORS `*`. | M1 |
-| `/authorize` | Code flow, PKCE, `state`, `nonce`, `login_hint`, Auto-select. | M1 |
+| `/authorize` | Code flow, PKCE, `state`, `nonce`, `login_hint`, Auto-select. `response_mode` `query` (default) and `form_post` (after M4, section 10.1). | M1, after M4 |
 | `/token` | `authorization_code` (M1). `client_credentials`, `refresh_token` (M2). Token exchange (M3). jwt-bearer (after M4). | M1 to M3, after M4 |
 | `/userinfo` | Bearer access token. Scope-filtered claims. | M1 |
 | `/endsession` | `id_token_hint` optional. In Strict mode, `post_logout_redirect_uri` must match the Client, which is found by `client_id` or `id_token_hint`. With no redirect: "signed out" page. `state` passed through. Clears the Session and the Auto-select cookie. Aliases apply. | M2 |
@@ -288,6 +289,17 @@ Paths are below the Issuer path unless they start with `/_mock`.
 | `POST /_mock/{issuer-id}/fail-next` | Injected failure: `{endpoint, status, error, count, delay_ms}`. | M3 |
 
 CORS (M2) on `/token`, `/userinfo` and `/revoke`: allowed origins come from the Client `web_origins`. If `web_origins` is not set, the origins of its redirect URIs are allowed.
+
+### 10.1 `response_mode` (after M4)
+
+- `query` (or no `response_mode`, or an empty value): a 302 to the `redirect_uri` with the response in the query. No change.
+- `form_post`: a 200 HTML page (`form_post.html`, `Cache-Control: no-store`) with a form that a script posts to the `redirect_uri`. A visible submit button is the fallback without JavaScript.
+  It posts the same parameters as the query: `code` and `state`, or `error`, `error_description` and `state`. `state` is sent only when the request has it. All values are HTML-escaped.
+- The `redirect_uri` check is the same for both modes. An error before the `redirect_uri` is trusted (unknown Client, `redirect_uri` mismatch) stays an error page, also with `form_post`.
+  An error after it (for example `unsupported_response_type`, `invalid_request`, `login_required`) uses the response mode of the request.
+- `form_post` with a `redirect_uri` that is not `http://` or `https://` (for example `com.example.app:/cb`) gives an error page with `invalid_request`. Only Lenient mode can reach this check, because a configured Client has only `http` and `https` redirect URIs; it is an error there too, not a warning.
+- An unknown `response_mode` (also `fragment`) gives `invalid_request`, in both modes (not only a warning in Lenient mode). The `redirect_uri` is already trusted, so it is a 302 with the error in the query, as for the other parameter errors.
+- The built-in `debugger` flow always uses `query`. Its callback accepts only `GET`.
 
 ## 11. Runtime state
 
@@ -371,7 +383,7 @@ Rejected, with reason:
 ### 13.3 Errors
 
 - Typed `thiserror` errors in the lib. Config errors carry their source.
-- `OAuthError` implements `IntoResponse`. It returns the RFC error JSON, or a redirect with `error` when a redirect is allowed.
+- `OAuthError` implements `IntoResponse`. It returns the RFC error JSON, or a redirect with `error` when a redirect is allowed. With `response_mode=form_post`, `/authorize` sends the same error by the form_post page (after M4).
 - No `unwrap()` / `expect()` outside tests and startup invariants. Clippy `unwrap_used` and `expect_used` are set to deny.
 
 ### 13.4 Toolchain and lints

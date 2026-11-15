@@ -37,6 +37,10 @@ M4 features:
 - `fauxidc config --schema` and the committed JSON Schema.
 - Releases publish the crate to crates.io (`cargo install fauxidc --locked`).
 
+After M4:
+
+- [`response_mode=form_post`](#response_modeform_post) at `/authorize`.
+
 The exit test runbooks are in [testing/](testing/): [M1](testing/m1-exit-test.md),
 [M2](testing/m2-exit-test.md) and [M3](testing/m3-exit-test.md). The M4 page checks are in [testing/m4-pages.md](testing/m4-pages.md).
 
@@ -189,6 +193,20 @@ curl -s http://localhost:9000/auth0/token -u orders:s \
   -d scope=orders:read \
   -d audience=https://orders.example.com
 ```
+
+## response_mode=form_post
+
+`/authorize` accepts `response_mode=query` (the default) and `response_mode=form_post`. Discovery lists both in `response_modes_supported`.
+
+- With `form_post`, `/authorize` answers 200 with an HTML page (`Cache-Control: no-store`) instead of a 302.
+  A script on the page posts a form to the `redirect_uri`. The page also shows a "Continue" button for a browser without JavaScript.
+- The form has the same parameters as the query mode: `code` and `state`, or `error`, `error_description` and `state`.
+- The `redirect_uri` check is the same as for `query`. If the Client or the `redirect_uri` is wrong, you get the error page and nothing is posted.
+- `form_post` needs an `http://` or `https://` `redirect_uri`. A custom scheme such as `com.example.app:/cb` gives `invalid_request`.
+- Any other `response_mode`, also `fragment`, gives `invalid_request` in Strict and in Lenient mode, as a redirect with the error in the query.
+- The `/debugger` login flow always uses `query`.
+
+You can replace the page with a `form_post.html` template; see [templates.md](templates.md#form_posthtml).
 
 ## private_key_jwt
 
