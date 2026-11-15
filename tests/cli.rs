@@ -95,8 +95,9 @@ fn serve_starts_and_stops_on_sigterm() {
 fn sigterm_does_not_wait_for_key_generation() {
     for _ in 0..5 {
         let (mut child, _addr) = start_server(&[]);
-        let start = Instant::now();
         send_sigterm(&child);
+        // The clock starts after `kill` returns, so the fork and exec of `kill` do not count.
+        let start = Instant::now();
         let status = wait_timeout(&mut child, Duration::from_secs(10)).expect("stopped");
         let took = start.elapsed();
         assert!(status.success());
