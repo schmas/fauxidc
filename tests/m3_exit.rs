@@ -298,10 +298,21 @@ async fn m3_exit() {
     let loc = mock.prompt_none(Some(&cookie)).await;
     assert!(query_param(&loc, "code").is_some(), "{loc}");
 
-    // 8. An invalid file keeps the running config.
+    // 8. An invalid file keeps the running config, and the watcher still applies the next
+    //    valid file.
     std::fs::write(&file, "[issuer.auth0\nnot toml").unwrap();
     tokio::time::sleep(Duration::from_millis(500)).await;
     assert_eq!(mock.test_api_status("carol").await, 200);
+    std::fs::write(
+        &file,
+        format!("{}\n[user.dave]\nlabel = \"Dave\"\n", config_text()),
+    )
+    .unwrap();
+    wait_until(Duration::from_secs(3), || async {
+        mock.test_api_status("dave").await == 200
+    })
+    .await;
+    assert_eq!(mock.test_api_status("carol").await, 400);
 
     server.shutdown().await.unwrap();
 }

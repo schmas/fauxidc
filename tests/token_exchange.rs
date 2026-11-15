@@ -496,3 +496,46 @@ async fn lenient_accepts_an_unverified_actor_token() {
     assert_eq!(s, 200, "{j}");
     assert_eq!(at_of(&j)["act"], json!({"sub":"ext-svc"}));
 }
+
+#[tokio::test]
+async fn public_client_can_exchange() {
+    let cfg = format!(
+        "{STRICT}\n[client.public_gw]\nclient_id = \"public-gw\"\ngrant_types = [\"{GRANT}\"]\n"
+    );
+    let app = app(&cfg);
+    let at = test_at(&app, "auth0", json!({"user":"alice"})).await;
+    let (s, _, b) = send(
+        &app,
+        post_form(
+            "/auth0/token",
+            &[
+                ("grant_type", GRANT),
+                ("client_id", "public-gw"),
+                ("subject_token", &at),
+                ("subject_token_type", AT_TYPE),
+            ],
+            &[],
+        ),
+    )
+    .await;
+    assert_eq!(s, 200, "{b}");
+    assert_eq!(at_of(&json(&b))["sub"], "auth0|alice");
+}
+
+#[tokio::test]
+async fn scope_is_not_checked_against_the_client_scopes() {
+    let cfg = cfg().replace(
+        "audience = \"https://api.example.com\"\n",
+        "audience = \"https://api.example.com\"\nscopes = [\"api\"]\n",
+    );
+    let app = app(&cfg);
+    let at = test_at(&app, "auth0", json!({"user":"alice"})).await;
+    let (s, j) = exchange(
+        &app,
+        "auth0",
+        &[("subject_token", &at), ("scope", "orders:write")],
+    )
+    .await;
+    assert_eq!(s, 200, "{j}");
+    assert_eq!(at_of(&j)["scope"], "orders:write");
+}

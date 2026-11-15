@@ -301,7 +301,7 @@ CORS (M2) on `/token`, `/userinfo` and `/revoke`: allowed origins come from the 
 
 ### 12.4 TLS
 
-None in M1 and M2. A `tls` cargo feature with `rustls` (ring) comes in M3, and only if users ask for it.
+None in M1 and M2. M3 adds an optional `tls` cargo feature with `rustls` (ring) and `tokio-rustls`, off by default. The default build, the release binaries and the image do not include it.
 
 ## 13. Project standards
 
@@ -333,7 +333,7 @@ None in M1 and M2. A `tls` cargo feature with `rustls` (ring) comes in M3, and o
 | Time | `std::time` (Unix seconds only) |
 | Locks | `std::sync::Mutex` |
 | Hot reload (M3) | `arc-swap` |
-| TLS (M3, optional) | `rustls` (ring) |
+| TLS (M3, optional, `tls` feature) | `rustls` (ring), `tokio-rustls` |
 | Dev only | `reqwest`, `openidconnect` |
 
 Rejected, with reason:

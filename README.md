@@ -162,7 +162,8 @@ cert_file = "cert.pem"  # PEM certificate chain, server certificate first
 key_file = "key.pem"    # PEM private key: PKCS#8, PKCS#1 or SEC1
 ```
 
-Set both keys or neither. fauxidc does not generate certificates.
+Set both keys or neither. Relative paths resolve against the working directory, as `server.key_file` does,
+not against the config file directory. fauxidc does not generate certificates.
 With TLS on, discovery publishes `https://` endpoint URLs (unless `public_base_url` is set); the `iss` stays the exact `issuer_url`.
 A config with `server.tls` fails with exit code 2 in a build without the feature.
 
@@ -219,8 +220,7 @@ Each Issuer serves a debugger page at `{issuer}/debugger` (the `paths.debugger` 
 
 The flow uses the built-in public Client `debugger`. It needs no config. Its only allowed redirect URI is the
 debugger callback of the same Issuer (`{issuer}/debugger/callback`), on any host. A configured Client with
-`client_id = "debugger"` replaces it. In Lenient mode, a Client registered at runtime with the id `debugger`
-also replaces it. The PKCE verifier stays on the server for 600 s.
+`client_id = "debugger"` replaces it. The PKCE verifier stays on the server for 600 s.
 
 The page also shows "Signed in as <label> · change" when the Auto-select cookie names a configured User.
 The "change" link (`{issuer}/debugger?forget=1`) clears the cookie.

@@ -17,12 +17,16 @@ const EXPECTED = [
 export const MESSAGE =
   "port 9000 has a server that is not fauxidc with examples/auth0.toml and examples/okta.toml; stop it or free the port";
 
-/** The issuer of a discovery answer, `null` for another answer, `undefined` when nothing answers. */
+/** The issuer of a discovery answer, `null` for another answer or no answer in 5 s, `undefined` when nothing listens. */
 async function issuerAt(url) {
   let response;
   try {
     response = await fetch(url, { signal: AbortSignal.timeout(5_000) });
-  } catch {
+  } catch (error) {
+    // A server that accepts the connection but does not answer is not fauxidc.
+    if (error?.name === "TimeoutError") {
+      return null;
+    }
     return undefined;
   }
   if (response.status !== 200) {
