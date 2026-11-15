@@ -195,6 +195,7 @@ async fn bad_id_token_hint_is_error_page() {
             sid: None,
         },
     )
+    .await
     .unwrap();
     let (s, h, b) = send(&app(&LOGOUT), get(&logout_url(&[("id_token_hint", &hint)]))).await;
     assert_eq!(s, 400);

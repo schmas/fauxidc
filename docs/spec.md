@@ -331,7 +331,7 @@ None in M1 and M2. M3 adds an optional `tls` cargo feature with `rustls` (ring) 
 
 | Domain | Crate |
 |---|---|
-| Runtime | `tokio` (`current_thread`) |
+| Runtime | `tokio` (`current_thread`); JWT signing on the blocking pool (ADR 0005) |
 | HTTP | `axum` 0.8, `tower-http` |
 | JWT | `jsonwebtoken` with `rust_crypto` (not `aws_lc_rs`) |
 | Keys | `rsa`, `p256` |

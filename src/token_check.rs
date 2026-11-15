@@ -84,8 +84,8 @@ mod tests {
         crate::keys::KeySet::single(std::sync::Arc::new(key()))
     }
 
-    #[test]
-    fn decodes_access_and_refresh_but_not_id_tokens() {
+    #[tokio::test]
+    async fn decodes_access_and_refresh_but_not_id_tokens() {
         let at = sign_access_token(
             &key(),
             AccessTokenInput {
@@ -98,6 +98,7 @@ mod tests {
                 lifetime: 60,
             },
         )
+        .await
         .unwrap();
         let t = decode_own_token(&set(), ISS, &at).unwrap();
         assert!(matches!(t, OwnToken::Access(_)));
@@ -123,6 +124,7 @@ mod tests {
                 },
             },
         )
+        .await
         .unwrap();
         let t = decode_own_token(&set(), ISS, &rt).unwrap();
         assert!(matches!(t, OwnToken::Refresh(_)));
@@ -140,6 +142,7 @@ mod tests {
                 sid: None,
             },
         )
+        .await
         .unwrap();
         assert!(decode_own_token(&set(), ISS, &idt).is_none());
         assert!(decode_own_token(&set(), ISS, "abc").is_none());

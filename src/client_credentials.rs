@@ -69,7 +69,8 @@ pub async fn grant(
             auth_time: None,
             lifetime: lifetime_secs(lifetimes.access_token),
         },
-    )?;
+    )
+    .await?;
     let mut body = json!({
         "access_token": access_token,
         "token_type": "Bearer",

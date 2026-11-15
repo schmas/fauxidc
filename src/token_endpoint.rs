@@ -273,6 +273,7 @@ pub(crate) async fn redeem_code(
             expires_in: None,
         },
     )
+    .await
 }
 
 /// Whether and how a token response gets a refresh token.
@@ -319,7 +320,7 @@ pub(crate) fn refresh_allowed(ctx: &IssuerCtx, client: &ResolvedClient, scope: &
 
 /// Signs the access token, the `id_token` (if `openid` is in scope) and the refresh token
 /// (per `refresh`). Returns the token response JSON body.
-pub(crate) fn issue_user_tokens(
+pub(crate) async fn issue_user_tokens(
     ctx: &IssuerCtx,
     key: &SigningKey,
     g: &UserGrant<'_>,
@@ -365,7 +366,8 @@ pub(crate) fn issue_user_tokens(
             auth_time: Some(g.auth_time),
             lifetime: access_lifetime,
         },
-    )?;
+    )
+    .await?;
     let mut body = json!({
         "access_token": access_token,
         "token_type": "Bearer",
@@ -383,18 +385,21 @@ pub(crate) fn issue_user_tokens(
             ),
             g.scope,
         );
-        body["id_token"] = json!(sign_id_token(
-            key,
-            IdTokenInput {
-                issuer_url: &issuer.issuer_url,
-                client_id: &client.client_id,
-                claims: id_claims,
-                auth_time: g.auth_time,
-                nonce: g.nonce,
-                lifetime: id_lifetime,
-                sid: g.sid,
-            },
-        )?);
+        body["id_token"] = json!(
+            sign_id_token(
+                key,
+                IdTokenInput {
+                    issuer_url: &issuer.issuer_url,
+                    client_id: &client.client_id,
+                    claims: id_claims,
+                    auth_time: g.auth_time,
+                    nonce: g.nonce,
+                    lifetime: id_lifetime,
+                    sid: g.sid,
+                },
+            )
+            .await?
+        );
     }
     let issue = match &g.refresh {
         RefreshMode::ByPolicy => refresh_allowed(ctx, client, g.scope),
@@ -405,25 +410,33 @@ pub(crate) fn issue_user_tokens(
         }
     };
     if issue {
-        let now = now_secs();
-        body["refresh_token"] = json!(sign_refresh_token(
-            key,
-            &RefreshClaims {
-                iss: issuer.issuer_url.clone(),
-                aud: client.client_id.clone(),
-                client_id: client.client_id.clone(),
-                sub,
-                jti: uuid::Uuid::new_v4().to_string(),
-                iat: now,
-                exp: now.saturating_add(lifetimes.refresh_token),
-                scope: g.refresh_scope.unwrap_or(g.scope).join(" "),
-                auth_time: g.auth_time,
-                token_aud: g.audience.map(str::to_owned),
-                subject: g.subject.clone(),
-            },
-        )?);
+        let claims = refresh_claims(&issuer.issuer_url, sub, lifetimes.refresh_token, g);
+        body["refresh_token"] = json!(sign_refresh_token(key, &claims).await?);
     }
     Ok(body)
+}
+
+/// The claims of a new refresh token for the grant `g`.
+fn refresh_claims(
+    issuer_url: &str,
+    sub: String,
+    lifetime: u64,
+    g: &UserGrant<'_>,
+) -> RefreshClaims {
+    let now = now_secs();
+    RefreshClaims {
+        iss: issuer_url.to_owned(),
+        aud: g.client.client_id.clone(),
+        client_id: g.client.client_id.clone(),
+        sub,
+        jti: uuid::Uuid::new_v4().to_string(),
+        iat: now,
+        exp: now.saturating_add(lifetime),
+        scope: g.refresh_scope.unwrap_or(g.scope).join(" "),
+        auth_time: g.auth_time,
+        token_aud: g.audience.map(str::to_owned),
+        subject: g.subject.clone(),
+    }
 }
 
 #[cfg(test)]

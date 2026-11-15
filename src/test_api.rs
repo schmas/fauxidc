@@ -233,4 +233,5 @@ async fn respond(ctx: &IssuerCtx, req: TestTokenRequest) -> Result<serde_json::V
             expires_in: req.expires_in,
         },
     )
+    .await
 }

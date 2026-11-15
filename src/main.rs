@@ -13,9 +13,17 @@ use fauxidc::{Server, StartOptions, healthcheck, logging};
 
 const DEFAULT_PORT: u16 = 9000;
 
+/// Threads of the tokio blocking pool. Token signing runs there (ADR 0005), so one thread
+/// per CPU uses all cores. Two at least, so a key generation does not stop signing.
+fn blocking_threads(cpus: usize) -> usize {
+    cpus.max(2)
+}
+
 fn main() -> ExitCode {
+    let cpus = std::thread::available_parallelism().map_or(1, std::num::NonZero::get);
     let runtime = match tokio::runtime::Builder::new_current_thread()
         .enable_all()
+        .max_blocking_threads(blocking_threads(cpus))
         .build()
     {
         Ok(runtime) => runtime,
@@ -156,5 +164,17 @@ fn stop_signal() -> std::io::Result<impl std::future::Future<Output = std::io::R
     #[cfg(not(unix))]
     {
         Ok(tokio::signal::ctrl_c())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::blocking_threads;
+
+    #[test]
+    fn blocking_pool_has_one_thread_per_cpu_and_at_least_two() {
+        assert_eq!(blocking_threads(8), 8);
+        assert_eq!(blocking_threads(2), 2);
+        assert_eq!(blocking_threads(1), 2);
     }
 }

@@ -39,11 +39,38 @@ pub fn lifetime_secs(secs: u64) -> i64 {
 
 const ACCESS_TOKEN_TYP: &str = "at+jwt";
 
-fn sign(key: &SigningKey, typ: &str, claims: &Claims) -> Result<String, OAuthError> {
+/// Runs `f` on the tokio blocking pool. RSA signing takes about 2 ms of CPU, so signing on
+/// the `current_thread` runtime would limit the server to one core and block other requests.
+/// On the blocking pool, signatures run in parallel on all cores (ADR 0005).
+pub(crate) async fn on_blocking_pool<R, F>(f: F) -> Result<R, OAuthError>
+where
+    F: FnOnce() -> R + Send + 'static,
+    R: Send + 'static,
+{
+    tokio::task::spawn_blocking(f)
+        .await
+        .map_err(|e| OAuthError::ServerError(format!("signing task failed: {e}")))
+}
+
+/// Signs `claims` with `key` on the blocking pool. The key is cloned (about 1 KB) because the
+/// task needs owned data. The error is the failure text.
+pub(crate) async fn sign_jwt<T>(key: &SigningKey, typ: &str, claims: T) -> Result<String, String>
+where
+    T: serde::Serialize + Send + 'static,
+{
     let mut header = Header::new(key.alg.jwt());
     header.typ = Some(typ.to_owned());
     header.kid = Some(key.kid.clone());
-    jsonwebtoken::encode(&header, claims, &key.encoding)
+    let encoding = key.encoding.clone();
+    on_blocking_pool(move || jsonwebtoken::encode(&header, &claims, &encoding))
+        .await
+        .map_err(|e| e.to_string())?
+        .map_err(|e| e.to_string())
+}
+
+async fn sign(key: &SigningKey, typ: &str, claims: Claims) -> Result<String, OAuthError> {
+    sign_jwt(key, typ, claims)
+        .await
         .map_err(|e| OAuthError::json("server_error", format!("token signing failed: {e}")))
 }
 
@@ -55,7 +82,10 @@ fn set_protocol(claims: &mut Claims, pairs: Vec<(&str, Value)>) {
 }
 
 /// Sign an ID token (`typ: JWT`).
-pub fn sign_id_token(key: &SigningKey, input: IdTokenInput<'_>) -> Result<String, OAuthError> {
+pub async fn sign_id_token(
+    key: &SigningKey,
+    input: IdTokenInput<'_>,
+) -> Result<String, OAuthError> {
     let now = now_secs();
     let mut claims = input.claims;
     let mut protocol = vec![
@@ -74,11 +104,11 @@ pub fn sign_id_token(key: &SigningKey, input: IdTokenInput<'_>) -> Result<String
         protocol.push(("sid", json!(sid)));
     }
     set_protocol(&mut claims, protocol);
-    sign(key, "JWT", &claims)
+    sign(key, "JWT", claims).await
 }
 
 /// Sign an access token (`typ: at+jwt`, RFC 9068). An empty scope omits the `scope` claim.
-pub fn sign_access_token(
+pub async fn sign_access_token(
     key: &SigningKey,
     input: AccessTokenInput<'_>,
 ) -> Result<String, OAuthError> {
@@ -99,7 +129,7 @@ pub fn sign_access_token(
         protocol.push(("auth_time", json!(auth_time)));
     }
     set_protocol(&mut claims, protocol);
-    sign(key, ACCESS_TOKEN_TYP, &claims)
+    sign(key, ACCESS_TOKEN_TYP, claims).await
 }
 
 /// Verify an access token: a key of `keys` (by `kid`, `alg` must match), `typ: at+jwt`, `iss`
@@ -193,6 +223,15 @@ mod tests {
         }
     }
 
+    #[tokio::test]
+    async fn signing_runs_on_the_blocking_pool_not_the_caller_thread() {
+        let caller = std::thread::current().id();
+        let worker = on_blocking_pool(|| std::thread::current().id())
+            .await
+            .unwrap();
+        assert_ne!(caller, worker);
+    }
+
     fn access_input(issuer: &str) -> AccessTokenInput<'_> {
         AccessTokenInput {
             issuer_url: issuer,
@@ -205,8 +244,8 @@ mod tests {
         }
     }
 
-    #[test]
-    fn id_token_has_protocol_claims() {
+    #[tokio::test]
+    async fn id_token_has_protocol_claims() {
         let t = sign_id_token(
             &key(),
             IdTokenInput {
@@ -219,6 +258,7 @@ mod tests {
                 sid: Some("s-1"),
             },
         )
+        .await
         .unwrap();
         let (h, c) = decode_unverified(&t);
         assert_eq!(h["typ"], "JWT");
@@ -235,17 +275,17 @@ mod tests {
         );
     }
 
-    #[test]
-    fn id_token_header_alg_follows_key() {
+    #[tokio::test]
+    async fn id_token_header_alg_follows_key() {
         let k = SigningKey::generate_for(crate::config::SigningAlg::ES256).unwrap();
-        let t = sign_id_token(&k, id_input("http://h/a")).unwrap();
+        let t = sign_id_token(&k, id_input("http://h/a")).await.unwrap();
         let (h, _) = decode_unverified(&t);
         assert_eq!(h["alg"], "ES256");
         assert_eq!(h["kid"], k.kid.as_str());
     }
 
-    #[test]
-    fn access_token_rfc9068_round_trip() {
+    #[tokio::test]
+    async fn access_token_rfc9068_round_trip() {
         let t = sign_access_token(
             &key(),
             AccessTokenInput {
@@ -258,6 +298,7 @@ mod tests {
                 lifetime: 60,
             },
         )
+        .await
         .unwrap();
         let (h, _) = decode_unverified(&t);
         assert_eq!(h["typ"], "at+jwt");
@@ -267,32 +308,36 @@ mod tests {
         assert_eq!(c["client_id"], "example-app");
     }
 
-    #[test]
-    fn verify_rejects_other_issuer_and_id_tokens() {
-        let at = sign_access_token(&key(), access_input("http://h/a")).unwrap();
+    #[tokio::test]
+    async fn verify_rejects_other_issuer_and_id_tokens() {
+        let at = sign_access_token(&key(), access_input("http://h/a"))
+            .await
+            .unwrap();
         assert!(verify_access_token(&set(), "http://h/b", &at).is_err());
-        let idt = sign_id_token(&key(), id_input("http://h/a")).unwrap();
+        let idt = sign_id_token(&key(), id_input("http://h/a")).await.unwrap();
         assert!(verify_access_token(&set(), "http://h/a", &idt).is_err());
     }
 
-    #[test]
-    fn id_token_hint_accepts_expired_and_rejects_access_tokens() {
+    #[tokio::test]
+    async fn id_token_hint_accepts_expired_and_rejects_access_tokens() {
         let mut i = id_input("http://h/a");
         i.lifetime = 0;
-        let t = sign_id_token(&key(), i).unwrap();
+        let t = sign_id_token(&key(), i).await.unwrap();
         std::thread::sleep(std::time::Duration::from_millis(1100));
         let c = verify_id_token_hint(&set(), "http://h/a", &t).unwrap();
         assert_eq!(c["aud"], "example-app");
         assert!(verify_id_token_hint(&set(), "http://h/b", &t).is_err());
-        let at = sign_access_token(&key(), access_input("http://h/a")).unwrap();
+        let at = sign_access_token(&key(), access_input("http://h/a"))
+            .await
+            .unwrap();
         assert!(verify_id_token_hint(&set(), "http://h/a", &at).is_err());
     }
 
-    #[test]
-    fn verify_rejects_expired() {
+    #[tokio::test]
+    async fn verify_rejects_expired() {
         let mut i = access_input("http://h/a");
         i.lifetime = 0;
-        let t = sign_access_token(&key(), i).unwrap();
+        let t = sign_access_token(&key(), i).await.unwrap();
         std::thread::sleep(std::time::Duration::from_millis(1100));
         assert!(verify_access_token(&set(), "http://h/a", &t).is_err());
     }

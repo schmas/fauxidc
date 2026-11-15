@@ -16,7 +16,8 @@ Further reading: `docs/spec.md` (approved spec), `GLOSSARY.md` (domain terms), `
 Only the pinned or unusual choices. The full crate table and the rejected crates are in `docs/spec.md` 13.2.
 
 - Rust edition 2024. Toolchain 1.100.0, pinned in `rust-toolchain.toml`. MSRV 1.98 (`rust-version` in `Cargo.toml`).
-- `tokio` with the `current_thread` runtime. `std::sync::Mutex`, no `parking_lot` or `dashmap`.
+- `tokio` with the `current_thread` runtime. JWT signing runs on the blocking pool (ADR 0005).
+  `std::sync::Mutex`, no `parking_lot` or `dashmap`.
 - `jsonwebtoken` with `rust_crypto`, not `aws_lc_rs`.
 - No C code in the default build. The release build is a static musl binary (size limit 5 MiB).
 - Optional `tls` feature: `rustls` with the `ring` provider (needs a C compiler).

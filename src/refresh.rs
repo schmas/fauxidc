@@ -1,7 +1,6 @@
 //! The refresh token format (`typ: rt+jwt`) and the `refresh_token` grant.
 
 use axum::http::HeaderMap;
-use jsonwebtoken::Header;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -39,11 +38,12 @@ pub struct RefreshClaims {
 }
 
 /// Signs a refresh token (the key's `alg`, `typ: rt+jwt`).
-pub fn sign_refresh_token(key: &SigningKey, claims: &RefreshClaims) -> Result<String, OAuthError> {
-    let mut header = Header::new(key.alg.jwt());
-    header.typ = Some(REFRESH_TOKEN_TYP.to_owned());
-    header.kid = Some(key.kid.clone());
-    jsonwebtoken::encode(&header, claims, &key.encoding)
+pub async fn sign_refresh_token(
+    key: &SigningKey,
+    claims: &RefreshClaims,
+) -> Result<String, OAuthError> {
+    crate::tokens::sign_jwt(key, REFRESH_TOKEN_TYP, claims.clone())
+        .await
         .map_err(|e| OAuthError::ServerError(format!("token signing failed: {e}")))
 }
 
@@ -153,6 +153,7 @@ pub async fn refresh_grant(
             expires_in: None,
         },
     )
+    .await
 }
 
 #[cfg(test)]
@@ -193,30 +194,36 @@ mod tests {
         }
     }
 
-    #[test]
-    fn es256_refresh_token_round_trip() {
+    #[tokio::test]
+    async fn es256_refresh_token_round_trip() {
         let k = std::sync::Arc::new(
             SigningKey::generate_for(crate::config::SigningAlg::ES256).unwrap(),
         );
-        let t = sign_refresh_token(&k, &claims(now_secs() + 60)).unwrap();
+        let t = sign_refresh_token(&k, &claims(now_secs() + 60))
+            .await
+            .unwrap();
         let header = jsonwebtoken::decode_header(&t).unwrap();
         assert_eq!(header.alg, jsonwebtoken::Algorithm::ES256);
         let set = crate::keys::KeySet::single(k);
         assert_eq!(verify_refresh_token(&set, ISS, &t).unwrap().jti, "j-1");
     }
 
-    #[test]
-    fn sign_verify_round_trip() {
-        let t = sign_refresh_token(&key(), &claims(now_secs() + 60)).unwrap();
+    #[tokio::test]
+    async fn sign_verify_round_trip() {
+        let t = sign_refresh_token(&key(), &claims(now_secs() + 60))
+            .await
+            .unwrap();
         let c = verify_refresh_token(&set(), ISS, &t).unwrap();
         assert_eq!(c.jti, "j-1");
         assert_eq!(c.token_aud.as_deref(), Some("https://api.example.com"));
         assert!(matches!(c.subject, Subject::User { ref id, .. } if id == "alice"));
     }
 
-    #[test]
-    fn verify_rejects_other_issuer() {
-        let t = sign_refresh_token(&key(), &claims(now_secs() + 60)).unwrap();
+    #[tokio::test]
+    async fn verify_rejects_other_issuer() {
+        let t = sign_refresh_token(&key(), &claims(now_secs() + 60))
+            .await
+            .unwrap();
         let e = verify_refresh_token(&set(), "http://localhost:9000/okta/", &t).unwrap_err();
         assert!(matches!(
             e,
@@ -227,8 +234,8 @@ mod tests {
         ));
     }
 
-    #[test]
-    fn verify_rejects_access_token() {
+    #[tokio::test]
+    async fn verify_rejects_access_token() {
         let at = sign_access_token(
             &key(),
             AccessTokenInput {
@@ -241,6 +248,7 @@ mod tests {
                 lifetime: 60,
             },
         )
+        .await
         .unwrap();
         let e = verify_refresh_token(&set(), ISS, &at).unwrap_err();
         assert!(matches!(
@@ -252,9 +260,11 @@ mod tests {
         ));
     }
 
-    #[test]
-    fn verify_rejects_expired() {
-        let t = sign_refresh_token(&key(), &claims(now_secs() - 1)).unwrap();
+    #[tokio::test]
+    async fn verify_rejects_expired() {
+        let t = sign_refresh_token(&key(), &claims(now_secs() - 1))
+            .await
+            .unwrap();
         let e = verify_refresh_token(&set(), ISS, &t).unwrap_err();
         assert!(matches!(
             e,
