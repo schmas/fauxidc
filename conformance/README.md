@@ -13,6 +13,10 @@ as the `conformance-results` artifact.
 
 You need Docker with Compose, git, curl, Python 3 and the Rust toolchain.
 
+Python packages: the script installs the exact versions in `conformance/requirements.txt` into
+`target/conformance-venv` on every run. To update them, install `httpx` and `pyparsing` in a new
+venv and write its `pip freeze` output to that file.
+
 ```sh
 scripts/conformance.sh
 ```
@@ -54,6 +58,7 @@ host name without a dot. Without `default_sni`, Caddy stops the handshake with `
 | `basic.json`, `config-op.json` | Suite configs: Clients and the scripted browser steps |
 | `expected-failures.json` | Expected failures and warnings (see "Known results") |
 | `expected-skips.json` | Expected skipped modules |
+| `requirements.txt` | Pinned Python packages of the harness (`run-test-plan.py`) |
 
 ## Known results
 
@@ -63,8 +68,6 @@ fail the run.
 
 | Module | Result | Reason | Removed by |
 |---|---|---|---|
-| `oidcc-prompt-none-logged-in` | failure | `prompt=none` needs a Session. fauxidc has no Sessions in M2, so it returns `login_required`. | M3 (Sessions) |
-| `oidcc-id-token-hint` | failure | Same as above: the second request uses `prompt=none` with an `id_token_hint`. | M3 (Sessions) |
 | `oidcc-scope-email` | warning | The id_token contains `email` for `scope=email`. Spec 8.2 applies the scope rule to the id_token and `/userinfo` alike. OIDC Core 5.4 permits this. | none (spec choice) |
 | `oidcc-alternate-happy-flow` | warning | Same as `oidcc-scope-email`. | none (spec choice) |
 | `oidcc-ensure-request-with-acr-values-succeeds` | warning | fauxidc does not issue an `acr` claim. The spec does not define `acr_values`. | none (not in the spec) |
@@ -72,14 +75,19 @@ fail the run.
 | `oidcc-claims-essential` | warning | fauxidc does not support the `claims` request parameter (`claims_parameter_supported` is `false`). | none (not in the spec) |
 | `oidcc-unsigned-request-object-supported-correctly-or-rejected-as-unsupported` | skipped | fauxidc answers `request_not_supported`. Request objects are not supported. | none (not in the spec) |
 
-`oidcc-max-age-1` and `oidcc-max-age-10000` pass in M2. fauxidc has no Sessions, so every
-authorization shows the login page and sets a new `auth_time`.
+`oidcc-prompt-none-logged-in` and `oidcc-id-token-hint` pass because a sign-in creates a
+Session, and `prompt=none` with a Session returns a code (spec 11).
+
+`oidcc-max-age-1` and `oidcc-max-age-10000` pass because `max_age` is checked against the
+Session `auth_time` (spec 11). A Session older than `max_age` gives the login page and a new
+`auth_time`. A Session that is not older is reused, so `auth_time` stays the same. A request
+with neither `prompt=none` nor `max_age` ignores the Session and works as in M2.
 
 ## Update the expected results
 
-An expected failure or skip that does not happen also fails the run. This is intentional: for
-example, when M3 adds Sessions, `oidcc-prompt-none-logged-in` starts to pass and the run fails.
-Then remove its entry from `expected-failures.json` and its row from the table above.
+An expected failure or skip that does not happen also fails the run. This is intentional: when a
+fix makes a listed module pass, the run fails until you remove its entry from
+`expected-failures.json` and its row from the table above.
 
 To add an entry, run with `--verbose` (the script does). For each unexpected result, the output
 prints a JSON template with `test-name`, `current-block` and `condition`. Copy the template, set

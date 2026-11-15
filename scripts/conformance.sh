@@ -88,11 +88,11 @@ if [[ "$discovery" != *'"issuer":"https://fauxidc/conformance"'* ]]; then
 fi
 echo "conformance: the TLS front works"
 
-# 6. The test plans.
+# 6. The test plans. The install runs every time, so an older venv gets the pinned set.
 if [[ ! -x "$VENV/bin/python3" ]]; then
   python3 -m venv "$VENV"
-  "$VENV/bin/pip" install --quiet httpx pyparsing
 fi
+"$VENV/bin/pip" install --quiet --disable-pip-version-check -r "$FAUXIDC_CONFORMANCE_DIR/requirements.txt"
 rm -rf "$RESULTS"
 mkdir -p "$RESULTS"
 set +e

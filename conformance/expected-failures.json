@@ -1,21 +1,5 @@
 [
   {
-    "test-name": "oidcc-prompt-none-logged-in",
-    "variant": "*",
-    "configuration-filename": "*basic.json",
-    "current-block": "Second authorization: Verify authorization endpoint response",
-    "condition": "CheckIfAuthorizationEndpointError",
-    "expected-result": "failure"
-  },
-  {
-    "test-name": "oidcc-id-token-hint",
-    "variant": "*",
-    "configuration-filename": "*basic.json",
-    "current-block": "Second authorization: Verify authorization endpoint response",
-    "condition": "CheckIfAuthorizationEndpointError",
-    "expected-result": "failure"
-  },
-  {
     "test-name": "oidcc-scope-email",
     "variant": "*",
     "configuration-filename": "*basic.json",
