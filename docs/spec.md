@@ -320,7 +320,7 @@ None in M1 and M2. M3 adds an optional `tls` cargo feature with `rustls` (ring) 
 - Name `fauxidc` ("faux" + "OIDC") for the repo, crate, binary and image. Owner `schmas`. License MIT OR Apache-2.0.
 - One crate with `src/lib.rs` + `src/main.rs`. The lib exposes `fauxidc::Server::start(config).await`, which returns the bound address, for in-process use in Rust tests. The lib API is marked unstable before 1.0.
 - Root files: `README.md`, `LICENSE-MIT`, `LICENSE-APACHE`, `CHANGELOG.md` (generated), `CONTRIBUTING.md` (mentions `bacon`), `AGENTS.md`, `SECURITY.md`. `SECURITY.md` says: never trust a fauxidc Issuer in production.
-- `examples/`: `auth0.toml`, `okta.toml`, `docker-compose.yml`. Neutral names only (`example-app`, `alice@example.com`).
+- `examples/`: `auth0.toml`, `okta.toml`, `generic.toml`, `keycloak.toml`, `docker-compose.yml`. Neutral names only (`example-app`, `alice@example.com`).
 - `docs/adr/` with the ADRs in 13.6.
 
 ### 13.2 Stack

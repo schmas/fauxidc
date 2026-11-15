@@ -1,0 +1,47 @@
+# Plain OAuth 2.0 / OpenID Connect Issuer with default endpoint paths.
+# Run: fauxidc --config examples/generic.toml
+# Discovery: http://localhost:9000/generic/.well-known/openid-configuration
+#
+# Clients: `web` (confidential), `spa` (public, PKCE) and `service` (client_credentials).
+# Users: `alice` and `bob`.
+
+[issuer.generic]
+issuer_url = "http://localhost:9000/generic"
+
+# Custom user template (M4). Remove the `#` to add a "Custom..." option to the login page.
+# The visitor types one username and the claims below apply with {username} filled in.
+# [issuer.generic.custom_user]
+# label = "Other..."
+# [issuer.generic.custom_user.claims]
+# email = "{username}@example.test"
+# email_verified = true
+# name = "{username} Example"
+
+[client.web]
+issuer = "generic"
+client_id = "web"
+client_secret = "local"
+redirect_uris = ["http://localhost:3000/callback"]
+post_logout_redirect_uris = ["http://localhost:3000/"]
+
+[client.spa]
+issuer = "generic"
+client_id = "spa"
+redirect_uris = ["http://localhost:5173/"]
+post_logout_redirect_uris = ["http://localhost:5173/"]
+
+[client.service]
+issuer = "generic"
+client_id = "service"
+client_secret = "local"
+grant_types = ["client_credentials"]
+scopes = ["api"]
+audience = "https://api.example.test"
+
+[user.alice]
+label = "Alice Admin"
+claims = { email = "alice@example.com", given_name = "Alice", family_name = "Admin", name = "Alice Admin", email_verified = true, roles = ["admin"] }
+
+[user.bob]
+label = "Bobby Viewer"
+claims = { email = "bob@example.com", given_name = "Bobby", family_name = "Viewer", name = "Bobby Viewer", email_verified = true, roles = ["viewer"] }

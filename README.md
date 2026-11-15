@@ -89,9 +89,13 @@ The `examples/` directory has:
   the logout path `/v2/logout` and the logout alias `returnTo`.
 - `okta.toml`: Issuer `okta` at `http://localhost:9000/oauth2/default`, with `/v1/*` endpoint paths
   (for example `/v1/token` and `/v1/keys`).
+- `generic.toml`: Issuer `generic` at `http://localhost:9000/generic` with default paths. Clients `web`
+  (confidential), `spa` (public) and `service` (`client_credentials`), and a commented Custom user template.
+- `keycloak.toml`: Issuer `keycloak` at `http://localhost:9000/realms/example`, with the
+  `/protocol/openid-connect/*` paths, `realm_access.roles` and `preferred_username`.
 - `docker-compose.yml`: runs the published image with `auth0.toml`.
 
-Both configs define the confidential Client `example-app`, the public SPA Client `example-spa`
+`auth0.toml` and `okta.toml` define the confidential Client `example-app`, the public SPA Client `example-spa`
 (redirect URIs `http://localhost:5173/` and `http://localhost:5174/`) and the Users `alice` and `bob`.
 
 With `auth0-spa-js` and `useRefreshTokens`, set `cacheLocation: "localstorage"` against `auth0.toml`.

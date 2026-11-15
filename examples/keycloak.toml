@@ -1,0 +1,28 @@
+# Example Issuer in the style of a Keycloak realm.
+# Run: fauxidc --config examples/keycloak.toml
+# Discovery: http://localhost:9000/realms/example/.well-known/openid-configuration
+#
+# Config cannot express one Keycloak behavior. Keycloak access tokens have the header
+# `typ` `JWT`. fauxidc always sends the header `typ` `at+jwt` (RFC 9068).
+# A validator that requires `JWT` must allow `at+jwt`.
+# The claim `typ = "Bearer"` in the access token payload is set below with `access_claims`.
+
+[issuer.keycloak]
+issuer_url = "http://localhost:9000/realms/example"
+paths = { authorize = "/protocol/openid-connect/auth", token = "/protocol/openid-connect/token", userinfo = "/protocol/openid-connect/userinfo", jwks = "/protocol/openid-connect/certs", endsession = "/protocol/openid-connect/logout", introspect = "/protocol/openid-connect/token/introspect", revoke = "/protocol/openid-connect/revoke" }
+
+[client.keycloak_app]
+issuer = "keycloak"
+client_id = "example-app"
+client_secret = "local"
+redirect_uris = ["http://localhost:3000/callback"]
+post_logout_redirect_uris = ["http://localhost:3000/"]
+access_claims = { typ = "Bearer" }
+
+[user.alice]
+label = "Alice Admin"
+claims = { email = "alice@example.com", given_name = "Alice", family_name = "Admin", name = "Alice Admin", email_verified = true, preferred_username = "alice", realm_access = { roles = ["admin"] } }
+
+[user.bob]
+label = "Bobby Viewer"
+claims = { email = "bob@example.com", given_name = "Bobby", family_name = "Viewer", name = "Bobby Viewer", email_verified = true, preferred_username = "bob", realm_access = { roles = ["viewer"] } }
