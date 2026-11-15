@@ -15,6 +15,8 @@ pub struct CliOverrides {
     pub port: Option<u16>,
     pub bind: Option<String>,
     pub log_format: Option<LogFormat>,
+    /// `--issuer-from-host`: set `issuer_from_host` on every Issuer (ADR 0006).
+    pub issuer_from_host: bool,
 }
 
 /// Everything `load` reads: files, env vars, flags and the working directory.
@@ -54,6 +56,10 @@ impl LoadInputs {
 }
 
 const ZERO_CONFIG: &str = include_str!("zero.toml");
+
+/// Sets `issuer_from_host` on every Issuer, like the `--issuer-from-host` flag. It is not a
+/// `FAUXIDC__*` override, so it keeps Zero config.
+const ISSUER_FROM_HOST_VAR: &str = "FAUXIDC_ISSUER_FROM_HOST";
 
 /// Loads and merges all sources, then checks the result.
 ///
@@ -99,7 +105,23 @@ pub fn load(inputs: &LoadInputs) -> Result<Loaded, ConfigErrors> {
         Ok(layer) => deep_merge(&mut merged, layer),
         Err(found) => errors.extend(found.0),
     }
+    let from_host = match env_value(ISSUER_FROM_HOST_VAR) {
+        _ if inputs.flags.issuer_from_host => Some(Source::Flag("--issuer-from-host")),
+        None | Some("" | "false") => None,
+        Some("true") => Some(Source::Env(ISSUER_FROM_HOST_VAR.to_owned())),
+        Some(_) => {
+            errors.push(ConfigError {
+                origin: Source::Env(ISSUER_FROM_HOST_VAR.to_owned()),
+                message: format!("{ISSUER_FROM_HOST_VAR} must be true or false"),
+            });
+            None
+        }
+    };
     deep_merge(&mut merged, flag_layer(&inputs.flags));
+    if let Some(source) = from_host {
+        let layer = issuer_from_host_layer(&merged, source);
+        deep_merge(&mut merged, layer);
+    }
     if !errors.is_empty() {
         return Err(ConfigErrors(errors));
     }
@@ -111,6 +133,25 @@ pub fn load(inputs: &LoadInputs) -> Result<Loaded, ConfigErrors> {
         default.issuer_url = format!("http://localhost:{}/default", loaded.config.server.port);
     }
     Ok(loaded)
+}
+
+/// A layer with `issuer.<id>.issuer_from_host = true` for every Issuer in `merged`.
+fn issuer_from_host_layer(merged: &Layer, source: Source) -> Layer {
+    let mut issuers = toml::Table::new();
+    for id in merged
+        .table
+        .get("issuer")
+        .and_then(toml::Value::as_table)
+        .into_iter()
+        .flat_map(toml::Table::keys)
+    {
+        let mut issuer = toml::Table::new();
+        issuer.insert("issuer_from_host".to_owned(), toml::Value::Boolean(true));
+        issuers.insert(id.clone(), toml::Value::Table(issuer));
+    }
+    let mut top = toml::Table::new();
+    top.insert("issuer".to_owned(), toml::Value::Table(issuers));
+    Layer::from_table(top, source)
 }
 
 /// Loads an inline layer (TOML or JSON) as the only source, then checks the result.
@@ -210,6 +251,47 @@ mod tests {
         assert_eq!(
             l.config.issuer["default"].issuer_url,
             "http://localhost:9100/default"
+        );
+    }
+
+    #[test]
+    fn issuer_from_host_flag_sets_every_issuer_and_keeps_zero_config() {
+        let mut i = inputs(&[]);
+        i.flags.issuer_from_host = true;
+        let l = load(&i).unwrap();
+        assert!(l.zero_config);
+        assert!(l.config.issuer["default"].issuer_from_host);
+        assert_eq!(
+            l.sources[&path("issuer.default.issuer_from_host")],
+            Source::Flag("--issuer-from-host")
+        );
+        let file = write_tmp(
+            "[issuer.a]\nissuer_url = \"http://localhost:9000/a\"\n\
+             [issuer.b]\nissuer_url = \"http://localhost:9000/b\"\n",
+        );
+        let mut i = inputs(&[]);
+        i.config_files = vec![file];
+        i.flags.issuer_from_host = true;
+        let l = load(&i).unwrap();
+        assert!(l.config.issuer.values().all(|x| x.issuer_from_host));
+    }
+
+    #[test]
+    fn issuer_from_host_env_var_keeps_zero_config() {
+        let l = load(&inputs(&[("FAUXIDC_ISSUER_FROM_HOST", "true")])).unwrap();
+        assert!(l.zero_config);
+        assert!(l.config.issuer["default"].issuer_from_host);
+        assert_eq!(
+            l.sources[&path("issuer.default.issuer_from_host")],
+            Source::Env("FAUXIDC_ISSUER_FROM_HOST".into())
+        );
+        let off = load(&inputs(&[("FAUXIDC_ISSUER_FROM_HOST", "false")])).unwrap();
+        assert!(!off.config.issuer["default"].issuer_from_host);
+        let e = load(&inputs(&[("FAUXIDC_ISSUER_FROM_HOST", "yes")])).unwrap_err();
+        assert!(
+            e.to_string()
+                .contains("FAUXIDC_ISSUER_FROM_HOST must be true or false"),
+            "{e}"
         );
     }
 

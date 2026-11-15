@@ -394,7 +394,7 @@ async fn silent_session(
         None => None,
         Some(hint) => {
             let keys = ctx.keys().await.map_err(Rejection::Redirect)?;
-            match verify_id_token_hint(&keys, &ctx.issuer().issuer_url, hint) {
+            match verify_id_token_hint(&keys, &ctx.issuer_url(headers), hint) {
                 Ok(claims) => Some(
                     claims
                         .get("sub")

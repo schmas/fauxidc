@@ -96,6 +96,25 @@ pub fn endpoint_base(server: &ServerConfig, issuer: &IssuerConfig, headers: &Hea
     format!("{origin}{path}")
 }
 
+/// Returns the `iss` value of an Issuer for one request.
+///
+/// The fixed `issuer_url`, or with `issuer_from_host` the endpoint base of the request with
+/// the trailing slash of `issuer_url` (ADR 0006).
+pub fn effective_issuer(
+    server: &ServerConfig,
+    issuer: &IssuerConfig,
+    headers: &HeaderMap,
+) -> String {
+    if !issuer.issuer_from_host {
+        return issuer.issuer_url.clone();
+    }
+    let mut url = endpoint_base(server, issuer, headers);
+    if issuer.issuer_url.ends_with('/') && !url.ends_with('/') {
+        url.push('/');
+    }
+    url
+}
+
 /// Returns the first comma-separated value of a header, trimmed, if not empty.
 fn first_value<'a>(headers: &'a HeaderMap, name: &str) -> Option<&'a str> {
     let raw = headers.get(name)?.to_str().ok()?;

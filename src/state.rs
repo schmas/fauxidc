@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use crate::config::{Claims, ClientConfig, Config, Endpoint, IssuerConfig};
 use crate::error::{OAuthError, StartError};
 use crate::failures::Injected;
-use crate::issuer::endpoint_base;
+use crate::issuer::{effective_issuer, endpoint_base};
 use crate::jwks_fetch::CACHE_TTL_SECS;
 use crate::keys::{KeyHandle, KeySet, Keyring};
 use crate::reload::restart_only_changes;
@@ -399,6 +399,11 @@ impl IssuerCtx {
     /// The URL that endpoint paths are appended to, without a trailing slash.
     pub fn base_url(&self, headers: &HeaderMap) -> String {
         endpoint_base(&self.app.config.server, self.issuer(), headers)
+    }
+
+    /// The `iss` of this Issuer for a request with `headers` (ADR 0006).
+    pub fn issuer_url(&self, headers: &HeaderMap) -> String {
+        effective_issuer(&self.app.config.server, self.issuer(), headers)
     }
 
     /// The router path of `e` relative to the Issuer path, for example `/oauth/token`.

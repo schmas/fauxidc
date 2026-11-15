@@ -145,6 +145,7 @@ pub async fn rotate_key(
 pub async fn issue(
     State(state): State<Arc<AppState>>,
     Path(issuer_id): Path<String>,
+    headers: HeaderMap,
     body: Result<Json<TestTokenRequest>, JsonRejection>,
 ) -> Response {
     if !state.config.issuer.contains_key(&issuer_id) {
@@ -163,7 +164,7 @@ pub async fn issue(
         id: issuer_id,
         path,
     };
-    match respond(&ctx, req).await {
+    match respond(&ctx, &headers, req).await {
         Ok(body) => (
             [
                 (header::CACHE_CONTROL, HeaderValue::from_static("no-store")),
@@ -176,7 +177,11 @@ pub async fn issue(
     }
 }
 
-async fn respond(ctx: &IssuerCtx, req: TestTokenRequest) -> Result<serde_json::Value, OAuthError> {
+async fn respond(
+    ctx: &IssuerCtx,
+    headers: &HeaderMap,
+    req: TestTokenRequest,
+) -> Result<serde_json::Value, OAuthError> {
     let invalid = |d: &str| OAuthError::json("invalid_request", d);
     let subject = match (req.user, req.sub) {
         (Some(id), None) => {
@@ -221,6 +226,7 @@ async fn respond(ctx: &IssuerCtx, req: TestTokenRequest) -> Result<serde_json::V
         ctx,
         &keys.active,
         &UserGrant {
+            iss: &ctx.issuer_url(headers),
             client: &client,
             subject: &subject,
             scope: &scope,

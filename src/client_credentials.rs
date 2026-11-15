@@ -61,7 +61,7 @@ pub async fn grant(
     let access_token = sign_access_token(
         &keys.active,
         AccessTokenInput {
-            issuer_url: &issuer.issuer_url,
+            issuer_url: &ctx.issuer_url(headers),
             client_id: &client.client_id,
             audience: &audience,
             claims,

@@ -2,7 +2,7 @@
 
 **Issuer**: One mock authorization server. It has its own discovery document, endpoints, clients and claim defaults. One process serves many issuers.
 
-**Issuer URL**: The exact string an Issuer puts in `iss` and in discovery `issuer`. It never changes with the request host. Its path decides which requests the Issuer gets.
+**Issuer URL**: The exact string an Issuer puts in `iss` and in discovery `issuer`. It never changes with the request host, unless `issuer_from_host = true` (ADR 0006). Its path decides which requests the Issuer gets.
 
 **Issuer id**: A short name for an Issuer. Config entries and the Test API use it to refer to the Issuer. It is not part of any token.
 

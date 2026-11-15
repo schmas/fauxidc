@@ -23,6 +23,7 @@ With no config file, no inline config and no `FAUXIDC__*` env var, fauxidc start
 It has one Issuer `default` at `http://localhost:9000/default` in Lenient mode, one public Client `test`, and the Users `alice` and `bob`.
 The port in the Issuer URL follows `--port`.
 A `FAUXIDC__*` env var turns off Zero config, so use it together with a config that has an Issuer.
+`--issuer-from-host` and `FAUXIDC_ISSUER_FROM_HOST=true` keep Zero config. See [Issuer URL and endpoint URLs](#issuer-url-and-endpoint-urls).
 
 ## The config command
 
@@ -114,9 +115,18 @@ An Issuer is in Strict mode by default. Set `lenient = true` on the Issuer for L
 
 ## Issuer URL and endpoint URLs
 
-The `iss` claim is always the exact `issuer_url`. The endpoint URLs in discovery follow the request `Host`,
+By default, the `iss` claim is always the exact `issuer_url`. The endpoint URLs in discovery follow the request `Host`,
 or `server.public_base_url` when it is set. See [ADR 0001](adr/0001-fixed-iss-host-derived-endpoints.md).
 With `server.trust_forwarded_headers = true`, fauxidc reads `X-Forwarded-Host` and `X-Forwarded-Proto`.
+
+With `issuer.<id>.issuer_from_host = true`, `iss` and the discovery `issuer` also follow the request:
+they are the base of the endpoint URLs plus the trailing slash of `issuer_url`.
+`issuer_url` still sets the Issuer path. Use this when the port is not known before the test starts, for example with Testcontainers.
+`--issuer-from-host` or `FAUXIDC_ISSUER_FROM_HOST=true` turns it on for every Issuer and keeps Zero config.
+
+fauxidc then accepts its own tokens only through the host that minted them.
+A token minted through `localhost:49153` is inactive at `fauxidc:9000/default/introspect`.
+See [ADR 0006](adr/0006-opt-in-host-derived-iss.md).
 
 ## Signing keys
 

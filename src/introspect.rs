@@ -85,7 +85,7 @@ async fn respond(
         .ok_or_else(|| OAuthError::json("invalid_request", "token is missing"))?;
     let keys = ctx.keys().await?;
     let inactive = json!({ "active": false });
-    let Some(own) = decode_own_token(&keys, &ctx.issuer().issuer_url, token) else {
+    let Some(own) = decode_own_token(&keys, &ctx.issuer_url(headers), token) else {
         return Ok(inactive);
     };
     if ctx.app.store.is_revoked(own.jti()) {

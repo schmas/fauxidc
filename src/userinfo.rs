@@ -30,7 +30,7 @@ fn bearer_token(headers: &HeaderMap) -> Option<&str> {
 pub async fn userinfo_get(State(ctx): State<IssuerCtx>, headers: HeaderMap) -> Response {
     record_endpoint(&ctx.id, "userinfo");
     let result = match bearer_token(&headers) {
-        Some(token) => respond(&ctx, token).await,
+        Some(token) => respond(&ctx, &headers, token).await,
         None => Err(OAuthError::BearerMissing),
     };
     result.unwrap_or_else(IntoResponse::into_response)
@@ -50,7 +50,7 @@ pub async fn userinfo_post(
             "invalid_request",
             "use one bearer token method",
         )),
-        (Some(token), None) | (None, Some(token)) => respond(&ctx, token).await,
+        (Some(token), None) | (None, Some(token)) => respond(&ctx, &headers, token).await,
         (None, None) => Err(OAuthError::BearerMissing),
     };
     result.unwrap_or_else(IntoResponse::into_response)
@@ -76,9 +76,13 @@ fn form_access_token(headers: &HeaderMap, body: &[u8]) -> Option<String> {
         .map(|(_, v)| v)
 }
 
-async fn respond(ctx: &IssuerCtx, token: &str) -> Result<Response, OAuthError> {
+async fn respond(
+    ctx: &IssuerCtx,
+    headers: &HeaderMap,
+    token: &str,
+) -> Result<Response, OAuthError> {
     let keys = ctx.keys().await?;
-    let mut claims = verify_access_token(&keys, &ctx.issuer().issuer_url, token)?;
+    let mut claims = verify_access_token(&keys, &ctx.issuer_url(headers), token)?;
     // OIDC Core 5.3: UserInfo is for OpenID Connect access tokens.
     let has_openid = claims
         .get("scope")

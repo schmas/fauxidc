@@ -202,7 +202,7 @@ pub async fn decode(
         page.error = Some("paste a JWT".to_owned());
         return render(&ctx, StatusCode::BAD_REQUEST, &page);
     };
-    match decode_jwt(&keys, &ctx.issuer().issuer_url, &token, now_secs()) {
+    match decode_jwt(&keys, &ctx.issuer_url(&headers), &token, now_secs()) {
         Ok(d) => page.decoded = Some(d),
         Err(e) => page.error = Some(e),
     }
@@ -365,6 +365,7 @@ async fn callback_page(ctx: &IssuerCtx, headers: &HeaderMap, q: &CallbackQuery) 
     let client = find_client(ctx, BUILTIN_DEBUGGER).unwrap_or_else(|| builtin_debugger(ctx));
     let body = match redeem_code(
         ctx,
+        headers,
         &client,
         code,
         Some(&flow.redirect_uri),
@@ -385,7 +386,7 @@ async fn callback_page(ctx: &IssuerCtx, headers: &HeaderMap, q: &CallbackQuery) 
     let now = now_secs();
     for name in ["id_token", "access_token", "refresh_token"] {
         if let Some(token) = body.get(name).and_then(Value::as_str)
-            && let Ok(d) = decode_jwt(&keys, &ctx.issuer().issuer_url, token, now)
+            && let Ok(d) = decode_jwt(&keys, &ctx.issuer_url(headers), token, now)
         {
             page.flow.push((name.to_owned(), d));
         }

@@ -1,7 +1,7 @@
 # 1. Fixed `iss`, with discovery endpoint URLs derived from the request `Host`
 
 Date: 2026-11-14
-Status: accepted
+Status: accepted. Amended by [ADR 0006](0006-opt-in-host-derived-iss.md) (opt-in `issuer_from_host`).
 
 ## Context
 

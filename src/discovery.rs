@@ -9,12 +9,13 @@ use crate::logging::record_endpoint;
 use crate::state::IssuerCtx;
 use crate::token_exchange::GRANT_TOKEN_EXCHANGE;
 
-/// Returns the discovery document. `issuer` is fixed; endpoints follow the request.
+/// Returns the discovery document. `issuer` is fixed unless `issuer_from_host`; endpoints
+/// follow the request.
 pub async fn document(State(ctx): State<IssuerCtx>, headers: HeaderMap) -> Json<Value> {
     record_endpoint(&ctx.id, "discovery");
     let url = |e| ctx.endpoint_url(&headers, e);
     Json(json!({
-        "issuer": ctx.issuer().issuer_url,
+        "issuer": ctx.issuer_url(&headers),
         "authorization_endpoint": url(Endpoint::Authorize),
         "token_endpoint": url(Endpoint::Token),
         "userinfo_endpoint": url(Endpoint::Userinfo),

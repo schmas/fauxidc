@@ -136,6 +136,13 @@ A negative `expires_in` gives an expired token, to test that your API rejects it
 Rust tests can also start fauxidc in the same process with `fauxidc::Server::start(config).await`.
 The library API is unstable before 1.0.
 
+### Random host port (Testcontainers)
+
+With a mapped port, set `FAUXIDC_ISSUER_FROM_HOST=true`. Then `iss` and the discovery `issuer` use the host and port of the request,
+so a client can use `http://localhost:<mapped port>/default` as its issuer. Zero config stays on.
+Tokens are then valid only through the host that minted them.
+See [docs/configuration.md](docs/configuration.md#issuer-url-and-endpoint-urls).
+
 ### Simulate a provider outage
 
 Make the next two token requests fail with 503, then remove all Injected failures:
