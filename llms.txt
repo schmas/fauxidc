@@ -1,0 +1,36 @@
+# fauxidc
+
+> fauxidc is a small OAuth 2.0 / OpenID Connect mock server for local development and integration tests: one static binary with a login page, signed tokens, a Test API, Injected failures and a debugger page. Never use it in production.
+
+## Docs
+
+- [Start in 60 seconds](README.md#start-in-60-seconds): Docker, the release binary, the discovery URL and a first token
+- [Recipes](README.md#recipes): SPA with PKCE, backend with a client secret, machine-to-machine, tokens in tests, provider outages, agents
+- [Configuration summary](README.md#configuration): config sources and the config command
+- [Test API summary](README.md#test-api): the `/_mock/` routes
+- [Templates summary](README.md#templates): custom pages and the Custom user template
+- [Debugger summary](README.md#debugger): decode a JWT or run a login flow
+- [TLS summary](README.md#tls): the optional `tls` feature
+- [Hot reload summary](README.md#hot-reload): config file polling and SIGHUP
+- [Conformance](README.md#conformance): the OpenID conformance suite in CI
+- [Not supported](README.md#not-supported): non-goals and current limits
+- [Configuration reference](docs/configuration.md): sources, Zero config, Docker, examples, Strict and Lenient mode, signing keys
+- [Test API reference](docs/test-api.md): token minting, key rotation, Injected failures, Request log
+- [Features reference](docs/features.md): Sessions, hot reload, debugger, TLS, token exchange, `private_key_jwt`
+- [Templates reference](docs/templates.md): the template context (version 2) and the stylesheet
+- [Spec](docs/spec.md): the full behavior reference
+
+## Config
+
+- [JSON Schema](schema/fauxidc.schema.json): every config key, draft 2020-12
+- [generic.toml](examples/generic.toml): default paths, web, SPA and service Clients
+- [auth0.toml](examples/auth0.toml): Auth0-style paths and logout alias
+- [okta.toml](examples/okta.toml): Okta-style `/v1/*` paths
+- [keycloak.toml](examples/keycloak.toml): Keycloak-style paths and realm roles
+- [entra.toml](examples/entra.toml): Entra-style claims
+- [cognito.toml](examples/cognito.toml): Cognito-style paths and claims
+- [docker-compose.yml](examples/docker-compose.yml): the published image with `auth0.toml`
+
+## Agent skill
+
+- [fauxidc skill](skills/fauxidc/SKILL.md): start fauxidc, write a config, mint tokens, inject failures, read the Request log, use the debugger, common pitfalls

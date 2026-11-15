@@ -128,8 +128,17 @@ To test key rotation, call `POST /_mock/generic/rotate-key`.
 
 ### Use with an agent
 
-The repo has an agent skill and an `llms.txt` file for coding agents.
-Give the agent the schema of the config file: [schema/fauxidc.schema.json](schema/fauxidc.schema.json).
+The repo has an agent skill, [skills/fauxidc](skills/fauxidc/SKILL.md). It tells a coding agent how to start fauxidc,
+write a config, mint tokens, inject failures and avoid the common pitfalls.
+Install it: copy or symlink the `skills/fauxidc` directory into `.claude/skills/` (one project) or `~/.agents/skills/` (all projects).
+
+```sh
+git clone https://github.com/schmas/fauxidc.git ~/src/fauxidc
+mkdir -p .claude/skills && ln -s ~/src/fauxidc/skills/fauxidc .claude/skills/fauxidc
+```
+
+[llms.txt](llms.txt) lists the docs for agents that read it.
+The schema of the config file is [schema/fauxidc.schema.json](schema/fauxidc.schema.json).
 
 ## Configuration
 

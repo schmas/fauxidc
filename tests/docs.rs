@@ -144,3 +144,157 @@ fn agents_md_keeps_every_rule() {
         assert!(a.contains(rule), "{rule}");
     }
 }
+
+#[test]
+fn skill_has_front_matter_and_fits() {
+    let s = read("skills/fauxidc/SKILL.md");
+    assert!(s.starts_with("---\nname: fauxidc\ndescription: "));
+    assert!(s.lines().count() < 200, "{} lines", s.lines().count());
+}
+
+#[test]
+fn skill_covers_the_pitfalls() {
+    let s = read("skills/fauxidc/SKILL.md");
+    for needle in [
+        "issuer_url",
+        "Host",
+        "Lenient",
+        "redirect_uri",
+        "/_mock/",
+        "fail-next",
+        "/debugger",
+        "fauxidc.schema.json",
+        "at+jwt",
+    ] {
+        assert!(s.contains(needle), "{needle}");
+    }
+}
+
+#[test]
+fn llms_txt_lists_the_docs() {
+    let l = read("llms.txt");
+    assert!(l.starts_with("# fauxidc\n\n> "));
+    for needle in [
+        "## Docs",
+        "## Config",
+        "## Agent skill",
+        "README.md#start-in-60-seconds",
+        "docs/templates.md",
+        "schema/fauxidc.schema.json",
+        "examples/cognito.toml",
+        "skills/fauxidc/SKILL.md",
+    ] {
+        assert!(l.contains(needle), "{needle}");
+    }
+}
+
+#[test]
+fn readme_says_how_to_install_the_skill() {
+    let r = read("README.md");
+    assert!(r.contains("skills/fauxidc"));
+    assert!(r.contains(".claude/skills/") && r.contains("~/.agents/skills/"));
+}
+
+/// The lines of `text` outside fenced code blocks.
+fn prose_lines(text: &str) -> Vec<&str> {
+    let mut in_fence = false;
+    let mut out = Vec::new();
+    for line in text.lines() {
+        if line.trim_start().starts_with("```") {
+            in_fence = !in_fence;
+            continue;
+        }
+        if !in_fence {
+            out.push(line);
+        }
+    }
+    out
+}
+
+/// GitHub heading anchors of a Markdown file: lowercase, spaces to `-`, other punctuation dropped.
+fn anchors(text: &str) -> Vec<String> {
+    prose_lines(text)
+        .into_iter()
+        .filter(|l| l.starts_with('#'))
+        .map(|l| {
+            l.trim_start_matches('#')
+                .trim()
+                .to_lowercase()
+                .chars()
+                .filter_map(|c| match c {
+                    ' ' => Some('-'),
+                    c if c.is_alphanumeric() || c == '-' || c == '_' => Some(c),
+                    _ => None,
+                })
+                .collect()
+        })
+        .collect()
+}
+
+/// The targets of the inline Markdown links `[text](target)` outside code blocks.
+fn link_targets(text: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    for line in prose_lines(text) {
+        let mut rest = line;
+        while let Some(at) = rest.find("](") {
+            rest = &rest[at + 2..];
+            if let Some(end) = rest.find(')') {
+                out.push(rest[..end].to_owned());
+                rest = &rest[end..];
+            }
+        }
+    }
+    out
+}
+
+#[test]
+fn doc_links_resolve() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let mut files = vec![
+        "README.md".to_owned(),
+        "llms.txt".to_owned(),
+        "skills/fauxidc/SKILL.md".to_owned(),
+        "AGENTS.md".to_owned(),
+        "CONTRIBUTING.md".to_owned(),
+    ];
+    for entry in std::fs::read_dir(root.join("docs")).unwrap() {
+        let name = entry.unwrap().file_name().into_string().unwrap();
+        if Path::new(&name).extension().is_some_and(|e| e == "md") {
+            files.push(format!("docs/{name}"));
+        }
+    }
+    let mut broken = Vec::new();
+    for file in &files {
+        let text = read(file);
+        let dir = Path::new(file).parent().unwrap();
+        for target in link_targets(&text) {
+            if ["http:", "https:", "mailto:"]
+                .iter()
+                .any(|p| target.starts_with(p))
+            {
+                continue;
+            }
+            let (path, anchor) = match target.split_once('#') {
+                Some((p, a)) => (p, Some(a)),
+                None => (target.as_str(), None),
+            };
+            let linked = if path.is_empty() {
+                Path::new(file).to_path_buf()
+            } else {
+                dir.join(path)
+            };
+            let full = root.join(&linked);
+            if !full.exists() {
+                broken.push(format!("{file}: {target} (no file)"));
+                continue;
+            }
+            if let Some(anchor) = anchor {
+                let linked_text = std::fs::read_to_string(&full).unwrap_or_default();
+                if !anchors(&linked_text).iter().any(|a| a == anchor) {
+                    broken.push(format!("{file}: {target} (no anchor)"));
+                }
+            }
+        }
+    }
+    assert!(broken.is_empty(), "{broken:#?}");
+}
