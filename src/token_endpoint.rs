@@ -20,7 +20,9 @@ use crate::keys::SigningKey;
 use crate::logging::record_endpoint;
 use crate::refresh::{RefreshClaims, sign_refresh_token};
 use crate::state::{IssuerCtx, PkceMethod, Subject, now_secs};
-use crate::tokens::{AccessTokenInput, IdTokenInput, sign_access_token, sign_id_token};
+use crate::tokens::{
+    AccessTokenInput, IdTokenInput, lifetime_secs, sign_access_token, sign_id_token,
+};
 
 /// The form fields of a token request.
 #[derive(Deserialize)]
@@ -199,6 +201,7 @@ async fn exchange_code(
             nonce: grant.nonce.as_deref(),
             refresh: RefreshMode::ByPolicy,
             refresh_scope: None,
+            expires_in: None,
         },
     )
 }
@@ -226,6 +229,8 @@ pub(crate) struct UserGrant<'a> {
     /// Scope of a new refresh token; `None` uses `scope`. A narrowed refresh keeps the
     /// original scope here (RFC 6749 section 6).
     pub refresh_scope: Option<&'a [String]>,
+    /// Overrides the `id_token` and access token lifetimes; may be negative (Test API).
+    pub expires_in: Option<i64>,
 }
 
 /// Strict: `offline_access` in scope AND the Client allows `refresh_token`. Lenient: always.
@@ -267,6 +272,12 @@ pub(crate) fn issue_user_tokens(
         ),
         g.scope,
     );
+    let access_lifetime = g
+        .expires_in
+        .unwrap_or_else(|| lifetime_secs(lifetimes.access_token));
+    let id_lifetime = g
+        .expires_in
+        .unwrap_or_else(|| lifetime_secs(lifetimes.id_token));
     let sub = access_claims
         .get("sub")
         .and_then(Value::as_str)
@@ -281,13 +292,13 @@ pub(crate) fn issue_user_tokens(
             claims: access_claims,
             scope: g.scope,
             auth_time: Some(g.auth_time),
-            lifetime: lifetimes.access_token,
+            lifetime: access_lifetime,
         },
     )?;
     let mut body = json!({
         "access_token": access_token,
         "token_type": "Bearer",
-        "expires_in": lifetimes.access_token,
+        "expires_in": access_lifetime,
         "scope": g.scope.join(" "),
     });
     if g.scope.iter().any(|s| s == "openid") {
@@ -309,7 +320,7 @@ pub(crate) fn issue_user_tokens(
                 claims: id_claims,
                 auth_time: g.auth_time,
                 nonce: g.nonce,
-                lifetime: lifetimes.id_token,
+                lifetime: id_lifetime,
             },
         )?);
     }

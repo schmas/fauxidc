@@ -156,6 +156,7 @@ pub async fn refresh_grant(
             nonce: None,
             refresh,
             refresh_scope: Some(&original),
+            expires_in: None,
         },
     )
 }

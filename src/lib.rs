@@ -28,6 +28,7 @@ pub mod router;
 pub mod server;
 pub mod state;
 pub mod templates;
+pub mod test_api;
 pub mod token_check;
 pub mod token_endpoint;
 pub mod tokens;

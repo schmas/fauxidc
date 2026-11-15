@@ -124,6 +124,14 @@ fn check_issuers(config: &Config, c: &mut Collector<'_>) {
     }
     let mut paths: Vec<(&str, String)> = Vec::new();
     for (id, issuer) in &config.issuer {
+        if id == RESERVED_ISSUER_ID {
+            c.push(
+                &["issuer", id],
+                format!(
+                    "issuer id \"{RESERVED_ISSUER_ID}\" is reserved: it would shadow /_mock/static/*"
+                ),
+            );
+        }
         if !valid_base_url(&issuer.public_base_url) {
             c.push(
                 &["issuer", id, "public_base_url"],
@@ -292,6 +300,9 @@ fn valid_origin(origin: &str) -> bool {
 
 const GRANT_TYPES: [&str; 3] = ["authorization_code", "refresh_token", "client_credentials"];
 
+/// An Issuer id that would shadow `/_mock/static/{*path}` in the Test API route.
+const RESERVED_ISSUER_ID: &str = "static";
+
 const RESERVED_PREFIXES: [&str; 2] = ["/_mock", "/.well-known"];
 
 fn effective_id<'a>(key: &'a str, client_id: Option<&'a String>) -> &'a str {
@@ -419,6 +430,12 @@ mod tests {
     #[test]
     fn bad_id() {
         assert!(errs(&format!("{A}[user.Bob]\n"))[0].starts_with("invalid id \"Bob\""));
+    }
+    #[test]
+    fn reserved_issuer_id_static() {
+        let e = errs("[issuer.static]\nissuer_url=\"http://h/s\"\n");
+        assert_eq!(e.len(), 1, "{e:?}");
+        assert!(e[0].contains("issuer id \"static\" is reserved"), "{e:?}");
     }
     #[test]
     fn reserved_custom_user_id() {

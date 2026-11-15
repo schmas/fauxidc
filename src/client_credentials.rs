@@ -8,7 +8,7 @@ use crate::client_auth::{ClientAuth, authenticate_client};
 use crate::error::OAuthError;
 use crate::state::IssuerCtx;
 use crate::token_endpoint::{TokenForm, require_grant};
-use crate::tokens::{AccessTokenInput, sign_access_token};
+use crate::tokens::{AccessTokenInput, lifetime_secs, sign_access_token};
 
 /// Issues an access token for the Client itself: `sub = client_id`, claims from the Client
 /// `access_claims`. No `id_token` and no refresh token (spec 9).
@@ -75,13 +75,13 @@ pub async fn grant(
             claims,
             scope: &scope,
             auth_time: None,
-            lifetime: lifetimes.access_token,
+            lifetime: lifetime_secs(lifetimes.access_token),
         },
     )?;
     let mut body = json!({
         "access_token": access_token,
         "token_type": "Bearer",
-        "expires_in": lifetimes.access_token,
+        "expires_in": lifetime_secs(lifetimes.access_token),
     });
     if !scope.is_empty() {
         body["scope"] = json!(scope.join(" "));

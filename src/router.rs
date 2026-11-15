@@ -25,6 +25,7 @@ use crate::logging::{record_endpoint, request_span};
 use crate::revoke;
 use crate::state::{AppState, IssuerCtx};
 use crate::templates;
+use crate::test_api;
 use crate::token_endpoint;
 use crate::userinfo;
 
@@ -100,6 +101,10 @@ pub fn build_router(state: Arc<AppState>) -> Router {
         .route(
             "/_mock/static/{*path}",
             get(templates::static_file).with_state(state.clone()),
+        )
+        .route(
+            "/_mock/{issuer_id}/token",
+            post(test_api::issue).with_state(state.clone()),
         )
         .route("/_mock/health", get(health::health).with_state(state))
         .layer(trace)

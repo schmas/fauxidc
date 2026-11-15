@@ -83,6 +83,31 @@ The full reference is in [docs/spec.md](docs/spec.md), section 5.
 
 You can replace the login page and the error page. See [docs/templates.md](docs/templates.md).
 
+## Test API
+
+`POST /_mock/{issuer-id}/token` issues tokens without a browser. The body is JSON:
+
+| Field | Meaning |
+| --- | --- |
+| `user` | A configured User id. Send exactly one of `user` and `sub`. |
+| `sub` | The `sub` of a Custom user. |
+| `claims` | Claim overrides (with `user`) or the Custom user claims (with `sub`). |
+| `client_id` | Default `test-api`. An unknown id is not registered; it only labels the tokens. |
+| `scope` | Default `openid profile email`. |
+| `audience` | Audience of the access token. |
+| `expires_in` | Lifetime in seconds of the id_token and the access token. Negative values give expired tokens. |
+
+The response has the same JSON shape as `/token`. An unknown Issuer id gives 404.
+A bad body, an unknown User or an unknown field gives 400 `invalid_request`.
+
+```sh
+curl -s http://localhost:9000/_mock/auth0/token \
+  -H 'content-type: application/json' \
+  -d '{"user": "alice"}'
+```
+
+The endpoint has no authentication. Never run fauxidc in production.
+
 ## Not yet supported
 
 M1 does not include these. They are planned for M2 and M3.

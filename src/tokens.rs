@@ -15,7 +15,7 @@ pub struct IdTokenInput<'a> {
     pub claims: Claims,
     pub auth_time: u64,
     pub nonce: Option<&'a str>,
-    pub lifetime: u64,
+    pub lifetime: i64,
 }
 
 /// Inputs for an RFC 9068 access token.
@@ -27,7 +27,12 @@ pub struct AccessTokenInput<'a> {
     pub scope: &'a [String],
     /// The `auth_time` claim; `None` (for `client_credentials`) omits it.
     pub auth_time: Option<u64>,
-    pub lifetime: u64,
+    pub lifetime: i64,
+}
+
+/// A configured lifetime in seconds as the signed value the signers take.
+pub fn lifetime_secs(secs: u64) -> i64 {
+    i64::try_from(secs).unwrap_or(i64::MAX)
 }
 
 const ACCESS_TOKEN_TYP: &str = "at+jwt";
@@ -56,7 +61,7 @@ pub fn sign_id_token(key: &SigningKey, input: IdTokenInput<'_>) -> Result<String
         ("aud", json!(input.client_id)),
         ("azp", json!(input.client_id)),
         ("iat", json!(now)),
-        ("exp", json!(now.saturating_add(input.lifetime))),
+        ("exp", json!(now.saturating_add_signed(input.lifetime))),
         ("auth_time", json!(input.auth_time)),
         ("jti", json!(uuid::Uuid::new_v4().to_string())),
     ];
@@ -79,7 +84,7 @@ pub fn sign_access_token(
         ("aud", json!(input.audience)),
         ("client_id", json!(input.client_id)),
         ("iat", json!(now)),
-        ("exp", json!(now.saturating_add(input.lifetime))),
+        ("exp", json!(now.saturating_add_signed(input.lifetime))),
         ("jti", json!(uuid::Uuid::new_v4().to_string())),
     ];
     if !input.scope.is_empty() {
