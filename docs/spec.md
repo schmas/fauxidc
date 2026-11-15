@@ -94,6 +94,7 @@ Type checks run against the schema after the merge.
 - Each error names its source: file and line, `inline`, `env FAUXIDC__...`, or the flag.
 - Config keys (Issuer, Client and User ids) must match `[a-z0-9_]+`, because shell env var names cannot contain `-`.
 - Invalid config at startup: exit with code 2 and the error list.
+- `server.fixed_time` (after M4) must be empty or an RFC 3339 date-time with an offset, at or after 1970-01-01T00:00:00Z. Another value is a config error at startup and at reload.
 
 ### 5.4 Shape
 
@@ -110,6 +111,7 @@ templates_dir = ""            # files here replace embedded templates one by one
 static_dir = ""
 log_format = "text"           # text | json
 request_log_size = 500
+fixed_time = ""               # after M4: RFC 3339, for example "2020-01-21T00:00:00Z"; empty: system clock
 
 [issuer.auth0]
 issuer_url = "http://localhost:9000/auth0/"
@@ -261,6 +263,7 @@ Later wins:
 - Refresh token: signed JWT. It carries the User id plus any Claim overrides or Custom user claims. On refresh, claims are merged again from the current config (M2).
 - Rotation (M2): on by default per Client. Using an old refresh token again returns `invalid_grant`, unless it is within `refresh_reuse_leeway_secs` (default 0). No family revocation.
 - `client_credentials` (M2): `sub = client_id`, claims from Client `access_claims`. No id_token and no refresh token.
+- Fixed clock (after M4): `server.fixed_time` sets the server clock to one RFC 3339 time, in whole seconds. The clock does not advance. Every issued time uses it: `iat`, `exp`, `auth_time`, `expires_in`, the code and refresh token lifetimes and the Session `auth_time`. Every check of token time uses it too: code expiry, refresh token `exp`, `max_age`, the client assertion `exp` and `nbf` (`private_key_jwt`), the jwt-bearer and token exchange `exp`, `/introspect`, `/userinfo`, `/revoke`, the revocation list, the refresh reuse window and the `/debugger` expiry note. Empty: the system clock. A reload applies a new, changed or removed value. There is no Test API route for it. See ADR 0007.
 - Token exchange (M3): if the subject token is a JWT from any fauxidc Issuer, the mock verifies the signature and `exp`. In Strict mode, any other token is rejected. In Lenient mode it is accepted unverified. The result has `sub` and User claims from the subject token, and `aud` from `audience` / `resource`. An `act` claim is added only when an `actor_token` is sent.
 - Token exchange token types (M4): `subject_token_type` and `actor_token_type` must fit the token. `...:access_token` needs the header `typ` `at+jwt`, `...:id_token` needs another `typ`, `...:jwt` accepts any. Strict mode rejects a mismatch; Lenient mode logs a warning.
 - Token exchange `may_act` (M4): when the subject token has `may_act.sub` and an `actor_token` is sent, the actor `sub` must equal it (RFC 8693 4.4). Strict mode rejects a mismatch; Lenient mode logs a warning.
@@ -362,7 +365,7 @@ None in M1 and M2. M3 adds an optional `tls` cargo feature with `rustls` (ring) 
 | Errors | `thiserror` v2 (lib), `anyhow` (`main.rs` only) |
 | IDs, random | `uuid` v4 (`jti`, `sid`), `rand` / `getrandom` |
 | Statics | `std::sync::LazyLock` |
-| Time | `std::time` (Unix seconds only) |
+| Time | `std::time` (Unix seconds only); `time` with only the `parsing` feature, to read `server.fixed_time` (after M4) |
 | Locks | `std::sync::Mutex` |
 | Hot reload (M3) | `arc-swap` |
 | TLS (M3, optional, `tls` feature) | `rustls` (ring), `tokio-rustls` |
@@ -371,7 +374,7 @@ None in M1 and M2. M3 adds an optional `tls` cargo feature with `rustls` (ring) 
 Rejected, with reason:
 
 - `figment` / `config`: see 5.8.
-- `jiff`: no date formatting needed. Add it if `/debugger` needs one.
+- `jiff`: no date formatting needed. Add it if `/debugger` needs one. `time` reads `server.fixed_time`, because `jsonwebtoken` already depends on it.
 - `color-eyre` / `miette`: the main user errors are config errors, and `toml` already prints them with spans. Use `miette` for config only if those errors read poorly.
 - `parking_lot` / `dashmap`: there is no contention on a `current_thread` runtime.
 - `dotenvy`: docker-compose already reads `.env`. A mock that reads `.env` on its own is surprising.

@@ -17,7 +17,7 @@ use crate::error::{OAuthError, append_query};
 use crate::logging::{record_client, record_endpoint};
 use crate::prompt::{self, PromptError, PromptRequest};
 use crate::session::Session;
-use crate::state::{CodeGrant, IssuerCtx, PkceMethod, Subject, now_secs};
+use crate::state::{CodeGrant, IssuerCtx, PkceMethod, Subject};
 use crate::templates::{
     CONTEXT_VERSION, ErrorContext, FormPostContext, LoginContext, STATIC_BASE, UserOption,
 };
@@ -589,7 +589,7 @@ fn current_session(
         return Err("prompt=none: session user no longer exists");
     }
     if let Some(max_age) = max_age
-        && now_secs() > session.auth_time.saturating_add(max_age)
+        && ctx.app.now() > session.auth_time.saturating_add(max_age)
     {
         return Err("prompt=none: session is older than max_age");
     }
@@ -854,7 +854,7 @@ fn sign_in_with(
         issuer_id: ctx.id.clone(),
         subject: subject.clone(),
         sid: uuid::Uuid::new_v4().to_string(),
-        auth_time: now_secs(),
+        auth_time: ctx.app.now(),
     };
     let (auth_time, sid) = (session.auth_time, session.sid.clone());
     let value = match ctx.app.store.sessions.create(session) {
@@ -897,7 +897,7 @@ pub(crate) fn issue_code(
         .issuer()
         .lifetimes
         .with_override(&req.client.config.lifetimes);
-    let now = now_secs();
+    let now = ctx.app.now();
     let audience = req
         .params
         .audience
@@ -916,7 +916,7 @@ pub(crate) fn issue_code(
         expires_at: now + lifetimes.code,
         sid,
     };
-    let code = match ctx.app.store.insert_code(grant) {
+    let code = match ctx.app.store.insert_code(grant, now) {
         Ok(code) => code,
         Err(e) => return e.into_response(),
     };
@@ -977,7 +977,7 @@ claims = { email = "alice@example.com" }
                     overrides: Claims::new(),
                 },
                 sid: "s-1".into(),
-                auth_time: now_secs(),
+                auth_time: ctx.app.now(),
             })
             .unwrap();
         let mut headers = HeaderMap::new();

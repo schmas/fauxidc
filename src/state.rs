@@ -8,8 +8,9 @@ use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use jsonwebtoken::jwk::JwkSet;
 use serde::{Deserialize, Serialize};
 
+use crate::clock::Clock;
 use crate::config::{Claims, ClientConfig, Config, Endpoint, IssuerConfig};
-use crate::error::{OAuthError, StartError};
+use crate::error::{ConfigError, ConfigErrors, OAuthError, StartError};
 use crate::failures::Injected;
 use crate::issuer::{effective_issuer, endpoint_base};
 use crate::jwks_fetch::CACHE_TTL_SECS;
@@ -51,13 +52,6 @@ pub struct CodeGrant {
     pub expires_at: u64,
     /// The Session `sid` of the sign-in; the ID token carries it.
     pub sid: Option<String>,
-}
-
-/// The current time in seconds since the Unix epoch.
-pub fn now_secs() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map_or(0, |d| d.as_secs())
 }
 
 /// In-memory stores.
@@ -106,8 +100,9 @@ pub struct UsedRefresh {
 }
 
 impl Store {
-    /// Stores a grant under a new random code and returns the code. Drops expired entries.
-    pub fn insert_code(&self, g: CodeGrant) -> Result<String, OAuthError> {
+    /// Stores a grant under a new random code and returns the code. Drops entries expired at
+    /// `now`.
+    pub fn insert_code(&self, g: CodeGrant, now: u64) -> Result<String, OAuthError> {
         let mut bytes = [0u8; 32];
         getrandom::fill(&mut bytes)
             .map_err(|e| OAuthError::ServerError(format!("random source failed: {e}")))?;
@@ -116,7 +111,6 @@ impl Store {
             .codes
             .lock()
             .map_err(|_| OAuthError::ServerError("code store lock poisoned".into()))?;
-        let now = now_secs();
         codes.retain(|_, grant| grant.expires_at > now);
         codes.insert(code.clone(), g);
         Ok(code)
@@ -198,18 +192,16 @@ impl Store {
             .map(|u| u.used_at)
     }
 
-    /// Adds `jti` to the revocation list until `exp`. Drops entries whose `exp` has passed.
-    pub fn revoke(&self, jti: &str, exp: u64) {
+    /// Adds `jti` to the revocation list until `exp`. Drops entries whose `exp` is before `now`.
+    pub fn revoke(&self, jti: &str, exp: u64, now: u64) {
         let mut revoked = self.revoked.lock().unwrap_or_else(PoisonError::into_inner);
-        let now = now_secs();
         revoked.retain(|_, e| *e >= now);
         revoked.insert(jti.to_owned(), exp);
     }
 
-    /// `true` if `jti` is on the revocation list. Drops entries whose `exp` has passed.
-    pub fn is_revoked(&self, jti: &str) -> bool {
+    /// `true` if `jti` is on the revocation list. Drops entries whose `exp` is before `now`.
+    pub fn is_revoked(&self, jti: &str, now: u64) -> bool {
         let mut revoked = self.revoked.lock().unwrap_or_else(PoisonError::into_inner);
-        let now = now_secs();
         revoked.retain(|_, e| *e >= now);
         revoked.contains_key(jti)
     }
@@ -250,14 +242,13 @@ impl Store {
             .retain(|(id, _), _| id != issuer_id);
     }
 
-    /// Stores a debugger flow under `state`. Drops expired flows. Above [`MAX_FLOWS`], the flow
-    /// with the smallest `expires_at` is dropped (plan Ruling 4).
-    pub fn insert_flow(&self, state: String, f: DebuggerFlow) {
+    /// Stores a debugger flow under `state`. Drops flows expired at `now`. Above [`MAX_FLOWS`],
+    /// the flow with the smallest `expires_at` is dropped (plan Ruling 4).
+    pub fn insert_flow(&self, state: String, f: DebuggerFlow, now: u64) {
         let mut flows = self
             .debugger_flows
             .lock()
             .unwrap_or_else(PoisonError::into_inner);
-        let now = now_secs();
         flows.retain(|_, f| f.expires_at > now);
         flows.insert(state, f);
         while flows.len() > MAX_FLOWS {
@@ -272,13 +263,14 @@ impl Store {
         }
     }
 
-    /// Removes and returns the flow of `state`. A state works once; an expired flow gives `None`.
-    pub fn take_flow(&self, state: &str) -> Option<DebuggerFlow> {
+    /// Removes and returns the flow of `state`. A state works once; a flow expired at `now`
+    /// gives `None`.
+    pub fn take_flow(&self, state: &str, now: u64) -> Option<DebuggerFlow> {
         self.debugger_flows
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
             .remove(state)
-            .filter(|f| f.expires_at > now_secs())
+            .filter(|f| f.expires_at > now)
     }
 
     /// Removes and returns the grant for `code`. A code works once.
@@ -298,9 +290,29 @@ pub struct AppState {
     pub store: Arc<Store>,
     pub templates: Templates,
     pub request_log: Arc<RequestLog>,
+    /// The clock of `server.fixed_time` (ADR 0007). A reload builds it again.
+    pub clock: Clock,
+}
+
+/// The clock of `config`. An invalid `server.fixed_time` is a config error.
+fn clock_of(config: &Config) -> Result<Clock, StartError> {
+    Clock::from_fixed_time(&config.server.fixed_time).map_err(|message| {
+        StartError::Config(ConfigErrors(vec![ConfigError {
+            origin: crate::config::Source::Default,
+            message,
+        }]))
+    })
 }
 
 impl AppState {
+    /// The current time of this config version, in seconds since the Unix epoch: the fixed
+    /// time of `server.fixed_time`, else the system clock. Token times and token time checks
+    /// use it (ADR 0007).
+    #[must_use]
+    pub fn now(&self) -> u64 {
+        self.clock.now()
+    }
+
     /// Builds the state. `keys` is the server key; [`Keyring::start`] gives each Issuer its
     /// key set from it; `server_key_from_file` is `true` when that key came from
     /// `server.key_file`. Must run inside a tokio runtime when an Issuer needs its own key.
@@ -309,6 +321,7 @@ impl AppState {
         keys: KeyHandle,
         server_key_from_file: bool,
     ) -> Result<AppState, StartError> {
+        let clock = clock_of(&config)?;
         let templates = Templates::load(&config).map_err(StartError::Templates)?;
         let keys =
             Arc::new(Keyring::start(&config, keys, server_key_from_file).map_err(StartError::Key)?);
@@ -319,6 +332,7 @@ impl AppState {
             store: Arc::new(Store::default()),
             templates,
             request_log,
+            clock,
         })
     }
 
@@ -329,6 +343,7 @@ impl AppState {
     /// and key rotation match the keys and the listener that exist. Must run inside a tokio
     /// runtime when a new Issuer needs its own key.
     pub fn next(&self, mut config: Config) -> Result<(AppState, Vec<String>), StartError> {
+        let clock = clock_of(&config)?;
         let templates = Templates::load(&config).map_err(StartError::Templates)?;
         let mut warnings = restart_only_changes(&self.config, &config);
         for warning in self
@@ -348,6 +363,7 @@ impl AppState {
                 store: self.store.clone(),
                 templates,
                 request_log: self.request_log.clone(),
+                clock,
             },
             warnings,
         ))
@@ -459,11 +475,11 @@ mod tests {
                 sub: "c-1".into(),
                 claims: Claims::new(),
             },
-            auth_time: now_secs(),
-            expires_at: now_secs() + 60,
+            auth_time: 1000,
+            expires_at: 1060,
             sid: None,
         };
-        let code = store.insert_code(grant).unwrap();
+        let code = store.insert_code(grant, 1000).unwrap();
         assert!(store.take_code(&code).is_some());
         assert!(store.take_code(&code).is_none());
     }
@@ -550,13 +566,14 @@ mod tests {
     #[test]
     fn revoke_and_prune() {
         let store = Store::default();
-        assert!(!store.is_revoked("j"));
-        store.revoke("j", now_secs() + 60);
-        assert!(store.is_revoked("j"));
-        store.revoke("old", 1);
-        assert!(!store.is_revoked("old"));
+        assert!(!store.is_revoked("j", 1000));
+        store.revoke("j", 1060, 1000);
+        assert!(store.is_revoked("j", 1000));
+        store.revoke("old", 1, 1000);
+        assert!(!store.is_revoked("old", 1000));
         assert!(!store.revoked.lock().unwrap().contains_key("old"));
-        assert!(store.is_revoked("j"));
+        assert!(store.is_revoked("j", 1060));
+        assert!(!store.is_revoked("j", 1061));
     }
 
     #[test]
@@ -608,7 +625,7 @@ mod tests {
     #[test]
     fn flow_store_is_capped() {
         let store = Store::default();
-        let base = now_secs() + 1000;
+        let base = 2000;
         for i in 0..=MAX_FLOWS as u64 {
             // The flow "s0" has the smallest expires_at.
             store.insert_flow(
@@ -619,12 +636,13 @@ mod tests {
                     redirect_uri: "r".into(),
                     expires_at: base + i,
                 },
+                1000,
             );
         }
         assert_eq!(store.debugger_flows.lock().unwrap().len(), MAX_FLOWS);
-        assert!(store.take_flow("s0").is_none());
-        assert!(store.take_flow("s1").is_some());
-        assert!(store.take_flow(&format!("s{MAX_FLOWS}")).is_some());
+        assert!(store.take_flow("s0", 1000).is_none());
+        assert!(store.take_flow("s1", 1000).is_some());
+        assert!(store.take_flow(&format!("s{MAX_FLOWS}"), 1000).is_some());
     }
 
     #[test]
@@ -636,11 +654,13 @@ mod tests {
             redirect_uri: "r".into(),
             expires_at,
         };
-        store.insert_flow("s".into(), flow(now_secs() + 60));
-        assert!(store.take_flow("s").is_some());
-        assert!(store.take_flow("s").is_none());
-        store.insert_flow("old".into(), flow(1));
-        assert!(store.take_flow("old").is_none());
+        store.insert_flow("s".into(), flow(1060), 1000);
+        assert!(store.take_flow("s", 1000).is_some());
+        assert!(store.take_flow("s", 1000).is_none());
+        store.insert_flow("old".into(), flow(1), 1000);
+        assert!(store.take_flow("old", 1000).is_none());
+        store.insert_flow("late".into(), flow(1060), 1000);
+        assert!(store.take_flow("late", 1060).is_none());
     }
 
     #[test]

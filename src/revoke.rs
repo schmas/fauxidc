@@ -95,7 +95,8 @@ async fn respond(ctx: &IssuerCtx, headers: &HeaderMap, f: &RevokeForm) -> Result
         .ok_or_else(|| OAuthError::json("invalid_request", "token is missing"))?;
     // `token_type_hint` is ignored (RFC 7009 2.1).
     let keys = ctx.keys().await?;
-    let Some(own) = decode_own_token(&keys, &ctx.issuer_url(headers), token) else {
+    let now = ctx.app.now();
+    let Some(own) = decode_own_token(&keys, &ctx.issuer_url(headers), token, now) else {
         // RFC 7009 2.2: an invalid token is not an error.
         tracing::info!(issuer = %ctx.id, "revoke: not a valid token of this issuer");
         return Ok(());
@@ -114,6 +115,6 @@ async fn respond(ctx: &IssuerCtx, headers: &HeaderMap, f: &RevokeForm) -> Result
     {
         return Ok(());
     }
-    ctx.app.store.revoke(own.jti(), own.exp());
+    ctx.app.store.revoke(own.jti(), own.exp(), now);
     Ok(())
 }

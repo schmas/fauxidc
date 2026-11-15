@@ -118,6 +118,10 @@ pub fn validate(config: &Config, sources: &SourceMap) -> Result<(), ConfigErrors
         );
     }
 
+    if let Err(message) = crate::clock::Clock::from_fixed_time(&config.server.fixed_time) {
+        c.push(&["server", "fixed_time"], message);
+    }
+
     if c.errors.is_empty() {
         Ok(())
     } else {
@@ -785,6 +789,22 @@ mod tests {
         assert_eq!(
             errs(&format!("{A}[user.alice.issuer.zz]\n")),
             vec!["user.alice.issuer.zz: unknown issuer"]
+        );
+    }
+    #[test]
+    fn bad_fixed_time() {
+        assert_eq!(
+            errs(&format!("[server]\nfixed_time = \"2020-01-21\"\n{A}")),
+            vec![
+                "server.fixed_time: invalid time \"2020-01-21\": use an RFC 3339 date-time at or \
+                 after 1970-01-01T00:00:00Z, for example \"2020-01-21T00:00:00Z\""
+            ]
+        );
+        assert!(
+            errs(&format!(
+                "[server]\nfixed_time = \"2020-01-21T00:00:00Z\"\n{A}"
+            ))
+            .is_empty()
         );
     }
     #[test]

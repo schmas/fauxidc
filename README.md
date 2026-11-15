@@ -138,6 +138,12 @@ A negative `expires_in` gives an expired token, to test that your API rejects it
 Rust tests can also start fauxidc in the same process with `fauxidc::Server::start(config).await`.
 The library API is unstable before 1.0.
 
+### Fixed time for reproducible tokens
+
+Set `server.fixed_time = "2020-01-21T00:00:00Z"` (or `FAUXIDC__SERVER__FIXED_TIME`).
+Then `iat`, `exp`, `auth_time` and `expires_in` are the same in every run, and fauxidc checks tokens with the same clock.
+See [docs/configuration.md](docs/configuration.md#fixed-time).
+
 ### Random host port (Testcontainers)
 
 With a mapped port, set `FAUXIDC_ISSUER_FROM_HOST=true`. Then `iss` and the discovery `issuer` use the host and port of the request,

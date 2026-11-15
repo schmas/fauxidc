@@ -105,6 +105,7 @@ curl -s http://localhost:9000/_mock/app/token \
 - Send exactly one of `user` (a configured User id) and `sub` (a Custom user). `claims` overrides or sets claims.
 - `client_id` defaults to `test-api`. `scope` defaults to `openid profile email`.
 - A negative `expires_in` gives an expired token.
+- For fixed token times, set `server.fixed_time = "2020-01-21T00:00:00Z"` (RFC 3339). Then `iat` is always that time, and fauxidc checks codes and tokens with the same clock. Your app checks `exp` with its own clock, so a past time gives tokens that it rejects.
 - An unknown Issuer id gives 404. A bad body or an unknown field gives 400 `invalid_request`.
 - `POST /_mock/{issuer-id}/rotate-key` adds a new signing key. `?retire=true` also removes the old keys.
 

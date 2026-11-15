@@ -40,6 +40,8 @@ M4 features:
 After M4:
 
 - [`response_mode=form_post`](#response_modeform_post) at `/authorize`.
+- A fixed server clock, `server.fixed_time`, for reproducible token times.
+  See [configuration.md](configuration.md#fixed-time).
 
 The exit test runbooks are in [testing/](testing/): [M1](testing/m1-exit-test.md),
 [M2](testing/m2-exit-test.md) and [M3](testing/m3-exit-test.md). The M4 page checks are in [testing/m4-pages.md](testing/m4-pages.md).
@@ -67,6 +69,7 @@ SIGHUP reloads the config. So closing the terminal does not stop a foreground fa
 Env vars, inline config and CLI flags change only at restart.
 Codes, Sessions, refresh tokens, revocations and the Request log stay valid across a reload.
 A Session for a removed User fails at its next use.
+A new, changed or removed `server.fixed_time` applies at once to new tokens and to every time check.
 
 These keys need a restart; a change logs a warning and has no effect until then:
 `server.port`, `server.bind`, `server.log_format`, `server.request_log_size`, `server.key_file`,

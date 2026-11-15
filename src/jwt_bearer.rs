@@ -68,6 +68,7 @@ pub async fn grant(
             claims,
             scope: &scope,
             auth_time: subject.get("auth_time").and_then(Value::as_u64),
+            now: ctx.app.now(),
             lifetime,
         },
     )

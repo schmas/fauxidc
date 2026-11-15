@@ -12,11 +12,12 @@ use jsonwebtoken::{Algorithm, DecodingKey, Validation};
 use serde_json::Value;
 
 use crate::clients::{ResolvedClient, find_client};
+use crate::clock::system_now;
 use crate::config::{ClientConfig, Endpoint, SigningAlg};
 use crate::error::OAuthError;
 use crate::jwks_fetch::{FETCH_TIMEOUT, fetch_jwks};
 use crate::logging::record_client;
-use crate::state::{IssuerCtx, now_secs};
+use crate::state::IssuerCtx;
 
 /// The `client_assertion_type` of a JWT client assertion (RFC 7523 2.2).
 pub const ASSERTION_TYPE: &str = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer";
@@ -294,7 +295,7 @@ async fn authenticate_assertion(
         .get("jti")
         .and_then(Value::as_str)
         .filter(|s| !s.is_empty());
-    let now = now_secs();
+    let now = ctx.app.now();
     let exp = claims.get("exp").and_then(Value::as_u64).unwrap_or(now);
     // Only a verified assertion uses up its `jti`: Lenient mode must not let any caller fill
     // the store with unverified entries.
@@ -392,8 +393,9 @@ async fn verify_assertion(
     let kid = header.kid.as_deref();
     let uri = client.config.jwks_uri.as_str();
     // A set fetched by this request is not fetched again for an unknown `kid`, and a cached
-    // set is refetched at most once per REFETCH_COOLDOWN.
-    let was_cached = !uri.is_empty() && ctx.app.store.cached_jwks(uri, now_secs()).is_some();
+    // set is refetched at most once per REFETCH_COOLDOWN. The cache and the cooldown use the
+    // system clock: they are not token time (ADR 0007).
+    let was_cached = !uri.is_empty() && ctx.app.store.cached_jwks(uri, system_now()).is_some();
     let mut set = client_keys(ctx, client, false).await?;
     if let Some(kid) = kid
         && set.find(kid).is_none()
@@ -401,7 +403,7 @@ async fn verify_assertion(
         && ctx
             .app
             .store
-            .may_refetch(uri, now_secs(), REFETCH_COOLDOWN.as_secs())
+            .may_refetch(uri, system_now(), REFETCH_COOLDOWN.as_secs())
     {
         set = client_keys(ctx, client, true).await?;
     }
@@ -432,7 +434,8 @@ async fn verify_assertion(
                 continue;
             }
         };
-        match jsonwebtoken::decode::<crate::config::Claims>(assertion, &key, &validation) {
+        // `exp` and `nbf` against the server clock, not the system clock (ADR 0007).
+        match crate::clock::decode_at(assertion, &key, &validation, ctx.app.now()) {
             Ok(data) => {
                 if data.claims.get("sub").and_then(Value::as_str) != Some(&client.client_id) {
                     return Err("client assertion sub must equal the client_id".to_owned());
@@ -480,13 +483,13 @@ pub(crate) async fn client_keys(
         return Err("client has no jwks or jwks_uri".to_owned());
     }
     let store = &ctx.app.store;
-    if !refetch && let Some(set) = store.cached_jwks(url, now_secs()) {
+    if !refetch && let Some(set) = store.cached_jwks(url, system_now()) {
         return Ok((*set).clone());
     }
     let set = fetch_jwks(url, FETCH_TIMEOUT)
         .await
         .map_err(|e| format!("jwks_uri {url}: {e}"))?;
-    store.cache_jwks(url, now_secs(), Arc::new(set.clone()));
+    store.cache_jwks(url, system_now(), Arc::new(set.clone()));
     Ok(set)
 }
 
@@ -701,7 +704,7 @@ claims = { email = "bob@example.com", name = "Bobby Viewer" }
         header.kid = Some(other.kid.clone());
         let claims = serde_json::json!({
             "iss": "backend", "sub": "backend", "aud": "http://localhost:9000/auth0/",
-            "exp": now_secs() + 60, "jti": "j-1",
+            "exp": system_now() + 60, "jti": "j-1",
         });
         let assertion = jsonwebtoken::encode(&header, &claims, &other.encoding).unwrap();
         let creds = ClientCredentials {

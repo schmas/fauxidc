@@ -50,15 +50,20 @@ impl OwnToken {
 
 /// A token this Issuer signed and that has not expired: an access token (`typ: at+jwt`, via
 /// `verify_access_token`) or a refresh token (`typ: rt+jwt`, via `verify_refresh_token`).
-/// Anything else, including ID tokens, is `None`.
-pub fn decode_own_token(keys: &KeySet, issuer_url: &str, token: &str) -> Option<OwnToken> {
+/// `exp` is checked against `now`. Anything else, including ID tokens, is `None`.
+pub fn decode_own_token(
+    keys: &KeySet,
+    issuer_url: &str,
+    token: &str,
+    now: u64,
+) -> Option<OwnToken> {
     let header = jsonwebtoken::decode_header(token).ok()?;
     if header.typ.as_deref() == Some(REFRESH_TOKEN_TYP) {
-        verify_refresh_token(keys, issuer_url, token)
+        verify_refresh_token(keys, issuer_url, token, now)
             .ok()
             .map(OwnToken::Refresh)
     } else {
-        verify_access_token(keys, issuer_url, token)
+        verify_access_token(keys, issuer_url, token, now)
             .ok()
             .map(OwnToken::Access)
     }
@@ -69,7 +74,7 @@ mod tests {
     use super::*;
     use crate::keys::SigningKey;
     use crate::refresh::sign_refresh_token;
-    use crate::state::{Subject, now_secs};
+    use crate::state::Subject;
     use crate::tokens::{AccessTokenInput, IdTokenInput, sign_access_token, sign_id_token};
 
     const ISS: &str = "http://localhost:9000/auth0/";
@@ -95,15 +100,16 @@ mod tests {
                 claims: Claims::new(),
                 scope: &[],
                 auth_time: Some(1),
+                now: 1000,
                 lifetime: 60,
             },
         )
         .await
         .unwrap();
-        let t = decode_own_token(&set(), ISS, &at).unwrap();
+        let t = decode_own_token(&set(), ISS, &at, 1000).unwrap();
         assert!(matches!(t, OwnToken::Access(_)));
         assert_eq!(t.client_id(), "example-app");
-        assert!(!t.jti().is_empty() && t.exp() > now_secs());
+        assert!(!t.jti().is_empty() && t.exp() == 1060);
 
         let rt = sign_refresh_token(
             &key(),
@@ -113,8 +119,8 @@ mod tests {
                 client_id: "example-app".into(),
                 sub: "auth0|alice".into(),
                 jti: "j-1".into(),
-                iat: now_secs(),
-                exp: now_secs() + 60,
+                iat: 1000,
+                exp: 1060,
                 scope: "openid offline_access".into(),
                 auth_time: 1,
                 token_aud: None,
@@ -126,7 +132,7 @@ mod tests {
         )
         .await
         .unwrap();
-        let t = decode_own_token(&set(), ISS, &rt).unwrap();
+        let t = decode_own_token(&set(), ISS, &rt, 1000).unwrap();
         assert!(matches!(t, OwnToken::Refresh(_)));
         assert_eq!((t.jti(), t.client_id()), ("j-1", "example-app"));
 
@@ -138,14 +144,16 @@ mod tests {
                 claims: Claims::new(),
                 auth_time: 1,
                 nonce: None,
+                now: 1000,
                 lifetime: 60,
                 sid: None,
             },
         )
         .await
         .unwrap();
-        assert!(decode_own_token(&set(), ISS, &idt).is_none());
-        assert!(decode_own_token(&set(), ISS, "abc").is_none());
-        assert!(decode_own_token(&set(), "http://localhost:9000/okta/", &at).is_none());
+        assert!(decode_own_token(&set(), ISS, &idt, 1000).is_none());
+        assert!(decode_own_token(&set(), ISS, &at, 1061).is_none());
+        assert!(decode_own_token(&set(), ISS, "abc", 1000).is_none());
+        assert!(decode_own_token(&set(), "http://localhost:9000/okta/", &at, 1000).is_none());
     }
 }

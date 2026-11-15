@@ -129,6 +129,27 @@ fauxidc then accepts its own tokens only through the host that minted them.
 A token minted through `localhost:49153` is inactive at `fauxidc:9000/default/introspect`.
 See [ADR 0006](adr/0006-opt-in-host-derived-iss.md).
 
+## Fixed time
+
+Set `server.fixed_time` to an RFC 3339 date-time to fix the server clock. Then token times are the same in every run:
+
+```toml
+[server]
+fixed_time = "2020-01-21T00:00:00Z"
+```
+
+- The clock does not advance. `iat` and `auth_time` are always this time, and `exp` is this time plus the lifetime.
+- fauxidc checks token time with the same clock: code expiry, refresh token `exp`, `max_age`, client assertions,
+  `/introspect`, `/userinfo` and the other token checks. So a fixed time in the past still gives working codes and refresh tokens.
+- Your app checks `exp` with its own clock. A fixed time in the past gives tokens that your app rejects as expired.
+  Use a fixed time in the future, or give your app the same fixed clock.
+- The env var is `FAUXIDC__SERVER__FIXED_TIME`. Like every `FAUXIDC__*` env var, it turns off Zero config. There is no CLI flag.
+- A config file change applies at the next reload. Remove the key to go back to the system clock.
+- An invalid value, for example a date without a time, is a config error.
+
+The Request log time, the `jwks_uri` cache and the `/debugger` flow lifetime stay on the system clock.
+See [ADR 0007](adr/0007-fixed-clock.md).
+
 ## Signing keys
 
 Each Issuer signs with `issuer.<id>.signing_alg`: `RS256` (default), `ES256` or `PS256`.

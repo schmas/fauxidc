@@ -91,6 +91,9 @@ pub struct ServerConfig {
     pub request_log_size: usize,
     /// HTTPS from PEM files. Needs a build with the `tls` feature.
     pub tls: TlsConfig,
+    /// A fixed server time, an RFC 3339 date-time such as `2020-01-21T00:00:00Z`. Issued token
+    /// times and every token time check use it (ADR 0007). Empty: the system clock.
+    pub fixed_time: String,
 }
 
 /// `[server.tls]`: the PEM certificate chain and private key of the HTTPS listener.
@@ -124,6 +127,7 @@ impl Default for ServerConfig {
             log_format: LogFormat::default(),
             request_log_size: 500,
             tls: TlsConfig::default(),
+            fixed_time: String::new(),
         }
     }
 }

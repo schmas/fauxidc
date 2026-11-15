@@ -74,7 +74,7 @@ fn decode_unverified(token: &str) -> Result<Claims, String> {
 }
 
 /// A JWT signed by any configured Issuer: `iss` (unverified) → Issuer; key by `kid` from that
-/// Issuer's set; `alg` must match; `exp` checked, leeway 0; `typ` not `rt+jwt`; `jti` not
+/// Issuer's set; `alg` must match; `exp` checked against the server clock, leeway 0; `typ` not `rt+jwt`; `jti` not
 /// revoked. Error text is for logs.
 pub(crate) async fn verify_fauxidc_jwt(
     app: &AppState,
@@ -102,14 +102,15 @@ pub(crate) async fn verify_fauxidc_jwt(
         .key_set(issuer_id)
         .await
         .map_err(|e| format!("keys of Issuer {issuer_id}: {e}"))?;
-    let (_, claims) = keys.verify(token, |v| {
+    let now = app.now();
+    let (_, claims) = keys.verify(token, now, |v| {
         v.leeway = 0;
         v.validate_aud = false;
         v.set_issuer(&[expected.as_str()]);
         v.set_required_spec_claims(&["exp", "iss"]);
     })?;
     if let Some(jti) = claims.get("jti").and_then(Value::as_str)
-        && app.store.is_revoked(jti)
+        && app.store.is_revoked(jti, now)
     {
         return Err("token was revoked".to_owned());
     }
@@ -314,6 +315,7 @@ pub async fn grant(
             claims,
             scope: &scope,
             auth_time,
+            now: ctx.app.now(),
             lifetime,
         },
     )

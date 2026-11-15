@@ -24,7 +24,7 @@ use crate::error::OAuthError;
 use crate::keys::SigningKey;
 use crate::logging::record_endpoint;
 use crate::refresh::{RefreshClaims, sign_refresh_token};
-use crate::state::{IssuerCtx, PkceMethod, Subject, now_secs};
+use crate::state::{IssuerCtx, PkceMethod, Subject};
 use crate::tokens::{
     AccessTokenInput, IdTokenInput, lifetime_secs, sign_access_token, sign_id_token,
 };
@@ -251,7 +251,7 @@ pub(crate) async fn redeem_code(
     if grant.issuer_id != ctx.id || grant.client_id != client.client_id {
         return Err(invalid_grant("code was not issued to this client"));
     }
-    if now_secs() >= grant.expires_at {
+    if ctx.app.now() >= grant.expires_at {
         return Err(invalid_grant("code expired"));
     }
     ctx.enforce(redirect_uri == Some(grant.redirect_uri.as_str()), || {
@@ -336,6 +336,8 @@ pub(crate) async fn issue_user_tokens(
 ) -> Result<Value, OAuthError> {
     let client = g.client;
     let issuer = ctx.issuer();
+    // One time for all tokens of the response (ADR 0007).
+    let now = ctx.app.now();
     let lifetimes = issuer.lifetimes.with_override(&client.config.lifetimes);
     let audience = match (g.audience, client.config.audience.as_str()) {
         (Some(a), _) => a.to_owned(),
@@ -373,6 +375,7 @@ pub(crate) async fn issue_user_tokens(
             claims: access_claims,
             scope: g.scope,
             auth_time: Some(g.auth_time),
+            now,
             lifetime: access_lifetime,
         },
     )
@@ -403,6 +406,7 @@ pub(crate) async fn issue_user_tokens(
                     claims: id_claims,
                     auth_time: g.auth_time,
                     nonce: g.nonce,
+                    now,
                     lifetime: id_lifetime,
                     sid: g.sid,
                 },
@@ -419,20 +423,20 @@ pub(crate) async fn issue_user_tokens(
         }
     };
     if issue {
-        let claims = refresh_claims(g.iss, sub, lifetimes.refresh_token, g);
+        let claims = refresh_claims(g.iss, sub, now, lifetimes.refresh_token, g);
         body["refresh_token"] = json!(sign_refresh_token(key, &claims).await?);
     }
     Ok(body)
 }
 
-/// The claims of a new refresh token for the grant `g`.
+/// The claims of a new refresh token for the grant `g`, issued at `now`.
 fn refresh_claims(
     issuer_url: &str,
     sub: String,
+    now: u64,
     lifetime: u64,
     g: &UserGrant<'_>,
 ) -> RefreshClaims {
-    let now = now_secs();
     RefreshClaims {
         iss: issuer_url.to_owned(),
         aud: g.client.client_id.clone(),
