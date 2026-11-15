@@ -11,6 +11,7 @@
 <h1>Signed out</h1>
 <p class="meta">{% if client_id %}Client: {{ client_id }} · {% endif %}Issuer: {{ issuer_id }}</p>
 <p>You are signed out.</p>
+{% if signed_in_as %}<p class="meta">Signed in as {{ signed_in_as }} · <a href="{{ change_href|href }}">change</a></p>{% endif %}
 </main>
 </body>
 </html>

@@ -15,6 +15,7 @@ use tower_http::trace::{DefaultOnResponse, TraceLayer};
 use crate::authorize;
 use crate::config::Endpoint;
 use crate::cors::client_cors_layer;
+use crate::debugger;
 use crate::discovery;
 use crate::endsession;
 use crate::failures::{self, FailureTarget};
@@ -149,6 +150,10 @@ fn issuer_router(ctx: &IssuerCtx, cors: &CorsLayer) -> Router {
         .route(
             ctx.endpoint_path(Endpoint::Introspect),
             guarded(post(introspect::introspect), fail("introspect")),
+        )
+        .route(
+            ctx.endpoint_path(Endpoint::Debugger),
+            guarded(get(debugger::page).post(debugger::decode), fail("debugger")),
         )
         .with_state(ctx.clone())
 }

@@ -272,18 +272,22 @@ fn check_endpoint_paths(id: &str, paths: &EndpointPaths, c: &mut Collector<'_>) 
             );
         }
     }
-    for (i, (ea, a)) in all.iter().enumerate() {
-        for (eb, b) in &all[i + 1..] {
-            if a.trim_end_matches('/') == b.trim_end_matches('/') {
+    // The debugger also serves `{debugger}/start` and `{debugger}/callback`.
+    let debugger = paths.debugger.trim_end_matches('/');
+    let mut checked: Vec<(String, String)> = all
+        .iter()
+        .map(|(e, p)| (e.key().to_owned(), p.trim_end_matches('/').to_owned()))
+        .collect();
+    for sub in ["start", "callback"] {
+        checked.push((format!("debugger/{sub}"), format!("{debugger}/{sub}")));
+    }
+    for (i, (ka, a)) in checked.iter().enumerate() {
+        for (kb, b) in &checked[i + 1..] {
+            if a == b {
                 c.push(
                     // The parent key falls back to the source of any key below it.
                     &["issuer", id, "paths"],
-                    format!(
-                        "issuer.{id}.paths: {} and {} both use {}",
-                        ea.key(),
-                        eb.key(),
-                        a.trim_end_matches('/')
-                    ),
+                    format!("issuer.{id}.paths: {ka} and {kb} both use {a}"),
                 );
             }
         }
@@ -682,6 +686,17 @@ mod tests {
         ));
         assert!(
             e.iter().any(|m| m.contains("paths") && m.contains("/x")),
+            "{e:?}"
+        );
+    }
+    #[test]
+    fn debugger_derived_paths_join_the_duplicate_check() {
+        let e = errs(&format!(
+            "{A}paths = {{ debugger = \"/x\", token = \"/x/start\" }}\n"
+        ));
+        assert!(
+            e.iter()
+                .any(|m| m.contains("debugger") && m.contains("token") && m.contains("/x/start")),
             "{e:?}"
         );
     }

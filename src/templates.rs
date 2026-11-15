@@ -26,6 +26,7 @@ pub const CONTEXT_VERSION: u32 = 1;
 const LOGIN: &str = "login.html";
 const ERROR: &str = "error.html";
 const SIGNED_OUT: &str = "signed_out.html";
+const DEBUGGER: &str = "debugger.html";
 
 #[derive(RustEmbed)]
 #[folder = "assets/templates"]
@@ -78,6 +79,48 @@ pub struct SignedOutContext {
     pub issuer_id: String,
     /// The Client of the logout request, when known.
     pub client_id: Option<String>,
+    /// The label of the Auto-select User of the request, when the cookie names a configured User.
+    pub signed_in_as: Option<String>,
+    /// The debugger `?forget=1` URL of the Issuer, which clears the Auto-select cookie.
+    pub change_href: Option<String>,
+    pub static_base: String,
+}
+
+/// One decoded JWT on the debugger page.
+#[derive(Debug, Clone, Serialize)]
+pub struct DecodedJwt {
+    /// The header as pretty JSON.
+    pub header: String,
+    /// The payload as pretty JSON.
+    pub payload: String,
+    pub signature_valid: bool,
+    /// `valid (kid …, ES256)`, or the reason the check failed.
+    pub signature_note: String,
+    /// `exp 1700000000: expires in 3599 s`, `exp …: expired 12 s ago`, or `no exp`.
+    pub expiry_note: String,
+}
+
+/// The context of `debugger.html`. Version 1.
+#[derive(Debug, Clone, Serialize)]
+pub struct DebuggerContext {
+    pub context_version: u32,
+    pub issuer_id: String,
+    /// The debugger path of the Issuer; the decode form posts here.
+    pub action: String,
+    /// `action` + `/start`: starts the login flow with the built-in `debugger` Client.
+    pub start_href: String,
+    /// The pasted value, kept in the textarea.
+    pub token: String,
+    pub decoded: Option<DecodedJwt>,
+    /// The tokens of a finished login flow, by name (`id_token`, `access_token`, `refresh_token`).
+    pub flow: Vec<(String, DecodedJwt)>,
+    /// The token response of a finished login flow, as pretty JSON.
+    pub flow_raw: Option<String>,
+    pub error: Option<String>,
+    /// The label of the Auto-select User, when the cookie names a configured User.
+    pub signed_in_as: Option<String>,
+    /// `action` + `?forget=1`.
+    pub change_href: String,
     pub static_base: String,
 }
 
@@ -91,8 +134,9 @@ impl Templates {
     pub fn load(config: &Config) -> Result<Templates, String> {
         let mut env = Environment::new();
         env.set_auto_escape_callback(|_| AutoEscape::Html);
+        env.add_filter("href", href);
         let dir = &config.server.templates_dir;
-        for name in [LOGIN, ERROR, SIGNED_OUT] {
+        for name in [LOGIN, ERROR, SIGNED_OUT, DEBUGGER] {
             let source = if dir.is_empty() {
                 None
             } else {
@@ -138,12 +182,34 @@ impl Templates {
         self.render(SIGNED_OUT, ctx)
     }
 
+    /// Renders the debugger page.
+    pub fn render_debugger(&self, ctx: &DebuggerContext) -> Result<String, String> {
+        self.render(DEBUGGER, ctx)
+    }
+
     fn render(&self, name: &str, ctx: &impl Serialize) -> Result<String, String> {
         self.env
             .get_template(name)
             .and_then(|t| t.render(minijinja::value::Serde(ctx)))
             .map_err(|e| format!("{name}: {e:#}"))
     }
+}
+
+/// The `href` filter: HTML-escapes `&`, `<`, `>`, `"` and `'` but keeps `/`, so a link
+/// stays readable in the page source. The default escaping writes `/` as `&#x2f;`.
+fn href(value: &str) -> minijinja::Value {
+    let mut out = String::with_capacity(value.len());
+    for ch in value.chars() {
+        match ch {
+            '&' => out.push_str("&amp;"),
+            '<' => out.push_str("&lt;"),
+            '>' => out.push_str("&gt;"),
+            '"' => out.push_str("&quot;"),
+            '\'' => out.push_str("&#x27;"),
+            _ => out.push(ch),
+        }
+    }
+    minijinja::Value::from_safe_string(out)
 }
 
 fn read_template(path: &FsPath) -> Result<String, String> {
@@ -264,6 +330,59 @@ mod tests {
                 .contains("<form")
         );
         std::fs::remove_file(path).unwrap();
+    }
+
+    fn debugger_ctx() -> DebuggerContext {
+        DebuggerContext {
+            context_version: CONTEXT_VERSION,
+            issuer_id: "auth0".into(),
+            action: "/auth0/debugger".into(),
+            start_href: "/auth0/debugger/start".into(),
+            token: "a<b".into(),
+            decoded: Some(DecodedJwt {
+                header: "{\"alg\": \"RS256\"}".into(),
+                payload: "{\"name\": \"<i>x</i>\"}".into(),
+                signature_valid: true,
+                signature_note: "valid (kid k1, RS256)".into(),
+                expiry_note: "no exp".into(),
+            }),
+            flow: Vec::new(),
+            flow_raw: None,
+            error: None,
+            signed_in_as: Some("Alice <Admin>".into()),
+            change_href: "/auth0/debugger?forget=1&x=\"".into(),
+            static_base: STATIC_BASE.into(),
+        }
+    }
+
+    #[test]
+    fn debugger_page_renders_and_escapes() {
+        let templates = Templates::load(&config("")).unwrap();
+        let html = templates.render_debugger(&debugger_ctx()).unwrap();
+        assert!(html.contains("name=\"token\""));
+        assert!(html.contains(">a&lt;b</textarea>"));
+        assert!(html.contains("href=\"/auth0/debugger/start\""));
+        assert!(html.contains("&lt;i&gt;x&lt;&#x2f;i&gt;"));
+        assert!(html.contains("valid (kid k1, RS256)"));
+        assert!(html.contains("Signed in as Alice &lt;Admin&gt;"));
+        assert!(html.contains("href=\"/auth0/debugger?forget=1&amp;x=&quot;\""));
+    }
+
+    #[test]
+    fn debugger_template_can_be_overridden() {
+        let dir = std::env::temp_dir().join(format!("fauxidc-unit-dbg-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("debugger.html"), "own {{ issuer_id }}").unwrap();
+        let cfg = config(&format!(
+            "[server]\ntemplates_dir = \"{}\"\n",
+            dir.display()
+        ));
+        let html = Templates::load(&cfg)
+            .unwrap()
+            .render_debugger(&debugger_ctx())
+            .unwrap();
+        assert_eq!(html, "own auth0");
+        std::fs::remove_dir_all(dir).unwrap();
     }
 
     #[test]

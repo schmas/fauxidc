@@ -252,3 +252,18 @@ async fn discovery_lists_end_session_endpoint() {
         "http://localhost:9000/auth0/v2/logout"
     );
 }
+
+#[tokio::test]
+async fn signed_out_page_shows_signed_in_as() {
+    let (s, _, b) = send(
+        &app(STRICT),
+        get_with(
+            "/auth0/endsession",
+            &[("cookie", "fauxidc_user_auth0=alice")],
+        ),
+    )
+    .await;
+    assert_eq!(s, 200);
+    assert!(b.contains("Signed in as Alice Admin"), "{b}");
+    assert!(b.contains("/auth0/debugger?forget=1"));
+}

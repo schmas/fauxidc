@@ -12,6 +12,7 @@ pub mod clients;
 pub mod config;
 pub mod cookies;
 pub mod cors;
+pub mod debugger;
 pub mod discovery;
 pub mod endsession;
 pub mod error;

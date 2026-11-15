@@ -10,3 +10,7 @@ fieldset, details { margin: 1rem 0; }
 button { margin-top: 1rem; padding: 0.5rem 1rem; }
 .meta { color: GrayText; font-size: 0.85rem; }
 .error { padding: 0.5rem 0.75rem; border: 1px solid #c00; border-radius: 0.25rem; color: #c00; }
+main.wide { width: min(48rem, 92vw); }
+pre { overflow-x: auto; white-space: pre-wrap; word-break: break-all; padding: 0.5rem; border: 1px solid GrayText; border-radius: 0.25rem; font-size: 0.85rem; }
+.ok { color: #080; }
+.bad { color: #c00; }

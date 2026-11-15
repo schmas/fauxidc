@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Debugger</title>
+<link rel="stylesheet" href="{{ static_base }}/login.css">
+</head>
+<body>
+<main class="wide">
+<h1>Debugger</h1>
+<p class="meta">Issuer: {{ issuer_id }}{% if signed_in_as %} · Signed in as {{ signed_in_as }} · <a href="{{ change_href|href }}">change</a>{% endif %}</p>
+{% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+<form method="post" action="{{ action|href }}">
+<label>JWT
+<textarea name="token">{{ token }}</textarea>
+</label>
+<button type="submit">Decode</button>
+</form>
+<p><a href="{{ start_href|href }}">Run login flow</a></p>
+{% macro jwt(d) %}<p class="{% if d.signature_valid %}ok{% else %}bad{% endif %}">Signature: {{ d.signature_note }}</p>
+<p>Expiry: {{ d.expiry_note }}</p>
+<h3>Header</h3>
+<pre>{{ d.header }}</pre>
+<h3>Payload</h3>
+<pre>{{ d.payload }}</pre>
+{% endmacro %}
+{% if decoded %}<section>
+<h2>Decoded</h2>
+{{ jwt(decoded) }}
+</section>{% endif %}
+{% for pair in flow %}<section>
+<h2>{{ pair[0] }}</h2>
+{{ jwt(pair[1]) }}
+</section>
+{% endfor %}
+{% if flow_raw %}<section>
+<h2>Token response</h2>
+<pre>{{ flow_raw }}</pre>
+</section>{% endif %}
+</main>
+</body>
+</html>
