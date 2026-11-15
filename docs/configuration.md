@@ -42,6 +42,7 @@ For completion and key checks in an editor with Taplo or Even Better TOML, add t
 The image entrypoint is `fauxidc --bind 0.0.0.0`, in the working directory `/config`, so it reads `/config/fauxidc.toml` when you mount one.
 With no mount and no env var, it starts in Zero config mode.
 Arguments to `docker run` add to the entrypoint. A later `--bind`, `--port` or `--log-format` flag wins.
+In the image, change the bind address with a `--bind` argument: the entrypoint flag overrides `server.bind` and `FAUXIDC__SERVER__BIND`.
 The image has the example configs in `/examples/`:
 
 ```sh
@@ -51,8 +52,10 @@ docker run --rm -p 9000:9000 ghcr.io/schmas/fauxidc --config /examples/generic.t
 The release archives have the same files in `examples/`.
 
 The image `HEALTHCHECK` runs `fauxidc healthcheck`, which probes the configured port.
-To change the port, set it in `/config/fauxidc.toml` or with `FAUXIDC__SERVER__PORT`, not only with a `--port` flag. Else override the `HEALTHCHECK`.
-The healthcheck reads only `/config/fauxidc.toml` and the env vars, not the `--config` flag: a config from `--config` must keep port 9000.
+To change the port, set it in `/config/fauxidc.toml` (with `FAUXIDC__SERVER__PORT` as an option), not only with a `--port` flag.
+The healthcheck reads only `/config/fauxidc.toml` and the env vars, not the `--config` flag.
+With `--config` (for example `--config /examples/generic.toml`), `FAUXIDC__SERVER__PORT` alone does not work for the healthcheck: the healthcheck finds no Issuer and probes port 9000.
+So with `--config`, keep port 9000, or mount the file at `/config/fauxidc.toml`, or override the `HEALTHCHECK` with `fauxidc healthcheck --url`.
 
 [examples/docker-compose.yml](../examples/docker-compose.yml) runs the published image with `auth0.toml`.
 
@@ -120,6 +123,7 @@ With `server.trust_forwarded_headers = true`, fauxidc reads `X-Forwarded-Host` a
 Each Issuer signs with `issuer.<id>.signing_alg`: `RS256` (default), `ES256` or `PS256`.
 An RS256 Issuer without `issuer.<id>.key_file` shares the server key (`FAUXIDC_KEY_PEM`, else `server.key_file`, else generated).
 Any other Issuer has its own key: from its `key_file` if the file exists, else generated and saved to `key_file` when it is set.
+A generated key is saved only when generation ends: if the server stops before that, no key file is written and the next start generates a new key.
 See [ADR 0003](adr/0003-per-issuer-key-sets.md).
 
 Access tokens have the JWT header `typ` `at+jwt` (RFC 9068). ID tokens have `typ` `JWT`.

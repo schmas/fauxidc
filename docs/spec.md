@@ -215,7 +215,7 @@ Our own merge, about 200 lines. Parse each source to `toml::Value`, deep-merge, 
 
 - RS256 in M1. One key shared by all Issuers, with one `kid`.
 - Key source order: `FAUXIDC_KEY_PEM`, then `server.key_file` if the file exists, then generate.
-- Generation runs on a background task after the listener binds. JWKS, `/token` and the Test API token endpoint wait for the key. Discovery does not wait. If `key_file` is set and writable, the generated key is saved there.
+- Generation runs on a background task after the listener binds. JWKS, `/token` and the Test API token endpoint wait for the key. Discovery does not wait. If `key_file` is set and writable, the generated key is saved there, unless the server stops before generation ends. Then no key is saved, and the next start generates a new key.
 - M3: per-Issuer keys, ES256 and PS256. `POST /_mock/{issuer-id}/rotate-key` adds a new active key and keeps the old one in JWKS. `?retire=true` removes the old key. An Issuer keeps at most 10 keys; a rotation above the cap removes the oldest key. M4: a request with an `Origin` header that is not the server's own origin (scheme + `Host`) gets 403 `access_denied`, so a web page cannot rotate the keys. A request without `Origin` is not affected.
 
 ## 8. Users and claims

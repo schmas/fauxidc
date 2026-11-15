@@ -29,6 +29,7 @@ so never run fauxidc in production. See [SECURITY.md](../SECURITY.md).
 
 The response has the same JSON shape as `/token`. An unknown Issuer id gives 404.
 A bad body, an unknown User or an unknown field gives 400 `invalid_request`.
+The Issuer `custom_user` template applies only to the login page. With `sub`, the token gets only `sub` and the claims you send, so send the template claims (for example `email`) in `claims`.
 
 ```sh
 curl -s http://localhost:9000/_mock/auth0/token \

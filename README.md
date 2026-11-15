@@ -227,7 +227,7 @@ email = "{username}@example.test"
 email_verified = true
 ```
 
-`sub` is the username, trimmed and in lowercase. `{username}` is filled in every string value, nested values too.
+`sub` is the username, trimmed and in lowercase (a `sub` in Override claims wins). `{username}` is filled in every string value, nested values too.
 [docs/templates.md](docs/templates.md) has the template context (version 2) and the override rules.
 
 ## Debugger

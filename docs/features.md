@@ -37,7 +37,7 @@ M4 features:
 - Releases without a crates.io publish.
 
 The exit test runbooks are in [testing/](testing/): [M1](testing/m1-exit-test.md),
-[M2](testing/m2-exit-test.md) and [M3](testing/m3-exit-test.md).
+[M2](testing/m2-exit-test.md) and [M3](testing/m3-exit-test.md). The M4 page checks are in [testing/m4-pages.md](testing/m4-pages.md).
 
 ## Sessions
 

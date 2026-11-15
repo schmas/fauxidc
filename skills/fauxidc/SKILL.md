@@ -36,7 +36,7 @@ docker run --rm -p 9000:9000 -v "$PWD/fauxidc.toml:/config/fauxidc.toml:ro" ghcr
 ```
 
 The image has the example configs in `/examples/` (`--config /examples/generic.toml`); the release archive has them in `examples/`.
-Arguments to `docker run` add to the entrypoint `fauxidc --bind 0.0.0.0`.
+Arguments to `docker run` add to the entrypoint `fauxidc --bind 0.0.0.0`. To change the bind address in the image, pass `--bind`: the entrypoint flag overrides `server.bind` and `FAUXIDC__SERVER__BIND`.
 In a fauxidc checkout, use `cargo run -- --config <file>`.
 
 - `--config` is repeatable. Files merge in order. Without `--config`, fauxidc reads `FAUXIDC_CONFIG`, then `./fauxidc.toml`.
