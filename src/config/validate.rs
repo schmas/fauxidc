@@ -192,6 +192,21 @@ fn valid_endpoint_path(path: &str) -> Result<(), &'static str> {
     if under(path, "/.well-known") {
         return Err("must not be under /.well-known");
     }
+    if under(path, "/_mock") {
+        return Err("must not be under /_mock");
+    }
+    if path
+        .split('/')
+        .any(|segment| segment == "." || segment == "..")
+    {
+        return Err("must not contain a . or .. segment");
+    }
+    if !path
+        .chars()
+        .all(|ch| ch.is_ascii_alphanumeric() || "/-._~:@!$&'()+,;=".contains(ch))
+    {
+        return Err("must use only URL path characters (no spaces, %, \\ or non-ASCII)");
+    }
     Ok(())
 }
 
@@ -210,7 +225,8 @@ fn check_endpoint_paths(id: &str, paths: &EndpointPaths, c: &mut Collector<'_>) 
         for (eb, b) in &all[i + 1..] {
             if a.trim_end_matches('/') == b.trim_end_matches('/') {
                 c.push(
-                    &["issuer", id, "paths", eb.key()],
+                    // The parent key falls back to the source of any key below it.
+                    &["issuer", id, "paths"],
                     format!(
                         "issuer.{id}.paths: {} and {} both use {}",
                         ea.key(),
@@ -542,6 +558,13 @@ mod tests {
             "/a//b",
             "/.well-known/x",
             "/a/*",
+            "/_mock/health",
+            "/_mock",
+            "/a b",
+            "/a%20b",
+            "/a\\b",
+            "/a/../b",
+            "/a/./b",
         ] {
             assert!(
                 !errs(&format!("{A}paths = {{ token = \"{p}\" }}\n")).is_empty(),
@@ -602,6 +625,16 @@ mod tests {
                 "{base}web_origins = [\"http://localhost:3000\", \"https://a.example.com/\"]\n"
             ))
             .is_empty()
+        );
+    }
+    #[test]
+    fn duplicate_path_error_names_a_source() {
+        let e = crate::config::load_str(&format!("{A}paths = {{ token = \"/revoke\" }}\n"))
+            .unwrap_err();
+        assert!(
+            e.0.iter()
+                .any(|m| m.message.contains("both use") && m.origin != Source::Default),
+            "{e:?}"
         );
     }
 }
