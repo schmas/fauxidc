@@ -1,6 +1,6 @@
 [package]
 name = "fauxidc"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 rust-version = "1.98"
 description = "Small OAuth 2.0 / OpenID Connect mock server for local development and tests."
