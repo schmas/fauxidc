@@ -415,7 +415,7 @@ async fn verify_assertion(
     let audience = [
         ctx.endpoint_url(headers, endpoint),
         ctx.endpoint_url(headers, Endpoint::Token),
-        ctx.issuer().issuer_url.clone(),
+        ctx.issuer_url(headers),
     ];
     let mut validation = Validation::new(alg.jwt());
     validation.leeway = 0;

@@ -287,6 +287,11 @@
           "additionalProperties": true,
           "default": {}
         },
+        "issuer_from_host": {
+          "description": "Take `iss` and the discovery `issuer` from the request host, not from `issuer_url`\n(ADR 0006). `issuer_url` still gives the path and the trailing slash.",
+          "type": "boolean",
+          "default": false
+        },
         "issuer_url": {
           "description": "The issuer URL (the `iss` claim). Empty: derived from the Issuer id.",
           "type": "string",

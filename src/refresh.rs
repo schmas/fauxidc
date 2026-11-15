@@ -91,7 +91,7 @@ pub async fn refresh_grant(
         OAuthError::json("invalid_grant", d)
     };
     let keys = ctx.keys().await?;
-    let claims = verify_refresh_token(&keys, &ctx.issuer().issuer_url, presented)
+    let claims = verify_refresh_token(&keys, &ctx.issuer_url(headers), presented)
         .inspect_err(|e| tracing::info!(issuer = %ctx.id, "refresh token rejected: {e}"))?;
     if claims.client_id != client.client_id {
         return Err(invalid_grant(
@@ -141,6 +141,7 @@ pub async fn refresh_grant(
         ctx,
         &keys.active,
         &UserGrant {
+            iss: &ctx.issuer_url(headers),
             client: &client,
             subject: &claims.subject,
             scope: &scope,

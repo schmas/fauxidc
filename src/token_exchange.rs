@@ -11,6 +11,7 @@ use serde_json::{Value, json};
 use crate::client_auth::{ClientAuth, authenticate_client};
 use crate::config::{Claims, Endpoint};
 use crate::error::OAuthError;
+use crate::issuer::effective_issuer;
 use crate::refresh::REFRESH_TOKEN_TYP;
 use crate::state::{AppState, IssuerCtx};
 use crate::token_endpoint::{TokenForm, require_grant};
@@ -75,17 +76,22 @@ fn decode_unverified(token: &str) -> Result<Claims, String> {
 /// A JWT signed by any configured Issuer: `iss` (unverified) → Issuer; key by `kid` from that
 /// Issuer's set; `alg` must match; `exp` checked, leeway 0; `typ` not `rt+jwt`; `jti` not
 /// revoked. Error text is for logs.
-pub(crate) async fn verify_fauxidc_jwt(app: &AppState, token: &str) -> Result<Claims, String> {
+pub(crate) async fn verify_fauxidc_jwt(
+    app: &AppState,
+    headers: &HeaderMap,
+    token: &str,
+) -> Result<Claims, String> {
     let unverified = decode_unverified(token)?;
     let iss = unverified
         .get("iss")
         .and_then(Value::as_str)
         .ok_or_else(|| "no iss claim".to_owned())?;
-    let (issuer_id, issuer) = app
+    let (issuer_id, expected) = app
         .config
         .issuer
         .iter()
-        .find(|(_, issuer)| issuer.issuer_url == iss)
+        .map(|(id, issuer)| (id, effective_issuer(&app.config.server, issuer, headers)))
+        .find(|(_, expected)| expected == iss)
         .ok_or_else(|| format!("iss {iss} is not a fauxidc Issuer"))?;
     let header = jsonwebtoken::decode_header(token).map_err(|_| "malformed token".to_owned())?;
     if header.typ.as_deref() == Some(REFRESH_TOKEN_TYP) {
@@ -99,7 +105,7 @@ pub(crate) async fn verify_fauxidc_jwt(app: &AppState, token: &str) -> Result<Cl
     let (_, claims) = keys.verify(token, |v| {
         v.leeway = 0;
         v.validate_aud = false;
-        v.set_issuer(&[issuer.issuer_url.as_str()]);
+        v.set_issuer(&[expected.as_str()]);
         v.set_required_spec_claims(&["exp", "iss"]);
     })?;
     if let Some(jti) = claims.get("jti").and_then(Value::as_str)
@@ -115,6 +121,7 @@ pub(crate) async fn verify_fauxidc_jwt(app: &AppState, token: &str) -> Result<Cl
 /// `what` names the parameter in errors and logs.
 pub(crate) async fn token_claims(
     ctx: &IssuerCtx,
+    headers: &HeaderMap,
     token: &str,
     what: &str,
 ) -> Result<Claims, OAuthError> {
@@ -122,7 +129,7 @@ pub(crate) async fn token_claims(
         tracing::info!(issuer = %ctx.id, "{what} rejected: {e}");
         invalid_request(format!("{what} is not a JWT"))
     })?;
-    let claims = match verify_fauxidc_jwt(&ctx.app, token).await {
+    let claims = match verify_fauxidc_jwt(&ctx.app, headers, token).await {
         Ok(claims) => claims,
         Err(e) => {
             ctx.enforce(false, || format!("{what} is invalid: {e}"))
@@ -257,14 +264,14 @@ pub async fn grant(
         (None, None) => {}
     }
 
-    let subject = token_claims(ctx, subject_token, "subject_token").await?;
+    let subject = token_claims(ctx, headers, subject_token, "subject_token").await?;
     check_token_type(ctx, subject_token, subject_type, "subject_token_type")?;
     let mut claims = subject.clone();
     for name in DROPPED_CLAIMS {
         claims.remove(name);
     }
     if let (Some(actor_token), Some(actor_type)) = (actor_token, actor_type) {
-        let actor = token_claims(ctx, actor_token, "actor_token").await?;
+        let actor = token_claims(ctx, headers, actor_token, "actor_token").await?;
         check_token_type(ctx, actor_token, actor_type, "actor_token_type")?;
         check_may_act(ctx, &subject, &actor)?;
         claims.insert("act".to_owned(), act_claim(&actor, &subject));
@@ -291,7 +298,7 @@ pub async fn grant(
     let access_token = sign_access_token(
         &keys.active,
         AccessTokenInput {
-            issuer_url: &issuer.issuer_url,
+            issuer_url: &ctx.issuer_url(headers),
             client_id: &client.client_id,
             audience: &audience,
             claims,

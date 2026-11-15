@@ -216,6 +216,7 @@ async fn exchange_code(
     require_grant(ctx, &client, "authorization_code")?;
     redeem_code(
         ctx,
+        headers,
         &client,
         f.code.as_deref().unwrap_or_default(),
         f.redirect_uri.as_deref(),
@@ -229,6 +230,7 @@ async fn exchange_code(
 /// callback calls it with the built-in Client.
 pub(crate) async fn redeem_code(
     ctx: &IssuerCtx,
+    headers: &HeaderMap,
     client: &ResolvedClient,
     code: &str,
     redirect_uri: Option<&str>,
@@ -261,6 +263,7 @@ pub(crate) async fn redeem_code(
         ctx,
         &keys.active,
         &UserGrant {
+            iss: &ctx.issuer_url(headers),
             client,
             subject: &grant.subject,
             scope: &grant.scope,
@@ -288,6 +291,8 @@ pub(crate) enum RefreshMode {
 
 /// What a user token response is built from.
 pub(crate) struct UserGrant<'a> {
+    /// The `iss` of the new tokens: `IssuerCtx::issuer_url` of the request.
+    pub iss: &'a str,
     pub client: &'a ResolvedClient,
     pub subject: &'a Subject,
     pub scope: &'a [String],
@@ -358,7 +363,7 @@ pub(crate) async fn issue_user_tokens(
     let access_token = sign_access_token(
         key,
         AccessTokenInput {
-            issuer_url: &issuer.issuer_url,
+            issuer_url: g.iss,
             client_id: &client.client_id,
             audience: &audience,
             claims: access_claims,
@@ -389,7 +394,7 @@ pub(crate) async fn issue_user_tokens(
             sign_id_token(
                 key,
                 IdTokenInput {
-                    issuer_url: &issuer.issuer_url,
+                    issuer_url: g.iss,
                     client_id: &client.client_id,
                     claims: id_claims,
                     auth_time: g.auth_time,
@@ -410,7 +415,7 @@ pub(crate) async fn issue_user_tokens(
         }
     };
     if issue {
-        let claims = refresh_claims(&issuer.issuer_url, sub, lifetimes.refresh_token, g);
+        let claims = refresh_claims(g.iss, sub, lifetimes.refresh_token, g);
         body["refresh_token"] = json!(sign_refresh_token(key, &claims).await?);
     }
     Ok(body)

@@ -25,6 +25,9 @@ pub struct Cli {
     pub bind: Option<String>,
     #[arg(long, value_enum, global = true)]
     pub log_format: Option<LogFormat>,
+    /// Take `iss` from the request host on every Issuer (also `FAUXIDC_ISSUER_FROM_HOST=true`)
+    #[arg(long, global = true)]
+    pub issuer_from_host: bool,
     #[command(subcommand)]
     pub command: Option<Command>,
 }
@@ -54,6 +57,7 @@ impl Cli {
             port: self.port,
             bind: self.bind.clone(),
             log_format: self.log_format,
+            issuer_from_host: self.issuer_from_host,
         }
     }
 }
@@ -71,6 +75,7 @@ mod tests {
                 port: Some(9100),
                 bind: None,
                 log_format: Some(LogFormat::Json),
+                issuer_from_host: false,
             }
         );
     }
@@ -95,6 +100,13 @@ mod tests {
             cli.config,
             vec![PathBuf::from("a.toml"), PathBuf::from("b.toml")]
         );
+    }
+
+    #[test]
+    fn issuer_from_host_flag() {
+        let cli = Cli::parse_from(["fauxidc", "--issuer-from-host"]);
+        assert!(cli.overrides().issuer_from_host);
+        assert!(!Cli::parse_from(["fauxidc"]).overrides().issuer_from_host);
     }
 
     #[test]

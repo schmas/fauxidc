@@ -131,9 +131,13 @@ impl Default for ServerConfig {
 /// One issuer (a mounted OIDC provider).
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(default, deny_unknown_fields)]
+#[allow(clippy::struct_excessive_bools)] // independent TOML switches, not states of one machine
 pub struct IssuerConfig {
     /// The issuer URL (the `iss` claim). Empty: derived from the Issuer id.
     pub issuer_url: String,
+    /// Take `iss` and the discovery `issuer` from the request host, not from `issuer_url`
+    /// (ADR 0006). `issuer_url` still gives the path and the trailing slash.
+    pub issuer_from_host: bool,
     /// The public base URL of this Issuer. Empty: the server value.
     pub public_base_url: String,
     /// Lenient mode: skip the strict checks of the authorize and token requests.

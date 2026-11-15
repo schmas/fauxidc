@@ -133,7 +133,7 @@ async fn endsession(ctx: &IssuerCtx, request: &HeaderMap, raw: Vec<(String, Stri
                 Ok(keys) => keys,
                 Err(e) => return e.into_response(),
             };
-            match verify_id_token_hint(&keys, &ctx.issuer().issuer_url, token) {
+            match verify_id_token_hint(&keys, &ctx.issuer_url(request), token) {
                 Ok(claims) => Some(claims),
                 Err(e) => {
                     tracing::info!(issuer = %ctx.id, "{e}");

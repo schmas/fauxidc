@@ -50,7 +50,8 @@ Conformance proof: CI runs the OpenID Foundation conformance suite ("Basic OP" a
 ## 4. Issuers and routing
 
 - Each Issuer has an Issuer id (config key, `[a-z0-9_]+`) and an `issuer_url` (exact string, a trailing slash is allowed).
-- `iss` and discovery `issuer` are always the exact `issuer_url`. They never change with the request host.
+- `iss` and discovery `issuer` are the exact `issuer_url`. They never change with the request host, unless the Issuer sets `issuer_from_host = true` (ADR 0006).
+- With `issuer_from_host = true`, `iss` and discovery `issuer` are the endpoint base of the request (the same order as the endpoint URLs below), plus the trailing slash of `issuer_url`. `issuer_url` still gives the Issuer path. fauxidc checks its own tokens (introspect, revoke, userinfo, refresh, `id_token_hint`, token exchange, debugger, the `private_key_jwt` audience) against the `iss` of the current request only. A token minted through one host fails through another host.
 - The path of `issuer_url` decides which requests the Issuer gets. Routing ignores a trailing slash.
 - Startup fails if two Issuer paths are equal or one is a prefix of the other. A root-path Issuer (`/`) is then only possible when it is the only Issuer.
 - Reserved prefixes: `/_mock` and `/.well-known`. An Issuer path must not start with them.
@@ -110,6 +111,7 @@ request_log_size = 500
 
 [issuer.auth0]
 issuer_url = "http://localhost:9000/auth0/"
+issuer_from_host = false      # true: iss follows the request host (ADR 0006)
 lenient = false
 auto_login = false            # login_hint=<user id> signs in at once
 require_nonce = false
@@ -172,6 +174,8 @@ If no file, no inline config and no `FAUXIDC__*` vars are given:
 - One Issuer `default` at `http://localhost:9000/default`, in Lenient mode. The port in this URL follows `server.port`, for example `--port 9100`.
 - One public Client `test`.
 - Two Users `alice` and `bob` with `example.com` emails and full name claims.
+
+`--issuer-from-host` or `FAUXIDC_ISSUER_FROM_HOST=true` sets `issuer_from_host` on every Issuer. It keeps Zero config, as other flags do. Other values than `true` and `false` are a config error.
 
 ### 5.7 `fauxidc config`
 
@@ -295,6 +299,7 @@ CORS (M2) on `/token`, `/userinfo` and `/revoke`: allowed origins come from the 
 ### 12.1 CLI
 
 - `fauxidc` (serve), `fauxidc config [--check]`, `fauxidc healthcheck [--url]`.
+- Global flags: `--config`, `--port`, `--bind`, `--log-format`, `--issuer-from-host`.
 - `clap` derive.
 
 ### 12.2 Logging

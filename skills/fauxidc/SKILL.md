@@ -157,7 +157,7 @@ Each Issuer serves `{issuer}/debugger`, for example `http://localhost:9000/app/d
 
 ## Common pitfalls
 
-- `iss` vs `Host`: the `iss` claim is always the exact `issuer_url`, including a trailing slash.
+- `iss` vs `Host`: the `iss` claim is always the exact `issuer_url`, including a trailing slash. Exception: with `issuer_from_host = true` (or `FAUXIDC_ISSUER_FROM_HOST=true`), `iss` follows the request host, and a token is valid only through the host that minted it.
   The endpoint URLs in discovery follow the request `Host` (ADR 0001). An app in Docker that calls
   `http://fauxidc:9000/...` gets endpoints on `fauxidc:9000`, but `iss` stays `http://localhost:9000/...`.
   Make the app expect the `issuer_url`, or set `issuer_url` to the URL the app uses (for example `http://fauxidc:9000/app`).
