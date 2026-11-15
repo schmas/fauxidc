@@ -58,7 +58,7 @@ Conformance proof: CI runs the OpenID Foundation conformance suite ("Basic OP" a
 - `paths` overrides any endpoint path per Issuer (M2). Example: `token = "/oauth/token"`. Discovery publishes the override.
 - Discovery is served at `{issuer path}/.well-known/openid-configuration` and `{issuer path}/.well-known/oauth-authorization-server`. The RFC 8414 form `/.well-known/oauth-authorization-server{issuer path}` is also served. All three return the same document (M1).
 - Endpoint URLs in discovery use `server.public_base_url` if set (per-Issuer override allowed). Otherwise they use `http://` + the request `Host` header. One process can then serve a browser at `localhost:9000` and a container at `fauxidc:9000`, with one fixed `iss`.
-- `X-Forwarded-Proto` / `X-Forwarded-Host` are used only when `server.trust_forwarded_headers = true`.
+- `X-Forwarded-Proto` / `X-Forwarded-Host` are used only when `server.trust_forwarded_headers = true`. Without `X-Forwarded-Proto`, the scheme is `https` when `server.tls` is set, else `http`.
 - `logout_param_aliases` maps provider parameter names to standard ones (M2). Example: `returnTo = "post_logout_redirect_uri"`.
 
 ## 5. Configuration

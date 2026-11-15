@@ -152,6 +152,33 @@ mod with_tls {
     }
 
     #[tokio::test]
+    async fn handshakes_above_the_cap_wait() {
+        let server = start(tls_config()).await;
+        let addr = server.local_addr();
+        let mut idle = Vec::new();
+        for _ in 0..fauxidc::tls::MAX_HANDSHAKES {
+            idle.push(tokio::net::TcpStream::connect(addr).await.unwrap());
+        }
+        // Let the listener accept them all: every handshake permit is now taken.
+        tokio::time::sleep(Duration::from_millis(300)).await;
+        let real = tokio::spawn(async move {
+            let tcp = tokio::net::TcpStream::connect(addr).await.unwrap();
+            let name = ServerName::try_from("localhost").unwrap();
+            connector().connect(name, tcp).await.is_ok()
+        });
+        tokio::time::sleep(Duration::from_millis(500)).await;
+        assert!(!real.is_finished(), "the handshake above the cap must wait");
+        drop(idle.pop());
+        let done = tokio::time::timeout(Duration::from_secs(2), real)
+            .await
+            .expect("the handshake finishes after one idle connection closes")
+            .unwrap();
+        assert!(done);
+        drop(idle);
+        server.shutdown().await.unwrap();
+    }
+
+    #[tokio::test]
     async fn plain_http_client_does_not_get_a_response() {
         let server = start(tls_config()).await;
         let result = reqwest::get(format!("http://{}/_mock/health", server.local_addr())).await;

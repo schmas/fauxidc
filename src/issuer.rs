@@ -75,7 +75,13 @@ pub fn endpoint_base(server: &ServerConfig, issuer: &IssuerConfig, headers: &Hea
         .then(|| first_value(headers, "x-forwarded-host"))
         .flatten()
     {
-        let proto = first_value(headers, "x-forwarded-proto").unwrap_or("http");
+        // Without X-Forwarded-Proto, the scheme of this listener (plan Ruling 9).
+        let default = if server.tls.enabled() {
+            "https"
+        } else {
+            "http"
+        };
+        let proto = first_value(headers, "x-forwarded-proto").unwrap_or(default);
         format!("{proto}://{host}")
     } else if let Some(host) = headers.get(HOST).and_then(|v| v.to_str().ok()) {
         let scheme = if server.tls.enabled() {
@@ -130,6 +136,34 @@ mod tests {
             issuer_url: url.into(),
             ..Default::default()
         }
+    }
+
+    #[test]
+    fn forwarded_host_without_proto_uses_https_when_tls_is_on() {
+        let headers = hdrs(&[("x-forwarded-host", "id.example.test")]);
+        let mut server = ServerConfig {
+            trust_forwarded_headers: true,
+            ..Default::default()
+        };
+        let issuer = iss("http://localhost:9000/auth0");
+        assert!(
+            endpoint_base(&server, &issuer, &headers).starts_with("http://id.example.test"),
+            "without tls"
+        );
+        server.tls = crate::config::TlsConfig {
+            cert_file: "c.pem".into(),
+            key_file: "k.pem".into(),
+        };
+        assert!(
+            endpoint_base(&server, &issuer, &headers).starts_with("https://id.example.test"),
+            "with tls"
+        );
+        // An explicit X-Forwarded-Proto still wins.
+        let headers = hdrs(&[
+            ("x-forwarded-host", "id.example.test"),
+            ("x-forwarded-proto", "http"),
+        ]);
+        assert!(endpoint_base(&server, &issuer, &headers).starts_with("http://id.example.test"));
     }
 
     #[test]

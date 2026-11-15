@@ -166,6 +166,8 @@ key_file = "key.pem"    # PEM private key: PKCS#8, PKCS#1 or SEC1
 Set both keys or neither. Relative paths resolve against the working directory, as `server.key_file` does,
 not against the config file directory. fauxidc does not generate certificates.
 With TLS on, discovery publishes `https://` endpoint URLs (unless `public_base_url` is set); the `iss` stays the exact `issuer_url`.
+With `trust_forwarded_headers = true`, a request with `X-Forwarded-Host` but no `X-Forwarded-Proto` also gets `https://` when TLS is on.
+At most 256 TLS handshakes run at once; more clients wait until one ends.
 A config with `server.tls` fails with exit code 2 in a build without the feature.
 
 ```sh

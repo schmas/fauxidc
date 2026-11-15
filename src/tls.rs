@@ -11,13 +11,17 @@ use std::time::Duration;
 use rustls::pki_types::pem::PemObject;
 use rustls::pki_types::{CertificateDer, PrivateKeyDer};
 use tokio::net::{TcpListener, TcpStream};
-use tokio::sync::mpsc;
+use tokio::sync::{Semaphore, mpsc};
 use tokio::task::JoinHandle;
 use tokio_rustls::TlsAcceptor;
 use tokio_rustls::server::TlsStream;
 
 /// The longest time one TLS handshake may take.
 pub const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// The most TLS handshakes that run at once (plan Ruling 37). Above it, the accept loop waits
+/// for a running handshake to end; new clients wait in the kernel backlog.
+pub const MAX_HANDSHAKES: usize = 256;
 
 /// Finished handshakes that wait for `accept`.
 const QUEUE: usize = 64;
@@ -49,8 +53,8 @@ pub fn server_config(
 }
 
 /// Accepts TCP connections and runs each handshake on its own task (bounded by
-/// [`HANDSHAKE_TIMEOUT`]). Finished handshakes go through a channel to `accept`, so one
-/// stalled client never blocks the listener.
+/// [`HANDSHAKE_TIMEOUT`], at most [`MAX_HANDSHAKES`] at once). Finished handshakes go through
+/// a channel to `accept`, so one stalled client never blocks the listener.
 pub struct TlsListener {
     addr: std::io::Result<SocketAddr>,
     ready: mpsc::Receiver<(TlsStream<TcpStream>, SocketAddr)>,
@@ -83,7 +87,12 @@ async fn accept_loop(
     acceptor: TlsAcceptor,
     tx: mpsc::Sender<(TlsStream<TcpStream>, SocketAddr)>,
 ) {
+    let permits = Arc::new(Semaphore::new(MAX_HANDSHAKES));
     loop {
+        // The semaphore is never closed, so this only waits.
+        let Ok(permit) = permits.clone().acquire_owned().await else {
+            return;
+        };
         let (stream, peer) = match tcp.accept().await {
             Ok(accepted) => accepted,
             Err(error) => {
@@ -96,7 +105,10 @@ async fn accept_loop(
         let acceptor = acceptor.clone();
         let tx = tx.clone();
         tokio::spawn(async move {
-            match tokio::time::timeout(HANDSHAKE_TIMEOUT, acceptor.accept(stream)).await {
+            let handshake = tokio::time::timeout(HANDSHAKE_TIMEOUT, acceptor.accept(stream)).await;
+            // The handshake has ended: free its place before waiting for `accept`.
+            drop(permit);
+            match handshake {
                 Ok(Ok(tls)) => {
                     let _ = tx.send((tls, peer)).await;
                 }
