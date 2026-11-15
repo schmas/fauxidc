@@ -4,7 +4,9 @@ use std::path::PathBuf;
 
 use axum::http::Uri;
 
-use super::types::{ClientConfig, Config, EndpointPaths, SigningAlg};
+use super::types::{
+    ClientConfig, Config, CustomUserConfig, EndpointPaths, SigningAlg, USERNAME_PLACEHOLDER,
+};
 use super::{KeyPath, Source, SourceMap};
 use crate::authorize::CUSTOM_USER;
 use crate::error::{ConfigError, ConfigErrors};
@@ -147,6 +149,9 @@ fn check_issuers(config: &Config, c: &mut Collector<'_>) {
             );
         }
         check_endpoint_paths(id, &issuer.paths, c);
+        if let Some(custom) = &issuer.custom_user {
+            check_custom_user(id, custom, c);
+        }
         check_logout_aliases(id, &issuer.logout_param_aliases, c);
         if issuer.issuer_url.is_empty() {
             c.push(
@@ -183,6 +188,53 @@ fn check_issuers(config: &Config, c: &mut Collector<'_>) {
                 );
             }
         }
+    }
+}
+
+/// `custom_user.claims` (plan Ruling 40): a string anywhere in the template may hold only the
+/// `{username}` placeholder, and `sub` comes from the username.
+fn check_custom_user(id: &str, custom: &CustomUserConfig, c: &mut Collector<'_>) {
+    let at = ["issuer", id, "custom_user", "claims"];
+    if custom.claims.contains_key("sub") {
+        c.push(
+            &at,
+            format!("issuer.{id}.custom_user.claims.sub: sub comes from the username"),
+        );
+    }
+    let mut bad = Vec::new();
+    for (key, value) in &custom.claims {
+        bad_placeholders(value, key.clone(), &mut bad);
+    }
+    for path in bad {
+        c.push(
+            &at,
+            format!(
+                "issuer.{id}.custom_user.claims.{path}: only the {USERNAME_PLACEHOLDER} placeholder is allowed"
+            ),
+        );
+    }
+}
+
+/// Collects the paths (dotted keys, `[n]` for array items) of strings that hold a `{` or `}`
+/// outside a `{username}` placeholder.
+fn bad_placeholders(value: &serde_json::Value, path: String, out: &mut Vec<String>) {
+    match value {
+        serde_json::Value::String(s) => {
+            if s.replace(USERNAME_PLACEHOLDER, "").contains(['{', '}']) {
+                out.push(path);
+            }
+        }
+        serde_json::Value::Array(items) => {
+            for (i, item) in items.iter().enumerate() {
+                bad_placeholders(item, format!("{path}[{i}]"), out);
+            }
+        }
+        serde_json::Value::Object(map) => {
+            for (key, item) in map {
+                bad_placeholders(item, format!("{path}.{key}"), out);
+            }
+        }
+        _ => {}
     }
 }
 
@@ -929,5 +981,75 @@ mod tests {
         let text = "[issuer.a]\nissuer_url = \"http://localhost:9000/a\"\nsigning_alg = \"ES256\"\nkey_file = \"./k.pem\"\n\n[issuer.b]\nissuer_url = \"http://localhost:9000/b\"\nsigning_alg = \"PS256\"\nkey_file = \"k.pem\"\n";
         let e = crate::config::load_str(text).unwrap_err().to_string();
         assert!(e.contains("use the same key file"), "{e}");
+    }
+
+    #[test]
+    fn template_strings_allow_only_username() {
+        let e = errs(&format!(
+            "{A}[issuer.a.custom_user.claims]\nname = \"{{user}}\"\ngroups = [\"ok-{{username}}\", \"{{username\"]\n"
+        ));
+        assert!(
+            e.iter().any(|m| m
+                == "issuer.a.custom_user.claims.name: only the {username} placeholder is allowed"),
+            "{e:?}"
+        );
+        assert!(
+            e.iter().any(|m| m.contains("custom_user.claims.groups[1]")),
+            "{e:?}"
+        );
+        assert!(!e.iter().any(|m| m.contains("groups[0]")), "{e:?}");
+    }
+
+    #[test]
+    fn template_error_names_nested_paths() {
+        let e = errs(&format!(
+            "{A}[issuer.a.custom_user.claims]\naddress = {{ formatted = \"}}\" }}\nlist = [[1, \"{{x}}\"]]\n"
+        ));
+        assert!(
+            e.iter()
+                .any(|m| m.contains("custom_user.claims.address.formatted:")),
+            "{e:?}"
+        );
+        assert!(
+            e.iter()
+                .any(|m| m.contains("custom_user.claims.list[0][1]:")),
+            "{e:?}"
+        );
+    }
+
+    #[test]
+    fn template_must_not_set_sub() {
+        let e = errs(&format!(
+            "{A}[issuer.a.custom_user.claims]\nsub = \"{{username}}\"\n"
+        ));
+        assert!(
+            e.iter()
+                .any(|m| m == "issuer.a.custom_user.claims.sub: sub comes from the username"),
+            "{e:?}"
+        );
+    }
+
+    #[test]
+    fn template_error_names_its_source() {
+        let e = crate::config::load_str(&format!(
+            "{A}[issuer.a.custom_user.claims]\nname = \"{{user}}\"\n"
+        ))
+        .unwrap_err();
+        assert!(
+            e.0.iter()
+                .any(|m| m.message.contains("custom_user.claims.name")
+                    && m.origin != Source::Default),
+            "{e:?}"
+        );
+    }
+
+    #[test]
+    fn valid_template_passes() {
+        assert!(
+            errs(&format!(
+                "{A}[issuer.a.custom_user]\nlabel = \"Other…\"\n[issuer.a.custom_user.claims]\nemail = \"{{username}}@example.test\"\nemail_verified = true\naddress = {{ formatted = \"{{username}} st\" }}\n"
+            ))
+            .is_empty()
+        );
     }
 }

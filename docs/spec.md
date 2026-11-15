@@ -120,6 +120,13 @@ login_template = ""           # per-Issuer login page
 paths = { token = "/oauth/token", endsession = "/v2/logout" }
 logout_param_aliases = { returnTo = "post_logout_redirect_uri" }
 
+[issuer.auth0.custom_user]    # M4, optional: "Custom…" asks for one username
+label = "Other…"              # dropdown label, default "Custom…"
+[issuer.auth0.custom_user.claims]   # only {username} is allowed; no sub
+email = "{username}@example.test"
+email_verified = true
+name = "{username} Example"
+
 [issuer.auth0.lifetimes]      # seconds
 id_token = 3600
 access_token = 3600
@@ -233,6 +240,7 @@ Later wins:
 ### 8.3 Login page
 
 - A dropdown of Users (by `label`), and a "Custom…" option for a Custom user (`sub` + claims JSON).
+- With `issuer.<id>.custom_user`, "Custom…" (or its `label`) shows one `username` field instead: `sub` is the username (trimmed, lowercase), and the claims are the template with `{username}` filled in every string value.
 - A collapsed "Override claims" JSON field for Claim overrides.
 - Shows the `client_id` and the Issuer id.
 - Checkbox "Remember me and skip this page" (Auto-select). It sets a cookie per Issuer with the User id. The next `/authorize` signs in that User with no page. `prompt=login` still shows the page. Logout clears the cookie. The debugger page has a "Signed in as … · change" link that clears it.

@@ -127,6 +127,31 @@ pub struct IssuerConfig {
     /// PEM file of this Issuer's own key. Empty: an RS256 Issuer uses the server key, any
     /// other Issuer gets a generated key that is not saved.
     pub key_file: String,
+    /// The Custom user template of the login page. None: the subject + JSON fields.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub custom_user: Option<CustomUserConfig>,
+}
+
+/// The placeholder in [`CustomUserConfig::claims`] string values.
+pub const USERNAME_PLACEHOLDER: &str = "{username}";
+
+/// `[issuer.<id>.custom_user]`: the Custom user template of the login page.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct CustomUserConfig {
+    /// The dropdown label. Default "Custom…".
+    pub label: String,
+    /// Claims with `{username}` placeholders in string values.
+    pub claims: Claims,
+}
+
+impl Default for CustomUserConfig {
+    fn default() -> Self {
+        Self {
+            label: "Custom…".to_owned(),
+            claims: Claims::new(),
+        }
+    }
 }
 
 /// The endpoints of an Issuer that have a configurable path.
@@ -383,5 +408,19 @@ mod tests {
     #[test]
     fn unknown_paths_key_is_rejected() {
         assert!(toml::from_str::<Config>("[issuer.a]\npaths = { tokn = \"/t\" }").is_err());
+    }
+
+    #[test]
+    fn custom_user_defaults_its_label() {
+        let c: Config = toml::from_str(
+            "[issuer.a.custom_user]\nclaims = { email = \"{username}@example.test\" }",
+        )
+        .unwrap();
+        let cu = c.issuer["a"].custom_user.as_ref().unwrap();
+        assert_eq!(cu.label, "Custom…");
+        assert_eq!(cu.claims["email"], "{username}@example.test");
+        assert!(c.issuer["a"].custom_user.is_some());
+        let plain: Config = toml::from_str("[issuer.a]").unwrap();
+        assert!(plain.issuer["a"].custom_user.is_none());
     }
 }
