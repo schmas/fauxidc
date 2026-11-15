@@ -2,3 +2,8 @@
 changelog_update = true
 release_always = false
 git_tag_name = "v{{ version }}"
+# fauxidc is not published to crates.io. Git-only mode reads the last version from the
+# git tags, and a release makes only the tag, the CHANGELOG entry and the GitHub release.
+# release.yml then builds the binaries and the image.
+git_only = true
+publish = false

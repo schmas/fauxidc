@@ -33,3 +33,14 @@ fn readme_describes_the_reload_debounce() {
     assert!(r.contains("1 to 2 s after the save"));
     assert!(!r.contains("within about 1 s"));
 }
+
+#[test]
+fn no_crates_io_publish() {
+    let rp = read("release-plz.toml");
+    assert!(rp.contains("publish = false"));
+    assert!(rp.contains("git_only = true"));
+    assert!(!read(".github/workflows/release.yml").contains("CARGO_REGISTRY_TOKEN"));
+    for f in ["README.md", "CONTRIBUTING.md", "docs/spec.md"] {
+        assert!(!read(f).contains("cargo install fauxidc"), "{f}");
+    }
+}

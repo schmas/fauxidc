@@ -307,7 +307,7 @@ CORS (M2) on `/token`, `/userinfo` and `/revoke`: allowed origins come from the 
 
 - GitHub Releases: static musl binaries (x86_64, aarch64) and macOS binaries.
 - Image `ghcr.io/schmas/fauxidc`, multi-arch, `FROM scratch`, `WORKDIR /config`, `EXPOSE 9000`, bind `0.0.0.0`, `HEALTHCHECK CMD ["/fauxidc","healthcheck"]`. With no mount and no env, it starts Zero config.
-- `cargo install fauxidc`.
+- No crates.io publish. Install from the GitHub release binaries or the image.
 - No Homebrew tap until someone asks for it.
 
 ### 12.4 TLS
@@ -382,7 +382,7 @@ Rejected, with reason:
 - OIDF conformance suite in CI from M2.
 - `cargo-nextest` in CI.
 - GitHub Actions jobs: fmt, clippy, test (Linux + macOS), deny, MSRV, musl build with checks on binary size and startup time. A regression past the targets fails CI.
-- `release-plz` handles versions, CHANGELOG, tags and the crates.io publish, from Conventional Commits. A tag workflow builds the release binaries and the multi-arch image.
+- `release-plz` handles versions, CHANGELOG, tags and the GitHub release, from Conventional Commits, in git-only mode (`git_only = true`, `publish = false`). No crates.io publish. When it creates a release, the release workflow builds the release binaries and the multi-arch image.
 
 ### 13.6 ADRs to write
 
