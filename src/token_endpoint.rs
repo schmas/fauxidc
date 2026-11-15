@@ -1,4 +1,4 @@
-//! The token endpoint: `authorization_code` grant.
+//! The token endpoint: grant dispatch and the `authorization_code` grant.
 
 use axum::{
     Form, Json,
@@ -6,20 +6,17 @@ use axum::{
     http::{HeaderMap, HeaderValue, header},
     response::{IntoResponse, Response},
 };
-use base64::{
-    Engine as _,
-    engine::general_purpose::{STANDARD, URL_SAFE_NO_PAD},
-};
+use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use serde::Deserialize;
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 
 use crate::authorize::valid_pkce_value;
 use crate::claims::{ClaimTarget, build_claims, filter_by_scope};
-use crate::clients::{ResolvedClient, find_client};
-use crate::config::ClientConfig;
+use crate::client_auth::{ClientAuth, authenticate_client, constant_time_eq};
+use crate::clients::ResolvedClient;
 use crate::error::OAuthError;
-use crate::logging::{record_client, record_endpoint};
+use crate::logging::record_endpoint;
 use crate::state::{IssuerCtx, PkceMethod, now_secs};
 use crate::tokens::{AccessTokenInput, IdTokenInput, sign_access_token, sign_id_token};
 
@@ -32,118 +29,22 @@ pub struct TokenForm {
     pub client_id: Option<String>,
     pub client_secret: Option<String>,
     pub code_verifier: Option<String>,
+    pub refresh_token: Option<String>,
+    pub scope: Option<String>,
+    pub audience: Option<String>,
+    pub resource: Option<String>,
 }
 
-/// Compares two byte strings without stopping at the first difference.
-fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
-    let mut diff = u8::from(a.len() != b.len());
-    for (i, byte) in b.iter().enumerate() {
-        diff |= a.get(i).copied().unwrap_or(0) ^ byte;
-    }
-    diff == 0
-}
-
-/// Form-urldecodes one part of Basic credentials (RFC 6749 2.3.1).
-fn form_decode(part: &str) -> Option<String> {
-    let pairs: Vec<(String, String)> =
-        serde_urlencoded::from_str(&format!("v={}", part.replace('&', "%26"))).ok()?;
-    pairs.into_iter().next().map(|(_, v)| v)
-}
-
-/// What the `Authorization` header holds.
-enum BasicAuth {
-    /// No header, or a scheme other than Basic.
-    Absent,
-    /// A Basic header that does not decode to `id:secret`.
-    Malformed,
-    Credentials(String, String),
-}
-
-fn basic_credentials(headers: &HeaderMap) -> BasicAuth {
-    let Some((scheme, encoded)) = headers
-        .get(header::AUTHORIZATION)
-        .and_then(|v| v.to_str().ok())
-        .and_then(|v| v.split_once(' '))
-    else {
-        return BasicAuth::Absent;
-    };
-    if !scheme.eq_ignore_ascii_case("basic") {
-        return BasicAuth::Absent;
-    }
-    let parsed = (|| {
-        let bytes = STANDARD.decode(encoded.trim()).ok()?;
-        let text = String::from_utf8(bytes).ok()?;
-        let (id, secret) = text.split_once(':')?;
-        Some((form_decode(id)?, form_decode(secret)?))
-    })();
-    match parsed {
-        Some((id, secret)) => BasicAuth::Credentials(id, secret),
-        None => BasicAuth::Malformed,
-    }
-}
-
-fn invalid_client(description: &str, basic_auth: bool) -> OAuthError {
-    OAuthError::Json {
-        error: "invalid_client",
-        description: description.to_owned(),
-        basic_auth,
-    }
-}
-
-/// Finds and authenticates the client of a token request.
-fn authenticate(
+/// `unauthorized_client` (through `ctx.enforce`) unless the Client allows `grant`.
+pub(crate) fn require_grant(
     ctx: &IssuerCtx,
-    headers: &HeaderMap,
-    f: &TokenForm,
-) -> Result<ResolvedClient, OAuthError> {
-    let (client_id, presented, basic_auth) = match basic_credentials(headers) {
-        BasicAuth::Credentials(id, secret) => (id, Some(secret), true),
-        BasicAuth::Malformed => return Err(invalid_client("malformed Basic credentials", true)),
-        BasicAuth::Absent => (
-            f.client_id.clone().unwrap_or_default(),
-            f.client_secret.clone(),
-            false,
-        ),
-    };
-    if client_id.is_empty() {
-        return Err(invalid_client(
-            "client authentication is required",
-            basic_auth,
-        ));
-    }
-    record_client(&client_id);
-    let Some(client) = find_client(ctx, &client_id) else {
-        ctx.enforce(false, || format!("unknown client_id: {client_id}"))
-            .map_err(|rule| invalid_client(&rule, basic_auth))?;
-        // Lenient: treat the unknown client as a public client with this id.
-        return Ok(ResolvedClient {
-            key: client_id.clone(),
-            client_id: client_id.clone(),
-            config: ClientConfig {
-                issuer: ctx.id.clone(),
-                client_id: Some(client_id),
-                ..ClientConfig::default()
-            },
-            lenient_registered: false,
-        });
-    };
-    if let Some(expected) = client.config.client_secret.as_deref() {
-        let ok = presented
-            .as_deref()
-            .is_some_and(|p| constant_time_eq(p.as_bytes(), expected.as_bytes()));
-        ctx.enforce(ok, || "client authentication failed".to_owned())
-            .map_err(|rule| invalid_client(&rule, basic_auth))?;
-    }
-    ctx.enforce(
-        client
-            .config
-            .grant_types
-            .iter()
-            .any(|g| g == "authorization_code"),
-        || "client is not allowed the authorization_code grant".to_owned(),
-    )
-    .map_err(|rule| OAuthError::json("unauthorized_client", rule))?;
-    Ok(client)
+    client: &ResolvedClient,
+    grant: &str,
+) -> Result<(), OAuthError> {
+    ctx.enforce(client.config.grant_types.iter().any(|g| g == grant), || {
+        format!("client is not allowed the {grant} grant")
+    })
+    .map_err(|rule| OAuthError::json("unauthorized_client", rule))
 }
 
 /// Checks a PKCE verifier against the stored challenge.
@@ -199,7 +100,7 @@ pub async fn token(
             return OAuthError::json("invalid_request", description).into_response();
         }
     };
-    match exchange_code(&ctx, &headers, &f).await {
+    match dispatch(&ctx, &headers, &f).await {
         Ok(body) => (
             [
                 (header::CACHE_CONTROL, HeaderValue::from_static("no-store")),
@@ -212,18 +113,37 @@ pub async fn token(
     }
 }
 
+/// Runs the grant that `grant_type` names. The grant type is checked before client authentication.
+async fn dispatch(
+    ctx: &IssuerCtx,
+    headers: &HeaderMap,
+    f: &TokenForm,
+) -> Result<Value, OAuthError> {
+    match f.grant_type.as_deref() {
+        Some("authorization_code") => exchange_code(ctx, headers, f).await,
+        Some(other) => Err(OAuthError::json(
+            "unsupported_grant_type",
+            format!("unsupported grant_type: {other}"),
+        )),
+        None => Err(OAuthError::json(
+            "unsupported_grant_type",
+            "grant_type is missing",
+        )),
+    }
+}
+
 async fn exchange_code(
     ctx: &IssuerCtx,
     headers: &HeaderMap,
     f: &TokenForm,
 ) -> Result<Value, OAuthError> {
-    if f.grant_type.as_deref() != Some("authorization_code") {
-        return Err(OAuthError::json(
-            "unsupported_grant_type",
-            "only the authorization_code grant is supported",
-        ));
-    }
-    let client = authenticate(ctx, headers, f)?;
+    let ClientAuth { client, .. } = authenticate_client(
+        ctx,
+        headers,
+        f.client_id.as_deref(),
+        f.client_secret.as_deref(),
+    )?;
+    require_grant(ctx, &client, "authorization_code")?;
     let invalid_grant = |d: &str| {
         tracing::info!(issuer = %ctx.id, "{d}");
         OAuthError::json("invalid_grant", d)
@@ -329,18 +249,5 @@ mod tests {
         assert!(!pkce_matches(challenge, PkceMethod::S256, "other"));
         assert!(pkce_matches("abc", PkceMethod::Plain, "abc"));
         assert!(!pkce_matches("abc", PkceMethod::Plain, "abd"));
-    }
-
-    #[test]
-    fn basic_parts_are_form_decoded() {
-        assert_eq!(form_decode("a%3Ab+c").as_deref(), Some("a:b c"));
-        assert_eq!(form_decode("a&b").as_deref(), Some("a&b"));
-    }
-
-    #[test]
-    fn constant_time_eq_handles_lengths() {
-        assert!(constant_time_eq(b"abc", b"abc"));
-        assert!(!constant_time_eq(b"abc", b"abcd"));
-        assert!(!constant_time_eq(b"abcd", b"abc"));
     }
 }

@@ -271,3 +271,28 @@ async fn form_rejection_is_json_invalid_request() {
     );
     assert_eq!(json(&b)["error"], "invalid_request");
 }
+
+#[tokio::test]
+async fn secret_in_basic_and_form_is_invalid_request() {
+    let app = app(STRICT);
+    let code = login_code(&app, &[]).await;
+    let (s, _, b) = send(&app, exchange(&code, &[("client_secret", "local")])).await;
+    assert_eq!(
+        (s.as_u16(), json(&b)["error"].as_str()),
+        (400, Some("invalid_request"))
+    );
+}
+
+#[tokio::test]
+async fn unknown_grant_type_is_unsupported() {
+    let req = post_form(
+        "/auth0/token",
+        &[("grant_type", "password")],
+        &[("authorization", &basic("example-app", "local"))],
+    );
+    let (s, _, b) = send(&app(STRICT), req).await;
+    assert_eq!(
+        (s.as_u16(), json(&b)["error"].as_str()),
+        (400, Some("unsupported_grant_type"))
+    );
+}

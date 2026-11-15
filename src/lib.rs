@@ -6,6 +6,7 @@
 pub mod authorize;
 pub mod claims;
 pub mod cli;
+pub mod client_auth;
 pub mod clients;
 pub mod config;
 pub mod cookies;
