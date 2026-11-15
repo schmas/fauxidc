@@ -2,7 +2,7 @@
 
 use axum::http::Uri;
 
-use super::types::{Config, EndpointPaths, SigningAlg};
+use super::types::{ClientConfig, Config, EndpointPaths, SigningAlg};
 use super::{KeyPath, Source, SourceMap};
 use crate::authorize::CUSTOM_USER;
 use crate::error::{ConfigError, ConfigErrors};
@@ -405,6 +405,9 @@ fn check_clients(config: &Config, c: &mut Collector<'_>) {
             );
         }
     }
+    for (key, client) in &config.client {
+        check_client_keys(key, client, c);
+    }
     let clients: Vec<_> = config.client.iter().collect();
     for (i, (key_a, a)) in clients.iter().enumerate() {
         let id = effective_id(key_a, a.client_id.as_ref());
@@ -423,6 +426,34 @@ fn check_clients(config: &Config, c: &mut Collector<'_>) {
             );
         }
     }
+}
+
+/// Checks the `private_key_jwt` keys of a Client: `jwks` is a JWK set of RSA or EC P-256
+/// keys, `jwks_uri` is an absolute `http://` URL, and not both.
+fn check_client_keys(key: &str, client: &ClientConfig, c: &mut Collector<'_>) {
+    if let Some(jwks) = &client.jwks {
+        if let Err(e) = crate::client_auth::parse_jwks(jwks) {
+            c.push(&["client", key, "jwks"], format!("client.{key}.jwks: {e}"));
+        }
+        if !client.jwks_uri.is_empty() {
+            c.push(
+                &["client", key, "jwks_uri"],
+                format!("client.{key}: set jwks or jwks_uri, not both"),
+            );
+        }
+    }
+    let uri = &client.jwks_uri;
+    if uri.is_empty() {
+        return;
+    }
+    let message = match absolute_http(uri) {
+        Some(u) if u.scheme_str() == Some("http") => return,
+        Some(_) => format!(
+            "client.{key}.jwks_uri: https is not supported, use an http:// URL or an inline jwks (\"{uri}\")"
+        ),
+        None => format!("client.{key}.jwks_uri: must be an absolute http:// URL (\"{uri}\")"),
+    };
+    c.push(&["client", key, "jwks_uri"], message);
 }
 
 fn check_users(config: &Config, c: &mut Collector<'_>) {
@@ -718,6 +749,40 @@ mod tests {
         assert!(
             errs(&format!(
                 "{base}web_origins = [\"http://localhost:3000\", \"https://a.example.com/\"]\n"
+            ))
+            .is_empty()
+        );
+    }
+    #[test]
+    fn client_jwks_must_be_a_jwk_set() {
+        let e = errs(&format!(
+            "{A}[client.backend]\njwks = {{ keys = [ {{ kty = \"EC\" }} ] }}\n"
+        ));
+        assert!(e.iter().any(|m| m.contains("client.backend.jwks")), "{e:?}");
+        let e = errs(&format!("{A}[client.backend]\njwks = {{ nokeys = 1 }}\n"));
+        assert!(e.iter().any(|m| m.contains("client.backend.jwks")), "{e:?}");
+    }
+    #[test]
+    fn client_jwks_and_jwks_uri_are_exclusive() {
+        let e = errs(&format!(
+            "{A}[client.backend]\njwks = {{ keys = [] }}\njwks_uri = \"http://localhost:1/jwks\"\n"
+        ));
+        assert!(e.iter().any(|m| m.contains("client.backend")), "{e:?}");
+    }
+    #[test]
+    fn client_jwks_uri_must_be_http() {
+        let e = errs(&format!(
+            "{A}[client.backend]\njwks_uri = \"https://keys.example.com/jwks\"\n"
+        ));
+        assert!(
+            e.iter()
+                .any(|m| m.contains("client.backend.jwks_uri") && m.contains("https")),
+            "{e:?}"
+        );
+        assert!(!errs(&format!("{A}[client.backend]\njwks_uri = \"/jwks\"\n")).is_empty());
+        assert!(
+            errs(&format!(
+                "{A}[client.backend]\njwks_uri = \"http://127.0.0.1:8080/jwks\"\n"
             ))
             .is_empty()
         );

@@ -8,7 +8,8 @@ use axum::{
 };
 use serde::Deserialize;
 
-use crate::client_auth::authenticate_client;
+use crate::client_auth::{ClientCredentials, authenticate_client};
+use crate::config::Endpoint;
 use crate::error::OAuthError;
 use crate::logging::record_endpoint;
 use crate::state::IssuerCtx;
@@ -22,24 +23,36 @@ pub struct RevokeForm {
     pub token_type_hint: Option<String>,
     pub client_id: Option<String>,
     pub client_secret: Option<String>,
+    pub client_assertion_type: Option<String>,
+    pub client_assertion: Option<String>,
+}
+
+impl RevokeForm {
+    /// The client credentials of the form.
+    pub fn credentials(&self) -> ClientCredentials<'_> {
+        ClientCredentials {
+            client_id: self.client_id.as_deref(),
+            client_secret: self.client_secret.as_deref(),
+            client_assertion_type: self.client_assertion_type.as_deref(),
+            client_assertion: self.client_assertion.as_deref(),
+        }
+    }
 }
 
 /// `true` if the request carries client credentials: a Basic `Authorization` header or a form
-/// `client_id` or `client_secret`. Other schemes (for example a Bearer token that a resource
+/// `client_id`, `client_secret` or `client_assertion`. Other schemes (for example a Bearer token that a resource
 /// server sends, RFC 7662 2.1) are not client credentials.
-pub(crate) fn has_credentials(
-    headers: &HeaderMap,
-    client_id: Option<&str>,
-    client_secret: Option<&str>,
-) -> bool {
+pub(crate) fn has_credentials(headers: &HeaderMap, creds: ClientCredentials<'_>) -> bool {
     let basic = headers
         .get(header::AUTHORIZATION)
         .and_then(|v| v.to_str().ok())
         .and_then(|v| v.split_once(' '))
         .is_some_and(|(scheme, _)| scheme.eq_ignore_ascii_case("basic"));
+    let present = |v: Option<&str>| v.is_some_and(|v| !v.is_empty());
     basic
-        || client_id.is_some_and(|v| !v.is_empty())
-        || client_secret.is_some_and(|v| !v.is_empty())
+        || present(creds.client_id)
+        || present(creds.client_secret)
+        || present(creds.client_assertion)
 }
 
 /// `POST {issuer}/revoke`.
@@ -64,12 +77,16 @@ pub async fn revoke(
 }
 
 async fn respond(ctx: &IssuerCtx, headers: &HeaderMap, f: &RevokeForm) -> Result<(), OAuthError> {
-    let (client_id, client_secret) = (f.client_id.as_deref(), f.client_secret.as_deref());
+    let creds = f.credentials();
     // Lenient: no client authentication is needed (spec 6.2).
-    let client = if ctx.issuer().lenient && !has_credentials(headers, client_id, client_secret) {
+    let client = if ctx.issuer().lenient && !has_credentials(headers, creds) {
         None
     } else {
-        Some(authenticate_client(ctx, headers, client_id, client_secret)?.client)
+        Some(
+            authenticate_client(ctx, headers, Endpoint::Revoke, creds)
+                .await?
+                .client,
+        )
     };
     let token = f
         .token

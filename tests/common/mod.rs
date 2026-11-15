@@ -265,3 +265,20 @@ pub async fn test_token(app: &Router, issuer: &str, body: Value) -> Value {
     assert_eq!(s, 200, "{b}");
     json(&b)
 }
+
+/// A JWT with `header` and `claims` and an empty signature.
+pub fn unsigned_jwt(header: &Value, claims: &Value) -> String {
+    use base64::Engine as _;
+    let enc = |v: &Value| {
+        base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(serde_json::to_vec(v).unwrap())
+    };
+    format!("{}.{}.", enc(header), enc(claims))
+}
+
+/// The current time in seconds since the Unix epoch.
+pub fn now() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs()
+}

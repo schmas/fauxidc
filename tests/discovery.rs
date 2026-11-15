@@ -166,3 +166,45 @@ async fn request_and_claims_parameters_unsupported() {
     assert_eq!(j["request_uri_parameter_supported"], false);
     assert_eq!(j["claims_parameter_supported"], false);
 }
+
+#[tokio::test]
+async fn private_key_jwt_is_published() {
+    let d = json(
+        &send(&app(AUTH0), get("/auth0/.well-known/openid-configuration"))
+            .await
+            .2,
+    );
+    assert_eq!(
+        d["token_endpoint_auth_methods_supported"],
+        json!([
+            "client_secret_basic",
+            "client_secret_post",
+            "private_key_jwt",
+            "none"
+        ])
+    );
+    assert_eq!(
+        d["introspection_endpoint_auth_methods_supported"],
+        json!([
+            "client_secret_basic",
+            "client_secret_post",
+            "private_key_jwt"
+        ])
+    );
+    assert_eq!(
+        d["revocation_endpoint_auth_methods_supported"],
+        json!([
+            "client_secret_basic",
+            "client_secret_post",
+            "private_key_jwt",
+            "none"
+        ])
+    );
+    for key in [
+        "token_endpoint_auth_signing_alg_values_supported",
+        "introspection_endpoint_auth_signing_alg_values_supported",
+        "revocation_endpoint_auth_signing_alg_values_supported",
+    ] {
+        assert_eq!(d[key], json!(["RS256", "PS256", "ES256"]), "{key}");
+    }
+}

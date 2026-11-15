@@ -3,6 +3,7 @@
 use axum::{Json, extract::State, http::HeaderMap};
 use serde_json::{Value, json};
 
+use crate::client_auth::ASSERTION_ALGS;
 use crate::config::Endpoint;
 use crate::logging::record_endpoint;
 use crate::state::IssuerCtx;
@@ -19,15 +20,18 @@ pub async fn document(State(ctx): State<IssuerCtx>, headers: HeaderMap) -> Json<
         "jwks_uri": url(Endpoint::Jwks),
         "end_session_endpoint": url(Endpoint::Endsession),
         "revocation_endpoint": url(Endpoint::Revoke),
-        "revocation_endpoint_auth_methods_supported": ["client_secret_basic", "client_secret_post", "none"],
+        "revocation_endpoint_auth_methods_supported": ["client_secret_basic", "client_secret_post", "private_key_jwt", "none"],
+        "revocation_endpoint_auth_signing_alg_values_supported": ASSERTION_ALGS,
         "introspection_endpoint": url(Endpoint::Introspect),
-        "introspection_endpoint_auth_methods_supported": ["client_secret_basic", "client_secret_post"],
+        "introspection_endpoint_auth_methods_supported": ["client_secret_basic", "client_secret_post", "private_key_jwt"],
+        "introspection_endpoint_auth_signing_alg_values_supported": ASSERTION_ALGS,
         "response_types_supported": ["code"],
         "response_modes_supported": ["query"],
         "grant_types_supported": ["authorization_code", "refresh_token", "client_credentials"],
         "subject_types_supported": ["public"],
         "id_token_signing_alg_values_supported": [ctx.issuer().signing_alg.as_str()],
-        "token_endpoint_auth_methods_supported": ["client_secret_basic", "client_secret_post", "none"],
+        "token_endpoint_auth_methods_supported": ["client_secret_basic", "client_secret_post", "private_key_jwt", "none"],
+        "token_endpoint_auth_signing_alg_values_supported": ASSERTION_ALGS,
         "request_parameter_supported": false,
         "request_uri_parameter_supported": false,
         "claims_parameter_supported": false,

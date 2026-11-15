@@ -218,7 +218,11 @@ async fn discovery_lists_introspection_endpoint() {
     );
     assert_eq!(
         j["introspection_endpoint_auth_methods_supported"],
-        json!(["client_secret_basic", "client_secret_post"])
+        json!([
+            "client_secret_basic",
+            "client_secret_post",
+            "private_key_jwt"
+        ])
     );
 }
 

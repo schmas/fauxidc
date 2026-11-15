@@ -64,6 +64,8 @@ pub struct Store {
     pub used_refresh: Mutex<HashMap<String, UsedRefresh>>,
     /// Revoked token `jti`s and their `exp`, for `/introspect` and the refresh grant.
     pub revoked: Mutex<HashMap<String, u64>>,
+    /// Used client assertion `jti`s by `(client_id, jti)`, and their `exp`.
+    pub used_assertions: Mutex<HashMap<(String, String), u64>>,
 }
 
 /// When a refresh token was first used, and when it expires.
@@ -103,6 +105,22 @@ impl Store {
             return leeway > 0 && now <= u.used_at.saturating_add(leeway);
         }
         used.insert(jti.to_owned(), UsedRefresh { used_at: now, exp });
+        true
+    }
+
+    /// Records the use of a client assertion `jti`. Returns true on the first use. Drops
+    /// entries whose `exp` has passed. One lock for the check and the insert.
+    pub fn use_assertion_jti(&self, client_id: &str, jti: &str, exp: u64, now: u64) -> bool {
+        let mut used = self
+            .used_assertions
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        used.retain(|_, e| *e >= now);
+        let key = (client_id.to_owned(), jti.to_owned());
+        if used.contains_key(&key) {
+            return false;
+        }
+        used.insert(key, exp);
         true
     }
 
@@ -280,6 +298,32 @@ mod tests {
                 .count()
         });
         assert_eq!(wins, 1);
+    }
+
+    #[test]
+    fn used_assertion_parallel_one_success() {
+        let store = Store::default();
+        let wins = std::thread::scope(|s| {
+            let handles: Vec<_> = (0..8)
+                .map(|_| s.spawn(|| store.use_assertion_jti("backend", "j", 1000, 10)))
+                .collect();
+            handles
+                .into_iter()
+                .map(|h| h.join().unwrap())
+                .filter(|won| *won)
+                .count()
+        });
+        assert_eq!(wins, 1);
+    }
+
+    #[test]
+    fn used_assertion_is_per_client_and_pruned() {
+        let store = Store::default();
+        assert!(store.use_assertion_jti("a", "j", 20, 10));
+        assert!(store.use_assertion_jti("b", "j", 20, 10));
+        assert!(!store.use_assertion_jti("a", "j", 20, 10));
+        // After exp the entry is dropped (the assertion itself has expired by then).
+        assert!(store.use_assertion_jti("a", "j", 40, 21));
     }
 
     #[test]

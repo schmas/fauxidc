@@ -266,6 +266,11 @@ pub struct ClientConfig {
     pub id_claims: Claims,
     pub access_claims: Claims,
     pub lifetimes: LifetimesOverride,
+    /// Inline JWK set for `private_key_jwt` (RFC 7523): `{ keys = [ .. ] }`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub jwks: Option<Claims>,
+    /// `http://` URL of the Client JWK set for `private_key_jwt`. Empty: none.
+    pub jwks_uri: String,
 }
 
 impl Default for ClientConfig {
@@ -288,6 +293,8 @@ impl Default for ClientConfig {
             id_claims: Claims::new(),
             access_claims: Claims::new(),
             lifetimes: LifetimesOverride::default(),
+            jwks: None,
+            jwks_uri: String::new(),
         }
     }
 }

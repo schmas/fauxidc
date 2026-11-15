@@ -16,9 +16,14 @@ pub struct ResolvedClient {
 }
 
 impl ResolvedClient {
-    /// A public client has no secret.
+    /// A public client has no secret, no `jwks` and no `jwks_uri`.
     pub fn is_public(&self) -> bool {
-        self.config.client_secret.is_none()
+        self.config.client_secret.is_none() && !self.has_keys()
+    }
+
+    /// `true` if the Client has a `jwks` or a `jwks_uri` for `private_key_jwt`.
+    pub fn has_keys(&self) -> bool {
+        self.config.jwks.is_some() || !self.config.jwks_uri.is_empty()
     }
 }
 

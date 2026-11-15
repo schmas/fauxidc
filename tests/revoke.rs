@@ -227,7 +227,12 @@ async fn discovery_lists_revocation_endpoint() {
     );
     assert_eq!(
         j["revocation_endpoint_auth_methods_supported"],
-        json!(["client_secret_basic", "client_secret_post", "none"])
+        json!([
+            "client_secret_basic",
+            "client_secret_post",
+            "private_key_jwt",
+            "none"
+        ])
     );
 }
 

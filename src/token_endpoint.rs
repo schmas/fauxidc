@@ -13,8 +13,9 @@ use sha2::{Digest, Sha256};
 
 use crate::authorize::valid_pkce_value;
 use crate::claims::{ClaimTarget, build_claims, filter_by_scope};
-use crate::client_auth::{ClientAuth, authenticate_client, constant_time_eq};
+use crate::client_auth::{ClientAuth, ClientCredentials, authenticate_client, constant_time_eq};
 use crate::clients::ResolvedClient;
+use crate::config::Endpoint;
 use crate::error::OAuthError;
 use crate::keys::SigningKey;
 use crate::logging::record_endpoint;
@@ -37,6 +38,20 @@ pub struct TokenForm {
     pub scope: Option<String>,
     pub audience: Option<String>,
     pub resource: Option<String>,
+    pub client_assertion_type: Option<String>,
+    pub client_assertion: Option<String>,
+}
+
+impl TokenForm {
+    /// The client credentials of the form.
+    pub fn credentials(&self) -> ClientCredentials<'_> {
+        ClientCredentials {
+            client_id: self.client_id.as_deref(),
+            client_secret: self.client_secret.as_deref(),
+            client_assertion_type: self.client_assertion_type.as_deref(),
+            client_assertion: self.client_assertion.as_deref(),
+        }
+    }
 }
 
 /// `unauthorized_client` (through `ctx.enforce`) unless the Client allows `grant`.
@@ -151,12 +166,8 @@ async fn exchange_code(
     headers: &HeaderMap,
     f: &TokenForm,
 ) -> Result<Value, OAuthError> {
-    let ClientAuth { client, .. } = authenticate_client(
-        ctx,
-        headers,
-        f.client_id.as_deref(),
-        f.client_secret.as_deref(),
-    )?;
+    let ClientAuth { client, .. } =
+        authenticate_client(ctx, headers, Endpoint::Token, f.credentials()).await?;
     require_grant(ctx, &client, "authorization_code")?;
     let invalid_grant = |d: &str| {
         tracing::info!(issuer = %ctx.id, "{d}");

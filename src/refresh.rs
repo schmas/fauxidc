@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::client_auth::{ClientAuth, authenticate_client};
+use crate::config::Endpoint;
 use crate::error::OAuthError;
 use crate::keys::{KeySet, SigningKey};
 use crate::state::{IssuerCtx, Subject, now_secs};
@@ -77,12 +78,8 @@ pub async fn refresh_grant(
     headers: &HeaderMap,
     f: &TokenForm,
 ) -> Result<Value, OAuthError> {
-    let ClientAuth { client, .. } = authenticate_client(
-        ctx,
-        headers,
-        f.client_id.as_deref(),
-        f.client_secret.as_deref(),
-    )?;
+    let ClientAuth { client, .. } =
+        authenticate_client(ctx, headers, Endpoint::Token, f.credentials()).await?;
     require_grant(ctx, &client, "refresh_token")?;
     let presented = f
         .refresh_token

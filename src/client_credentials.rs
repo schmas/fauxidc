@@ -5,6 +5,7 @@ use serde_json::{Value, json};
 
 use crate::claims::PROTOCOL_CLAIMS;
 use crate::client_auth::{ClientAuth, authenticate_client};
+use crate::config::Endpoint;
 use crate::error::OAuthError;
 use crate::state::IssuerCtx;
 use crate::token_endpoint::{TokenForm, require_grant};
@@ -17,12 +18,8 @@ pub async fn grant(
     headers: &HeaderMap,
     f: &TokenForm,
 ) -> Result<Value, OAuthError> {
-    let ClientAuth { client, .. } = authenticate_client(
-        ctx,
-        headers,
-        f.client_id.as_deref(),
-        f.client_secret.as_deref(),
-    )?;
+    let ClientAuth { client, .. } =
+        authenticate_client(ctx, headers, Endpoint::Token, f.credentials()).await?;
     ctx.enforce(!client.is_public(), || {
         "client_credentials needs a confidential client".to_owned()
     })

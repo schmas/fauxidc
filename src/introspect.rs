@@ -9,9 +9,9 @@ use axum::{
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use crate::client_auth::{AuthMethod, authenticate_client};
+use crate::client_auth::{AuthMethod, ClientCredentials, authenticate_client};
 use crate::clients::find_client;
-use crate::config::ClientConfig;
+use crate::config::{ClientConfig, Endpoint};
 use crate::error::OAuthError;
 use crate::logging::record_endpoint;
 use crate::refresh::RefreshClaims;
@@ -27,6 +27,20 @@ pub struct IntrospectForm {
     pub token_type_hint: Option<String>,
     pub client_id: Option<String>,
     pub client_secret: Option<String>,
+    pub client_assertion_type: Option<String>,
+    pub client_assertion: Option<String>,
+}
+
+impl IntrospectForm {
+    /// The client credentials of the form.
+    pub fn credentials(&self) -> ClientCredentials<'_> {
+        ClientCredentials {
+            client_id: self.client_id.as_deref(),
+            client_secret: self.client_secret.as_deref(),
+            client_assertion_type: self.client_assertion_type.as_deref(),
+            client_assertion: self.client_assertion.as_deref(),
+        }
+    }
 }
 
 /// `POST {issuer}/introspect`.
@@ -55,10 +69,10 @@ async fn respond(
     headers: &HeaderMap,
     f: &IntrospectForm,
 ) -> Result<Value, OAuthError> {
-    let (client_id, client_secret) = (f.client_id.as_deref(), f.client_secret.as_deref());
+    let creds = f.credentials();
     // Lenient: no client authentication is needed (spec 6.2).
-    if !ctx.issuer().lenient || has_credentials(headers, client_id, client_secret) {
-        let auth = authenticate_client(ctx, headers, client_id, client_secret)?;
+    if !ctx.issuer().lenient || has_credentials(headers, creds) {
+        let auth = authenticate_client(ctx, headers, Endpoint::Introspect, creds).await?;
         ctx.enforce(auth.method != AuthMethod::None, || {
             "introspection needs a confidential client".to_owned()
         })
