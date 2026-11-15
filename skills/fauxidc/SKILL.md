@@ -23,7 +23,13 @@ tar -xzf fauxidc-*-aarch64-apple-darwin.tar.gz
 ./fauxidc-*-aarch64-apple-darwin/fauxidc --config fauxidc.toml
 ```
 
-From source with Cargo (Rust 1.98 or newer; no crates.io package). Add `--tag v0.1.0` (or another release tag) to pin a version once releases exist:
+From crates.io with Cargo (Rust 1.98 or newer), once releases exist:
+
+```sh
+cargo install fauxidc --locked
+```
+
+From source with Cargo. Add `--tag v0.1.0` (or another release tag) to pin a version:
 
 ```sh
 cargo install --git https://github.com/schmas/fauxidc --locked

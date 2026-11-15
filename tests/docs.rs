@@ -35,13 +35,33 @@ fn readme_describes_the_reload_debounce() {
 }
 
 #[test]
-fn no_crates_io_publish() {
+fn crates_io_publish_is_set_up() {
+    for f in ["README.md", "skills/fauxidc/SKILL.md"] {
+        let t = read(f);
+        assert!(t.contains("cargo install fauxidc --locked"), "{f}");
+        assert!(
+            t.contains("cargo install --git https://github.com/schmas/fauxidc --locked"),
+            "{f}"
+        );
+    }
+    assert!(!read("Cargo.toml").contains("publish = false"));
     let rp = read("release-plz.toml");
-    assert!(rp.contains("publish = false"));
-    assert!(rp.contains("git_only = true"));
-    assert!(!read(".github/workflows/release.yml").contains("CARGO_REGISTRY_TOKEN"));
-    for f in ["README.md", "CONTRIBUTING.md", "docs/spec.md"] {
-        assert!(!read(f).contains("cargo install fauxidc"), "{f}");
+    assert!(!rp.contains("publish = false"));
+    assert!(!rp.contains("git_only = true"));
+    assert!(
+        read(".github/workflows/release.yml")
+            .contains("CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}")
+    );
+    for f in [
+        "README.md",
+        "AGENTS.md",
+        "docs/features.md",
+        "docs/spec.md",
+        "skills/fauxidc/SKILL.md",
+    ] {
+        let t = read(f).to_lowercase();
+        assert!(!t.contains("no crates.io"), "{f}");
+        assert!(!t.contains("without a crates.io"), "{f}");
     }
 }
 

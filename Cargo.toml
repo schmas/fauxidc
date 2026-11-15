@@ -9,8 +9,6 @@ repository = "https://github.com/schmas/fauxidc"
 readme = "README.md"
 keywords = ["oidc", "oauth2", "mock", "testing", "identity"]
 categories = ["development-tools::testing", "authentication"]
-# Not published to crates.io: releases are GitHub release binaries and the ghcr.io image.
-publish = false
 exclude = [
     "/.github",
     "/.dockerignore",

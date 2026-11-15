@@ -36,13 +36,19 @@ fauxidc
 
 If macOS blocks a binary that a browser downloaded, run `xattr -d com.apple.quarantine /usr/local/bin/fauxidc`.
 
-Or build it from source with Cargo (needs Rust 1.98 or newer; there is no crates.io package):
+Or install it from crates.io with Cargo (needs Rust 1.98 or newer), after the first release:
+
+```sh
+cargo install fauxidc --locked
+```
+
+Or build it from source, from the Git repository:
 
 ```sh
 cargo install --git https://github.com/schmas/fauxidc --locked
 ```
 
-After the first release, add `--tag v0.1.0` (or another release tag) to pin a version.
+Add `--tag v0.1.0` (or another release tag) to the `--git` command to pin a version.
 The archive also has the `examples/` directory. From a checkout, use `cargo run --` in place of `fauxidc`.
 
 With no config, fauxidc starts in Zero config mode: one Issuer `default` in Lenient mode,
@@ -276,7 +282,6 @@ Current limits:
 
 - `jwks_uri` must be an `http://` URL.
 - The `tls` feature uses the PEM files you give. fauxidc does not generate certificates.
-- No crates.io package. Install the binary from the GitHub releases or use the image.
 
 ## License
 

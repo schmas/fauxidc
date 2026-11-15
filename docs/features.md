@@ -34,7 +34,7 @@ M4 features:
 - A new design for the built-in pages, and the Custom user template (`custom_user`).
 - Example configs in the style of a generic provider, Keycloak, Entra and Cognito.
 - `fauxidc config --schema` and the committed JSON Schema.
-- Releases without a crates.io publish.
+- Releases publish the crate to crates.io (`cargo install fauxidc --locked`).
 
 The exit test runbooks are in [testing/](testing/): [M1](testing/m1-exit-test.md),
 [M2](testing/m2-exit-test.md) and [M3](testing/m3-exit-test.md). The M4 page checks are in [testing/m4-pages.md](testing/m4-pages.md).
