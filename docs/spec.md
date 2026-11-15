@@ -44,6 +44,7 @@ See [`GLOSSARY.md`](../GLOSSARY.md). Main terms: Issuer, Issuer URL, Issuer id, 
 | RFC 7662 introspection, RFC 7009 revocation | M2 |
 | RFC 8693 token exchange | M3 |
 | RFC 7523 `private_key_jwt` client auth | M3 |
+| RFC 7523 section 2.1 jwt-bearer grant (On-Behalf-Of) | after M4 |
 
 Conformance proof: CI runs the OpenID Foundation conformance suite ("Basic OP" and "Config OP" plans) from M2. The README links the results.
 
@@ -262,6 +263,7 @@ Later wins:
 - Token exchange (M3): if the subject token is a JWT from any fauxidc Issuer, the mock verifies the signature and `exp`. In Strict mode, any other token is rejected. In Lenient mode it is accepted unverified. The result has `sub` and User claims from the subject token, and `aud` from `audience` / `resource`. An `act` claim is added only when an `actor_token` is sent.
 - Token exchange token types (M4): `subject_token_type` and `actor_token_type` must fit the token. `...:access_token` needs the header `typ` `at+jwt`, `...:id_token` needs another `typ`, `...:jwt` accepts any. Strict mode rejects a mismatch; Lenient mode logs a warning.
 - Token exchange `may_act` (M4): when the subject token has `may_act.sub` and an `actor_token` is sent, the actor `sub` must equal it (RFC 8693 4.4). Strict mode rejects a mismatch; Lenient mode logs a warning.
+- jwt-bearer grant (after M4, RFC 7523 section 2.1): the Client must list `urn:ietf:params:oauth:grant-type:jwt-bearer` in `grant_types`. It is not a default grant. The `assertion` is checked like a token exchange subject token: Strict mode verifies a JWT of any fauxidc Issuer (signature, `exp`, revocation, no refresh token); Lenient mode uses a JWT that fails the check unverified, with a warning. A rejected assertion gives `invalid_grant`. `scope` is the `scope` parameter, else the assertion `scope` claim; without both, `invalid_scope` in both modes. The result is an access token only, with `sub` and the User claims of the assertion and `aud` as for the other grants. No id_token, no refresh token and no `act` claim.
 - Default lifetimes: id_token and access token 1 h, refresh token 24 h, code 60 s. They can be set per Issuer and per Client.
 
 ## 10. Endpoints
@@ -273,7 +275,7 @@ Paths are below the Issuer path unless they start with `/_mock`.
 | `/.well-known/openid-configuration`, `/.well-known/oauth-authorization-server` (both forms) | Discovery. CORS `*`. | M1 |
 | `/jwks` | JWKS. CORS `*`. | M1 |
 | `/authorize` | Code flow, PKCE, `state`, `nonce`, `login_hint`, Auto-select. | M1 |
-| `/token` | `authorization_code` (M1). `client_credentials`, `refresh_token` (M2). Token exchange (M3). | M1 to M3 |
+| `/token` | `authorization_code` (M1). `client_credentials`, `refresh_token` (M2). Token exchange (M3). jwt-bearer (after M4). | M1 to M3, after M4 |
 | `/userinfo` | Bearer access token. Scope-filtered claims. | M1 |
 | `/endsession` | `id_token_hint` optional. In Strict mode, `post_logout_redirect_uri` must match the Client, which is found by `client_id` or `id_token_hint`. With no redirect: "signed out" page. `state` passed through. Clears the Session and the Auto-select cookie. Aliases apply. | M2 |
 | `/introspect` | Requires an authenticated confidential Client of the same Issuer. | M2 |

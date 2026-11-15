@@ -437,11 +437,12 @@ fn valid_origin(origin: &str) -> bool {
     })
 }
 
-const GRANT_TYPES: [&str; 4] = [
+const GRANT_TYPES: [&str; 5] = [
     "authorization_code",
     "refresh_token",
     "client_credentials",
     crate::token_exchange::GRANT_TOKEN_EXCHANGE,
+    crate::jwt_bearer::GRANT_JWT_BEARER,
 ];
 
 /// An Issuer id that would shadow `/_mock/static/{*path}` in the Test API route.

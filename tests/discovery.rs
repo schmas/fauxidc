@@ -151,7 +151,8 @@ async fn m2_grants_and_offline_access_are_published() {
             "authorization_code",
             "refresh_token",
             "client_credentials",
-            "urn:ietf:params:oauth:grant-type:token-exchange"
+            "urn:ietf:params:oauth:grant-type:token-exchange",
+            "urn:ietf:params:oauth:grant-type:jwt-bearer"
         ])
     );
     assert!(
