@@ -25,7 +25,7 @@ The CI job `css` fails when the committed file differs from a fresh build.
 
 ## Rules
 
-- Every change goes through a pull request. `main` blocks direct pushes, also for maintainers. A PR merges when the CI jobs and the Conformance check pass.
+- Every change goes through a pull request. `main` blocks direct pushes, also for maintainers. A PR merges when the CI jobs and the Conformance check pass. [docs/releasing.md](docs/releasing.md) shows how a merge becomes a release.
 - Use [Conventional Commits](https://www.conventionalcommits.org/). Releases and the CHANGELOG are generated from them.
 - Write tests first. Unit tests go next to the code. Integration tests go in `tests/`.
 - A new dependency needs a reason in the PR. See the "Tech Stack" section in [AGENTS.md](AGENTS.md) and [docs/spec.md](docs/spec.md) section 13.2.
