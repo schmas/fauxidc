@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0](https://github.com/schmas/fauxidc/compare/v0.2.0...v0.3.0) - 2026-11-15
+
+### Added
+
+- fixed server clock for reproducible token times ([#20](https://github.com/schmas/fauxidc/pull/20))
+- support response_mode=form_post at /authorize ([#21](https://github.com/schmas/fauxidc/pull/21))
+
+### Other
+
+- add a Testcontainers guide for JVM projects ([#19](https://github.com/schmas/fauxidc/pull/19))
+
 ## [0.2.0](https://github.com/schmas/fauxidc/compare/v0.1.2...v0.2.0) - 2026-11-15
 
 ### Added
