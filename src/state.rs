@@ -59,6 +59,15 @@ pub struct Store {
     pub lenient_clients: Mutex<HashMap<(String, String), ClientConfig>>,
     /// Issued authorization codes that are not yet used.
     pub codes: Mutex<HashMap<String, CodeGrant>>,
+    /// Used refresh token `jti`s of rotating Clients.
+    pub used_refresh: Mutex<HashMap<String, UsedRefresh>>,
+}
+
+/// When a refresh token was first used, and when it expires.
+#[derive(Debug, Clone, Copy)]
+pub struct UsedRefresh {
+    pub used_at: u64,
+    pub exp: u64,
 }
 
 impl Store {
@@ -76,6 +85,31 @@ impl Store {
         codes.retain(|_, grant| grant.expires_at > now);
         codes.insert(code.clone(), g);
         Ok(code)
+    }
+
+    /// Records the first use of `jti`. Returns true on the first use, or on a reuse when
+    /// `leeway > 0` and `now <= used_at + leeway`. Drops entries whose `exp` has passed.
+    /// One lock for the check and the insert.
+    pub fn use_refresh_jti(&self, jti: &str, exp: u64, now: u64, leeway: u64) -> bool {
+        let mut used = self
+            .used_refresh
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        used.retain(|_, u| u.exp >= now);
+        if let Some(u) = used.get(jti) {
+            return leeway > 0 && now <= u.used_at.saturating_add(leeway);
+        }
+        used.insert(jti.to_owned(), UsedRefresh { used_at: now, exp });
+        true
+    }
+
+    /// When `jti` was first used, if it was used and has not expired from the store.
+    pub fn refresh_used_at(&self, jti: &str) -> Option<u64> {
+        self.used_refresh
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .get(jti)
+            .map(|u| u.used_at)
     }
 
     /// Removes and returns the grant for `code`. A code works once.
@@ -187,5 +221,33 @@ mod tests {
         let code = store.insert_code(grant).unwrap();
         assert!(store.take_code(&code).is_some());
         assert!(store.take_code(&code).is_none());
+    }
+
+    #[test]
+    fn refresh_jti_is_single_use_at_leeway_zero() {
+        let store = Store::default();
+        assert!(store.use_refresh_jti("j", 1000, 10, 0));
+        assert_eq!(store.refresh_used_at("j"), Some(10));
+        assert!(!store.use_refresh_jti("j", 1000, 10, 0));
+        assert!(!store.use_refresh_jti("j", 1000, 11, 0));
+    }
+
+    #[test]
+    fn refresh_jti_reuse_within_leeway() {
+        let store = Store::default();
+        assert!(store.use_refresh_jti("j", 1000, 10, 5));
+        assert!(store.use_refresh_jti("j", 1000, 15, 5));
+        assert!(!store.use_refresh_jti("j", 1000, 16, 5));
+        // The first use time stays; a reuse does not extend the window.
+        assert_eq!(store.refresh_used_at("j"), Some(10));
+    }
+
+    #[test]
+    fn expired_refresh_jti_is_pruned() {
+        let store = Store::default();
+        assert!(store.use_refresh_jti("old", 20, 10, 0));
+        assert!(store.use_refresh_jti("new", 1000, 30, 0));
+        assert_eq!(store.refresh_used_at("old"), None);
+        assert_eq!(store.refresh_used_at("new"), Some(30));
     }
 }

@@ -123,6 +123,7 @@ async fn dispatch(
 ) -> Result<Value, OAuthError> {
     match f.grant_type.as_deref() {
         Some("authorization_code") => exchange_code(ctx, headers, f).await,
+        Some("refresh_token") => crate::refresh::refresh_grant(ctx, headers, f).await,
         Some(other) => Err(OAuthError::json(
             "unsupported_grant_type",
             format!("unsupported grant_type: {other}"),
@@ -193,10 +194,6 @@ async fn exchange_code(
 }
 
 /// Whether and how a token response gets a refresh token.
-#[expect(
-    dead_code,
-    reason = "Issue and Echo are used by the refresh_token grant"
-)]
 pub(crate) enum RefreshMode {
     /// Issue one when `refresh_allowed`.
     ByPolicy,

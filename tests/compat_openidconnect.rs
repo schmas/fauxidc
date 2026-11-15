@@ -89,6 +89,7 @@ async fn code_flow_with_pkce_and_nonce() {
         )
         .add_scope(Scope::new("email".into()))
         .add_scope(Scope::new("profile".into()))
+        .add_scope(Scope::new("offline_access".into()))
         .add_extra_param("login_hint", "alice")
         .set_pkce_challenge(challenge)
         .url();
@@ -135,6 +136,23 @@ async fn code_flow_with_pkce_and_nonce() {
         .unwrap();
     assert_eq!(ui.subject().as_str(), "auth0|alice");
     assert_eq!(ui.email().unwrap().as_str(), "alice@example.com");
+
+    // 9. Refresh: a new access token and a new (rotated) refresh token.
+    let refresh_token = tokens.refresh_token().unwrap().clone();
+    let refreshed = client
+        .exchange_refresh_token(&refresh_token)
+        .unwrap()
+        .request_async(&http_client)
+        .await
+        .unwrap();
+    assert_ne!(
+        refreshed.access_token().secret(),
+        tokens.access_token().secret()
+    );
+    assert_ne!(
+        refreshed.refresh_token().unwrap().secret(),
+        refresh_token.secret()
+    );
 
     srv.shutdown().await.unwrap();
 }

@@ -1,11 +1,15 @@
 //! The refresh token format (`typ: rt+jwt`) and the `refresh_token` grant.
 
+use axum::http::HeaderMap;
 use jsonwebtoken::{Algorithm, Header, Validation};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
+use crate::client_auth::{ClientAuth, authenticate_client};
 use crate::error::OAuthError;
 use crate::keys::SigningKey;
-use crate::state::Subject;
+use crate::state::{IssuerCtx, Subject, now_secs};
+use crate::token_endpoint::{RefreshMode, TokenForm, UserGrant, issue_user_tokens, require_grant};
 
 /// The JWT header `typ` of a refresh token.
 pub const REFRESH_TOKEN_TYP: &str = "rt+jwt";
@@ -63,6 +67,93 @@ pub fn verify_refresh_token(
     jsonwebtoken::decode::<RefreshClaims>(token, &key.decoding, &validation)
         .map(|data| data.claims)
         .map_err(|e| invalid(&e.to_string()))
+}
+
+/// The `refresh_token` grant: verifies the refresh token, applies rotation and the reuse
+/// check, and issues new tokens with claims merged again from the current config (spec 9).
+pub async fn refresh_grant(
+    ctx: &IssuerCtx,
+    headers: &HeaderMap,
+    f: &TokenForm,
+) -> Result<Value, OAuthError> {
+    let ClientAuth { client, .. } = authenticate_client(
+        ctx,
+        headers,
+        f.client_id.as_deref(),
+        f.client_secret.as_deref(),
+    )?;
+    require_grant(ctx, &client, "refresh_token")?;
+    let presented = f
+        .refresh_token
+        .as_deref()
+        .filter(|t| !t.is_empty())
+        .ok_or_else(|| OAuthError::json("invalid_request", "refresh_token is missing"))?;
+    let invalid_grant = |d: String| {
+        tracing::info!(issuer = %ctx.id, "{d}");
+        OAuthError::json("invalid_grant", d)
+    };
+    let key = ctx
+        .app
+        .keys
+        .get()
+        .await
+        .map_err(|_| OAuthError::Unavailable)?;
+    let claims = verify_refresh_token(&key, &ctx.issuer().issuer_url, presented)
+        .inspect_err(|e| tracing::info!(issuer = %ctx.id, "refresh token rejected: {e}"))?;
+    if claims.client_id != client.client_id {
+        return Err(invalid_grant(
+            "refresh token was not issued to this client".to_owned(),
+        ));
+    }
+    let original: Vec<String> = claims.scope.split_whitespace().map(str::to_owned).collect();
+    let scope = match f.scope.as_deref().filter(|s| !s.trim().is_empty()) {
+        Some(requested) => {
+            let requested: Vec<String> = requested.split_whitespace().map(str::to_owned).collect();
+            let wider: Vec<&str> = requested
+                .iter()
+                .filter(|s| !original.contains(s))
+                .map(String::as_str)
+                .collect();
+            ctx.enforce(wider.is_empty(), || {
+                format!("scope exceeds the original grant: {}", wider.join(" "))
+            })
+            .map_err(|rule| OAuthError::json("invalid_scope", rule))?;
+            requested
+        }
+        None => original,
+    };
+    if let Subject::User { id, .. } = &claims.subject
+        && !ctx.app.config.user.contains_key(id)
+    {
+        return Err(invalid_grant(format!("user no longer exists: {id}")));
+    }
+    let refresh = if client.config.rotate_refresh_tokens {
+        let fresh = ctx.app.store.use_refresh_jti(
+            &claims.jti,
+            claims.exp,
+            now_secs(),
+            client.config.refresh_reuse_leeway_secs,
+        );
+        if !fresh {
+            return Err(invalid_grant("refresh token was already used".to_owned()));
+        }
+        RefreshMode::Issue
+    } else {
+        RefreshMode::Echo(presented.to_owned())
+    };
+    issue_user_tokens(
+        ctx,
+        &key,
+        &UserGrant {
+            client: &client,
+            subject: &claims.subject,
+            scope: &scope,
+            audience: claims.token_aud.as_deref(),
+            auth_time: claims.auth_time,
+            nonce: None,
+            refresh,
+        },
+    )
 }
 
 #[cfg(test)]
