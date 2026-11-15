@@ -219,6 +219,19 @@ mod tests {
     }
 
     #[test]
+    fn paths_from_env() {
+        let loaded = load(&inputs(&[
+            (
+                "FAUXIDC_CONFIG_INLINE",
+                "[issuer.auth0]\nissuer_url = \"http://localhost:9000/auth0/\"",
+            ),
+            ("FAUXIDC__ISSUER__AUTH0__PATHS__TOKEN", "/oauth/token"),
+        ]))
+        .unwrap();
+        assert_eq!(loaded.config.issuer["auth0"].paths.token, "/oauth/token");
+    }
+
+    #[test]
     fn precedence_file_inline_env_flag() {
         let f =
             write_tmp("[server]\nport = 1\n[issuer.a]\nissuer_url = \"http://localhost:9000/a\"");

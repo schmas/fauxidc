@@ -2,7 +2,7 @@
 
 use axum::http::Uri;
 
-use super::types::Config;
+use super::types::{Config, EndpointPaths};
 use super::{KeyPath, Source, SourceMap};
 use crate::authorize::CUSTOM_USER;
 use crate::error::{ConfigError, ConfigErrors};
@@ -133,6 +133,8 @@ fn check_issuers(config: &Config, c: &mut Collector<'_>) {
                 ),
             );
         }
+        check_endpoint_paths(id, &issuer.paths, c);
+        check_logout_aliases(id, &issuer.logout_param_aliases, c);
         if issuer.issuer_url.is_empty() {
             c.push(
                 &["issuer", id, "issuer_url"],
@@ -171,6 +173,109 @@ fn check_issuers(config: &Config, c: &mut Collector<'_>) {
     }
 }
 
+fn valid_endpoint_path(path: &str) -> Result<(), &'static str> {
+    if !path.starts_with('/') {
+        return Err("must start with /");
+    }
+    if path == "/" {
+        return Err("must not be /");
+    }
+    if path.contains(['?', '#']) {
+        return Err("must not contain ? or #");
+    }
+    if path.contains(['{', '}', '*']) {
+        return Err("must not contain {, } or *");
+    }
+    if path.contains("//") {
+        return Err("must not contain an empty segment");
+    }
+    if under(path, "/.well-known") {
+        return Err("must not be under /.well-known");
+    }
+    Ok(())
+}
+
+fn check_endpoint_paths(id: &str, paths: &EndpointPaths, c: &mut Collector<'_>) {
+    let all = paths.all();
+    for (e, path) in all {
+        let key = e.key();
+        if let Err(reason) = valid_endpoint_path(path) {
+            c.push(
+                &["issuer", id, "paths", key],
+                format!("issuer.{id}.paths.{key}: \"{path}\" {reason}"),
+            );
+        }
+    }
+    for (i, (ea, a)) in all.iter().enumerate() {
+        for (eb, b) in &all[i + 1..] {
+            if a.trim_end_matches('/') == b.trim_end_matches('/') {
+                c.push(
+                    &["issuer", id, "paths", eb.key()],
+                    format!(
+                        "issuer.{id}.paths: {} and {} both use {}",
+                        ea.key(),
+                        eb.key(),
+                        a.trim_end_matches('/')
+                    ),
+                );
+            }
+        }
+    }
+}
+
+/// Parameters of RP-Initiated Logout 1.0 section 2 that an alias may map to.
+const LOGOUT_PARAMS: [&str; 6] = [
+    "id_token_hint",
+    "logout_hint",
+    "client_id",
+    "post_logout_redirect_uri",
+    "state",
+    "ui_locales",
+];
+
+fn check_logout_aliases(
+    id: &str,
+    aliases: &std::collections::BTreeMap<String, String>,
+    c: &mut Collector<'_>,
+) {
+    for (alias, target) in aliases {
+        let at = ["issuer", id, "logout_param_aliases"];
+        if alias.is_empty() {
+            c.push(
+                &at,
+                format!("issuer.{id}.logout_param_aliases: empty alias name"),
+            );
+        } else if alias == target {
+            c.push(
+                &at,
+                format!("issuer.{id}.logout_param_aliases.{alias}: alias equals its target"),
+            );
+        }
+        if !LOGOUT_PARAMS.contains(&target.as_str()) {
+            c.push(
+                &at,
+                format!(
+                    "issuer.{id}.logout_param_aliases.{alias}: \"{target}\" is not a logout parameter (use one of {})",
+                    LOGOUT_PARAMS.join(", ")
+                ),
+            );
+        }
+    }
+}
+
+/// `true` for `http(s)://host[:port]` with an empty path (one trailing `/` allowed).
+fn valid_origin(origin: &str) -> bool {
+    let bare = origin.strip_suffix('/').unwrap_or(origin);
+    absolute_http(bare).is_some_and(|u| {
+        u.query().is_none()
+            && bare
+                .split_once("://")
+                .is_some_and(|(_, rest)| !rest.contains('/'))
+    })
+}
+
+const GRANT_TYPES: [&str; 3] = ["authorization_code", "refresh_token", "client_credentials"];
+
 const RESERVED_PREFIXES: [&str; 2] = ["/_mock", "/.well-known"];
 
 fn effective_id<'a>(key: &'a str, client_id: Option<&'a String>) -> &'a str {
@@ -193,6 +298,40 @@ fn check_clients(config: &Config, c: &mut Collector<'_>) {
             c.push(
                 &["client", key, "redirect_uris"],
                 format!("client.{key}.redirect_uris: invalid \"{uri}\""),
+            );
+        }
+        for uri in client
+            .post_logout_redirect_uris
+            .iter()
+            .filter(|u| !valid_redirect_uri(u))
+        {
+            c.push(
+                &["client", key, "post_logout_redirect_uris"],
+                format!("client.{key}.post_logout_redirect_uris: invalid \"{uri}\""),
+            );
+        }
+        for origin in client
+            .web_origins
+            .iter()
+            .flatten()
+            .filter(|o| !valid_origin(o))
+        {
+            c.push(
+                &["client", key, "web_origins"],
+                format!("client.{key}.web_origins: invalid origin \"{origin}\""),
+            );
+        }
+        for grant in client
+            .grant_types
+            .iter()
+            .filter(|g| !GRANT_TYPES.contains(&g.as_str()))
+        {
+            c.push(
+                &["client", key, "grant_types"],
+                format!(
+                    "client.{key}.grant_types: unknown grant type \"{grant}\" (use one of {})",
+                    GRANT_TYPES.join(", ")
+                ),
             );
         }
     }
@@ -382,5 +521,87 @@ mod tests {
         );
         assert_eq!(issuer_path("http://localhost:9000").unwrap(), "/");
         assert!(issuer_path("localhost:9000/a").is_err());
+    }
+    #[test]
+    fn duplicate_endpoint_paths() {
+        let e = errs(&format!(
+            "{A}paths = {{ token = \"/x\", revoke = \"/x/\" }}\n"
+        ));
+        assert!(
+            e.iter().any(|m| m.contains("paths") && m.contains("/x")),
+            "{e:?}"
+        );
+    }
+    #[test]
+    fn bad_endpoint_paths() {
+        for p in [
+            "oauth/token",
+            "/",
+            "/a?b",
+            "/a/{id}",
+            "/a//b",
+            "/.well-known/x",
+            "/a/*",
+        ] {
+            assert!(
+                !errs(&format!("{A}paths = {{ token = \"{p}\" }}\n")).is_empty(),
+                "{p}"
+            );
+        }
+    }
+    #[test]
+    fn alias_target_must_be_standard() {
+        let e = errs(&format!(
+            "{A}logout_param_aliases = {{ returnTo = \"redirect\" }}\n"
+        ));
+        assert!(
+            e.iter()
+                .any(|m| m.contains("logout_param_aliases") && m.contains("returnTo")),
+            "{e:?}"
+        );
+        assert!(
+            errs(&format!(
+                "{A}logout_param_aliases = {{ returnTo = \"post_logout_redirect_uri\" }}\n"
+            ))
+            .is_empty()
+        );
+    }
+    #[test]
+    fn alias_key_must_differ_from_target_and_not_be_empty() {
+        assert!(
+            !errs(&format!(
+                "{A}logout_param_aliases = {{ state = \"state\" }}\n"
+            ))
+            .is_empty()
+        );
+        assert!(
+            !errs(&format!(
+                "{A}logout_param_aliases = {{ \"\" = \"state\" }}\n"
+            ))
+            .is_empty()
+        );
+    }
+    #[test]
+    fn client_m2_fields_are_checked() {
+        let base = format!("{A}[client.c]\n");
+        assert!(!errs(&format!("{base}grant_types = [\"password\"]\n")).is_empty());
+        assert!(
+            !errs(&format!(
+                "{base}post_logout_redirect_uris = [\"not a url\"]\n"
+            ))
+            .is_empty()
+        );
+        assert!(
+            !errs(&format!(
+                "{base}web_origins = [\"http://localhost:3000/app\"]\n"
+            ))
+            .is_empty()
+        );
+        assert!(
+            errs(&format!(
+                "{base}web_origins = [\"http://localhost:3000\", \"https://a.example.com/\"]\n"
+            ))
+            .is_empty()
+        );
     }
 }

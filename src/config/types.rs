@@ -70,6 +70,101 @@ pub struct IssuerConfig {
     pub default_claims: Claims,
     pub login_template: String,
     pub lifetimes: Lifetimes,
+    pub paths: EndpointPaths,
+    pub logout_param_aliases: BTreeMap<String, String>,
+}
+
+/// The endpoints of an Issuer that have a configurable path.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Endpoint {
+    Authorize,
+    Token,
+    Userinfo,
+    Jwks,
+    Endsession,
+    Introspect,
+    Revoke,
+    Debugger,
+}
+
+impl Endpoint {
+    /// The config key of this endpoint under `paths`.
+    #[must_use]
+    pub fn key(self) -> &'static str {
+        match self {
+            Endpoint::Authorize => "authorize",
+            Endpoint::Token => "token",
+            Endpoint::Userinfo => "userinfo",
+            Endpoint::Jwks => "jwks",
+            Endpoint::Endsession => "endsession",
+            Endpoint::Introspect => "introspect",
+            Endpoint::Revoke => "revoke",
+            Endpoint::Debugger => "debugger",
+        }
+    }
+}
+
+/// Endpoint paths below the Issuer path.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct EndpointPaths {
+    pub authorize: String,
+    pub token: String,
+    pub userinfo: String,
+    pub jwks: String,
+    pub endsession: String,
+    pub introspect: String,
+    pub revoke: String,
+    /// Routed in M3; the key is accepted and validated now.
+    pub debugger: String,
+}
+
+impl Default for EndpointPaths {
+    fn default() -> Self {
+        Self {
+            authorize: "/authorize".to_owned(),
+            token: "/token".to_owned(),
+            userinfo: "/userinfo".to_owned(),
+            jwks: "/jwks".to_owned(),
+            endsession: "/endsession".to_owned(),
+            introspect: "/introspect".to_owned(),
+            revoke: "/revoke".to_owned(),
+            debugger: "/debugger".to_owned(),
+        }
+    }
+}
+
+impl EndpointPaths {
+    /// The path of `e`.
+    #[must_use]
+    pub fn get(&self, e: Endpoint) -> &str {
+        match e {
+            Endpoint::Authorize => &self.authorize,
+            Endpoint::Token => &self.token,
+            Endpoint::Userinfo => &self.userinfo,
+            Endpoint::Jwks => &self.jwks,
+            Endpoint::Endsession => &self.endsession,
+            Endpoint::Introspect => &self.introspect,
+            Endpoint::Revoke => &self.revoke,
+            Endpoint::Debugger => &self.debugger,
+        }
+    }
+
+    /// All eight (endpoint, path) pairs in the order of the enum.
+    #[must_use]
+    pub fn all(&self) -> [(Endpoint, &str); 8] {
+        [
+            Endpoint::Authorize,
+            Endpoint::Token,
+            Endpoint::Userinfo,
+            Endpoint::Jwks,
+            Endpoint::Endsession,
+            Endpoint::Introspect,
+            Endpoint::Revoke,
+            Endpoint::Debugger,
+        ]
+        .map(|e| (e, self.get(e)))
+    }
 }
 
 /// Token and code lifetimes in seconds.
@@ -212,5 +307,19 @@ mod tests {
             ..Default::default()
         });
         assert_eq!((l.code, l.id_token), (5, 3600));
+    }
+
+    #[test]
+    fn endpoint_paths_defaults_and_override() {
+        let c: Config = toml::from_str("[issuer.a]\npaths = { token = \"/oauth/token\" }").unwrap();
+        let p = &c.issuer["a"].paths;
+        assert_eq!(p.get(Endpoint::Token), "/oauth/token");
+        assert_eq!(p.get(Endpoint::Endsession), "/endsession");
+        assert_eq!(p.all().len(), 8);
+    }
+
+    #[test]
+    fn unknown_paths_key_is_rejected() {
+        assert!(toml::from_str::<Config>("[issuer.a]\npaths = { tokn = \"/t\" }").is_err());
     }
 }
