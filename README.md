@@ -124,9 +124,12 @@ See [ADR 0003](docs/adr/0003-per-issuer-key-sets.md).
 
 ### Hot reload
 
-fauxidc checks the config files for changes every second (modification time and length) and also reloads on SIGHUP.
+fauxidc polls the config files every second (modification time and length) and also reloads on SIGHUP.
+A change applies only after two polls in a row see the same new file state, so it applies 1 to 2 s after the save.
+This keeps a half-written file from being loaded. If a change fails to load or to apply, fauxidc keeps the old config and logs the error.
+It tries again on SIGHUP and on the next file change that passes the same check; a poll that sees no new change does not try again.
+SIGHUP reloads the config. So closing the terminal does not stop a foreground fauxidc; stop it with Ctrl-C or SIGTERM.
 Env vars, inline config and CLI flags change only at restart.
-If the new config is invalid, fauxidc keeps the old config and logs the error.
 Codes, Sessions, refresh tokens, revocations and the Request log stay valid across a reload.
 A Session for a removed User fails at its next use.
 These keys need a restart; a change logs a warning and has no effect until then:
@@ -219,6 +222,19 @@ curl -s http://localhost:9000/auth0/token -u gateway:gw \
   -d audience=https://orders.example.com
 ```
 
+## Sessions
+
+A Session records that a User signed in at an Issuer. Sessions are in memory (at most 10 000) and reset on restart.
+
+- The cookie is `fauxidc_session_<issuer id>`. Its Path is the Issuer path. It is `HttpOnly`, `SameSite=Lax` and lasts for the browser session.
+- Every sign-in at `/authorize` creates a Session with `auth_time` set to now and a `sid`.
+- `prompt=none` returns a code if a Session exists. Else it returns `login_required`.
+- `prompt=login` and `prompt=select_account` always show the page.
+- `max_age` reuses a Session that is not older than `max_age` seconds. `max_age=0` acts as `prompt=login`.
+- A request without `prompt=none` and without `max_age` does not use the Session. Auto-select and `login_hint` with `auto_login` work as before.
+- If `max_age` is sent, Session reuse wins over `login_hint` with `auto_login` and over Auto-select.
+- `/endsession` deletes the Session and both cookies.
+
 ## Debugger
 
 Each Issuer serves a debugger page at `{issuer}/debugger` (the `paths.debugger` key changes the path).
@@ -232,7 +248,7 @@ Each Issuer serves a debugger page at `{issuer}/debugger` (the `paths.debugger` 
 The flow uses the built-in public Client `debugger`. It needs no config. Its only allowed redirect URI is the
 exact debugger callback URL that `/start` builds for the request (`{issuer}/debugger/callback` on the request
 host, or on `public_base_url` when it is set). It needs PKCE with S256, also in Lenient mode. A configured Client with
-`client_id = "debugger"` replaces it. The PKCE verifier stays on the server for 600 s.
+`client_id = "debugger"` replaces it. It must list `{issuer}/debugger/callback` in `redirect_uris`. The PKCE verifier stays on the server for 600 s.
 `/start` sets the cookie `fauxidc_debugger_<issuer id>` with the flow `state`; the callback needs it, so the flow
 must finish in the browser that started it. Without the matching cookie, the callback answers 400, also for an error from `/authorize`.
 
