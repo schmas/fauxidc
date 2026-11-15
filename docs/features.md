@@ -23,6 +23,7 @@ M3 features:
 - Per-Issuer keys with `RS256`, `ES256` or `PS256`, and key rotation through the Test API.
 - `private_key_jwt` client authentication (RFC 7523) with a Client `jwks` or `jwks_uri`.
 - Token exchange (RFC 8693).
+- The jwt-bearer grant (RFC 7523 section 2.1, On-Behalf-Of).
 - Sessions: `prompt=none`, `prompt=login`, `max_age` and `auth_time`.
 - Hot reload of the config files, also on SIGHUP.
 - The `/debugger` page: decode a JWT, or run a code + PKCE flow and see the tokens.
@@ -161,6 +162,31 @@ curl -s http://localhost:9000/auth0/token -u gateway:gw \
   -d grant_type=urn:ietf:params:oauth:grant-type:token-exchange \
   -d subject_token_type=urn:ietf:params:oauth:token-type:access_token \
   -d subject_token="$ACCESS_TOKEN" \
+  -d audience=https://orders.example.com
+```
+
+## jwt-bearer grant
+
+`/token` supports the RFC 7523 jwt-bearer grant (`grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer`), the On-Behalf-Of flow.
+The Client must authenticate and must list the grant in `grant_types`. It is not a default grant.
+
+- The `assertion` is checked like a token exchange `subject_token`, with the same Strict and Lenient behavior.
+  A rejected assertion gives `invalid_grant` (RFC 7523 3.1). A missing `assertion` gives `invalid_request`.
+- `scope` is the `scope` parameter, else the `scope` claim of the assertion. Without both, the request gives `invalid_scope`, in both modes.
+- The result is an access token of this Issuer with `sub` and the User claims of the assertion.
+  `aud` is `audience`, else `resource`, else the Client `audience`, else the `client_id`. There is no id_token, no refresh token and no `act` claim.
+
+```toml
+[client.orders]
+client_secret = "s"
+grant_types = ["urn:ietf:params:oauth:grant-type:jwt-bearer"]
+```
+
+```sh
+curl -s http://localhost:9000/auth0/token -u orders:s \
+  -d grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer \
+  -d assertion="$ACCESS_TOKEN" \
+  -d scope=orders:read \
   -d audience=https://orders.example.com
 ```
 

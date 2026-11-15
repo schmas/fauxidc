@@ -118,22 +118,24 @@ pub(crate) async fn verify_fauxidc_jwt(
 
 /// Strict: `verify_fauxidc_jwt`. Lenient: the same, and on failure a warning plus the unverified
 /// claims. A value that is not a JWT fails in both modes. `sub` must be a non-empty string.
-/// `what` names the parameter in errors and logs.
+/// `what` names the parameter in errors and logs. `error` is the OAuth error code of a rejection.
 pub(crate) async fn token_claims(
     ctx: &IssuerCtx,
     headers: &HeaderMap,
     token: &str,
     what: &str,
+    error: &'static str,
 ) -> Result<Claims, OAuthError> {
+    let reject = |description: String| OAuthError::json(error, description);
     let unverified = decode_unverified(token).map_err(|e| {
         tracing::info!(issuer = %ctx.id, "{what} rejected: {e}");
-        invalid_request(format!("{what} is not a JWT"))
+        reject(format!("{what} is not a JWT"))
     })?;
     let claims = match verify_fauxidc_jwt(&ctx.app, headers, token).await {
         Ok(claims) => claims,
         Err(e) => {
             ctx.enforce(false, || format!("{what} is invalid: {e}"))
-                .map_err(invalid_request)?;
+                .map_err(reject)?;
             unverified
         }
     };
@@ -142,7 +144,7 @@ pub(crate) async fn token_claims(
         .and_then(Value::as_str)
         .is_some_and(|s| !s.is_empty());
     if !has_sub {
-        return Err(invalid_request(format!("{what} has no sub")));
+        return Err(reject(format!("{what} has no sub")));
     }
     Ok(claims)
 }
@@ -213,7 +215,7 @@ fn check_may_act(ctx: &IssuerCtx, subject: &Claims, actor: &Claims) -> Result<()
 }
 
 /// The space-separated values of a string, or `None` if there are none.
-fn split_scope(value: Option<&str>) -> Option<Vec<String>> {
+pub(crate) fn split_scope(value: Option<&str>) -> Option<Vec<String>> {
     let scope: Vec<String> = value?.split_whitespace().map(str::to_owned).collect();
     (!scope.is_empty()).then_some(scope)
 }
@@ -264,14 +266,22 @@ pub async fn grant(
         (None, None) => {}
     }
 
-    let subject = token_claims(ctx, headers, subject_token, "subject_token").await?;
+    let subject = token_claims(
+        ctx,
+        headers,
+        subject_token,
+        "subject_token",
+        "invalid_request",
+    )
+    .await?;
     check_token_type(ctx, subject_token, subject_type, "subject_token_type")?;
     let mut claims = subject.clone();
     for name in DROPPED_CLAIMS {
         claims.remove(name);
     }
     if let (Some(actor_token), Some(actor_type)) = (actor_token, actor_type) {
-        let actor = token_claims(ctx, headers, actor_token, "actor_token").await?;
+        let actor =
+            token_claims(ctx, headers, actor_token, "actor_token", "invalid_request").await?;
         check_token_type(ctx, actor_token, actor_type, "actor_token_type")?;
         check_may_act(ctx, &subject, &actor)?;
         claims.insert("act".to_owned(), act_claim(&actor, &subject));

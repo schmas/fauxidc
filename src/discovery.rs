@@ -5,6 +5,7 @@ use serde_json::{Value, json};
 
 use crate::client_auth::ASSERTION_ALGS;
 use crate::config::Endpoint;
+use crate::jwt_bearer::GRANT_JWT_BEARER;
 use crate::logging::record_endpoint;
 use crate::state::IssuerCtx;
 use crate::token_exchange::GRANT_TOKEN_EXCHANGE;
@@ -29,7 +30,7 @@ pub async fn document(State(ctx): State<IssuerCtx>, headers: HeaderMap) -> Json<
         "introspection_endpoint_auth_signing_alg_values_supported": ASSERTION_ALGS,
         "response_types_supported": ["code"],
         "response_modes_supported": ["query"],
-        "grant_types_supported": ["authorization_code", "refresh_token", "client_credentials", GRANT_TOKEN_EXCHANGE],
+        "grant_types_supported": ["authorization_code", "refresh_token", "client_credentials", GRANT_TOKEN_EXCHANGE, GRANT_JWT_BEARER],
         "subject_types_supported": ["public"],
         "id_token_signing_alg_values_supported": [ctx.issuer().signing_alg.as_str()],
         "token_endpoint_auth_methods_supported": ["client_secret_basic", "client_secret_post", "private_key_jwt", "none"],
