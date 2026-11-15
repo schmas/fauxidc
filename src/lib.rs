@@ -16,6 +16,7 @@ pub mod endsession;
 pub mod error;
 pub mod health;
 pub mod healthcheck;
+pub mod introspect;
 pub mod issuer;
 pub mod jwks;
 pub mod keys;

@@ -17,6 +17,7 @@ use crate::config::Endpoint;
 use crate::discovery;
 use crate::endsession;
 use crate::health;
+use crate::introspect;
 use crate::issuer::issuer_path;
 use crate::jwks;
 use crate::logging::{record_endpoint, request_span};
@@ -70,6 +71,10 @@ pub fn build_router(state: Arc<AppState>) -> Router {
                 get(endsession::endsession_get).post(endsession::endsession_post),
             )
             .route(ctx.endpoint_path(Endpoint::Revoke), post(revoke::revoke))
+            .route(
+                ctx.endpoint_path(Endpoint::Introspect),
+                post(introspect::introspect),
+            )
             .with_state(ctx.clone());
         router = if path == "/" {
             router.merge(sub)
