@@ -53,7 +53,7 @@ for (const spa of spas) {
       await testInfo.attach("console-errors", { body: errors.join("\n"), contentType: "text/plain" });
       // A CORS failure shows only in the console. Soft, so it is reported
       // also when it made an earlier step fail.
-      expect.soft(errors.filter((e) => e.includes("CORS")), "CORS errors in the console").toEqual([]);
+      expect.soft(errors.filter((e) => e.includes("CORS") || e.includes("Cross-Origin")), "CORS errors in the console").toEqual([]);
     }
   });
 }
