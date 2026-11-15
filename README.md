@@ -110,6 +110,8 @@ curl -s http://localhost:9000/generic/token -u web:local \
 
 The Client can also send the secret in the body (`client_secret_post`) or use `private_key_jwt`.
 See [docs/features.md](docs/features.md#private_key_jwt).
+A backend that wants the code in a POST body (for example ASP.NET Core) can send `response_mode=form_post`.
+See [docs/features.md](docs/features.md#response_modeform_post).
 
 ### Machine-to-machine
 
@@ -228,7 +230,7 @@ The Test API lives under `/_mock/` and has no authentication.
 
 ## Templates
 
-You can replace the login page, the error page, the signed-out page and the debugger page with your own templates.
+You can replace the login page, the error page, the signed-out page, the debugger page and the `form_post` page with your own templates.
 The built-in pages link one embedded stylesheet, `/_mock/static/fauxidc.css`, and need no network.
 
 For a Custom user from one username, set a claims template on the Issuer. The "Custom…" entry

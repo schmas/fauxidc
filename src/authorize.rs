@@ -18,7 +18,9 @@ use crate::logging::{record_client, record_endpoint};
 use crate::prompt::{self, PromptError, PromptRequest};
 use crate::session::Session;
 use crate::state::{CodeGrant, IssuerCtx, PkceMethod, Subject, now_secs};
-use crate::templates::{CONTEXT_VERSION, ErrorContext, LoginContext, STATIC_BASE, UserOption};
+use crate::templates::{
+    CONTEXT_VERSION, ErrorContext, FormPostContext, LoginContext, STATIC_BASE, UserOption,
+};
 use crate::tokens::verify_id_token_hint;
 
 /// The `user` form value that selects the Custom user.
@@ -28,6 +30,8 @@ pub const CUSTOM_USER: &str = "__custom__";
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct AuthorizeParams {
     pub response_type: Option<String>,
+    /// `query` (the default) or `form_post`.
+    pub response_mode: Option<String>,
     pub client_id: Option<String>,
     pub redirect_uri: Option<String>,
     pub scope: Option<String>,
@@ -57,6 +61,7 @@ impl AuthorizeParams {
     pub fn hidden_fields(&self) -> Vec<(String, String)> {
         [
             ("response_type", &self.response_type),
+            ("response_mode", &self.response_mode),
             ("client_id", &self.client_id),
             ("redirect_uri", &self.redirect_uri),
             ("scope", &self.scope),
@@ -75,11 +80,23 @@ impl AuthorizeParams {
     }
 }
 
+/// How `/authorize` returns its response to the Client (the `response_mode` parameter).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum ResponseMode {
+    /// A 302 redirect with the parameters in the `redirect_uri` query. The default.
+    #[default]
+    Query,
+    /// A 200 HTML page that posts the parameters to the `redirect_uri` (OAuth 2.0 Form Post
+    /// Response Mode).
+    FormPost,
+}
+
 /// A request that passed all checks.
 #[derive(Debug, Clone)]
 pub struct ValidRequest {
     pub client: ResolvedClient,
     pub redirect_uri: String,
+    pub response_mode: ResponseMode,
     pub scope: Vec<String>,
     pub pkce: Option<(String, PkceMethod)>,
     pub params: AuthorizeParams,
@@ -92,6 +109,82 @@ enum Rejection {
     Page(StatusCode, String),
     /// A redirect to the registered `redirect_uri` with the error.
     Redirect(OAuthError),
+    /// A `form_post` page that posts the error to the registered `redirect_uri`.
+    FormPost {
+        redirect_uri: String,
+        fields: Vec<(String, String)>,
+    },
+}
+
+/// An error for the Client at the trusted `redirect_uri`, in the response mode of the request:
+/// `error`, `error_description` and `state` (when the request sent it).
+fn client_error(
+    mode: ResponseMode,
+    redirect_uri: &str,
+    state: Option<&String>,
+    error: &'static str,
+    description: &str,
+) -> Rejection {
+    match mode {
+        ResponseMode::Query => Rejection::Redirect(OAuthError::Redirect {
+            redirect_uri: redirect_uri.to_owned(),
+            state: state.cloned(),
+            error,
+            description: description.to_owned(),
+        }),
+        ResponseMode::FormPost => {
+            let mut fields = vec![
+                ("error".to_owned(), error.to_owned()),
+                ("error_description".to_owned(), description.to_owned()),
+            ];
+            if let Some(state) = state {
+                fields.push(("state".to_owned(), state.clone()));
+            }
+            Rejection::FormPost {
+                redirect_uri: redirect_uri.to_owned(),
+                fields,
+            }
+        }
+    }
+}
+
+/// `true` if `uri` starts with `http://` or `https://` (any case).
+fn is_http_uri(uri: &str) -> bool {
+    let head = uri.get(..8).unwrap_or(uri).to_ascii_lowercase();
+    head.starts_with("http://") || head.starts_with("https://")
+}
+
+/// Reads `response_mode`, after the `redirect_uri` is trusted. An empty value counts as
+/// absent. An unknown value (also `fragment`) is an `invalid_request` redirect with the error
+/// in the query. `form_post` needs an `http` or `https` `redirect_uri`, else an error page with
+/// `invalid_request`. Both rules apply in Strict and Lenient mode (not through `enforce`).
+fn parse_response_mode(
+    ctx: &IssuerCtx,
+    p: &AuthorizeParams,
+    redirect_uri: &str,
+) -> Result<ResponseMode, Rejection> {
+    match p.response_mode.as_deref().filter(|v| !v.is_empty()) {
+        None | Some("query") => Ok(ResponseMode::Query),
+        Some("form_post") if is_http_uri(redirect_uri) => Ok(ResponseMode::FormPost),
+        Some("form_post") => {
+            let rule = format!(
+                "invalid_request: response_mode=form_post needs an http or https redirect_uri: {redirect_uri}"
+            );
+            tracing::info!(issuer = %ctx.id, "{rule}");
+            Err(page(rule))
+        }
+        Some(other) => {
+            let rule = format!("unsupported response_mode: {other}");
+            tracing::info!(issuer = %ctx.id, "{rule}");
+            Err(client_error(
+                ResponseMode::Query,
+                redirect_uri,
+                p.state.as_ref(),
+                "invalid_request",
+                &rule,
+            ))
+        }
+    }
 }
 
 fn page(message: String) -> Rejection {
@@ -146,14 +239,16 @@ fn validate(
     };
 
     check_redirect_uri(ctx, headers, &client, redirect_uri).map_err(page)?;
+    let response_mode = parse_response_mode(ctx, p, redirect_uri)?;
 
     let fail = |error: &'static str, description: &str| {
-        Rejection::Redirect(OAuthError::Redirect {
-            redirect_uri: redirect_uri.to_owned(),
-            state: p.state.clone(),
+        client_error(
+            response_mode,
+            redirect_uri,
+            p.state.as_ref(),
             error,
-            description: description.to_owned(),
-        })
+            description,
+        )
     };
 
     // OIDC Core 3.1.2.6: request objects are not supported, in both modes.
@@ -217,6 +312,7 @@ fn validate(
 
     Ok(ValidRequest {
         redirect_uri: redirect_uri.to_owned(),
+        response_mode,
         scope: p
             .scope
             .as_deref()
@@ -333,10 +429,40 @@ fn reject(ctx: &IssuerCtx, rejection: Rejection) -> Response {
     match rejection {
         Rejection::Redirect(error) => error.into_response(),
         Rejection::Page(status, message) => error_page(ctx, status, message),
+        Rejection::FormPost {
+            redirect_uri,
+            fields,
+        } => form_post_page(ctx, redirect_uri, fields),
     }
 }
 
-/// A redirect to the request `redirect_uri` with `error` and the rule text as description.
+/// The `response_mode=form_post` page: `200`, `Cache-Control: no-store`, and a form that
+/// posts `fields` to `redirect_uri` by script, with a submit button as the no-script fallback.
+fn form_post_page(
+    ctx: &IssuerCtx,
+    redirect_uri: String,
+    fields: Vec<(String, String)>,
+) -> Response {
+    let context = FormPostContext {
+        context_version: CONTEXT_VERSION,
+        issuer_id: ctx.id.clone(),
+        redirect_uri,
+        fields,
+        static_base: STATIC_BASE.to_owned(),
+    };
+    match ctx.app.templates.render_form_post(&context) {
+        Ok(html) => (
+            StatusCode::OK,
+            [(header::CACHE_CONTROL, "no-store")],
+            Html(html),
+        )
+            .into_response(),
+        Err(e) => OAuthError::ServerError(format!("form_post page: {e}")).into_response(),
+    }
+}
+
+/// An error to the request `redirect_uri` in its response mode, with `error` and the rule
+/// text as description.
 fn redirect_error(
     ctx: &IssuerCtx,
     req: &ValidRequest,
@@ -344,12 +470,13 @@ fn redirect_error(
     rule: &str,
 ) -> Rejection {
     tracing::info!(issuer = %ctx.id, "{rule}");
-    Rejection::Redirect(OAuthError::Redirect {
-        redirect_uri: req.redirect_uri.clone(),
-        state: req.params.state.clone(),
+    client_error(
+        req.response_mode,
+        &req.redirect_uri,
+        req.params.state.as_ref(),
         error,
-        description: rule.to_owned(),
-    })
+        rule,
+    )
 }
 
 /// Parses `prompt` and `max_age`. `none` with other values is an `invalid_request` in both
@@ -711,7 +838,7 @@ fn template_subject(
 }
 
 /// Creates a Session for `subject` (`auth_time` = now, new `sid`), issues the code with them,
-/// and on a 302 appends the Session cookie.
+/// and on a 302 (query) or a 200 (`form_post`) appends the Session cookie.
 pub(crate) fn sign_in(ctx: &IssuerCtx, req: &ValidRequest, subject: Subject) -> Response {
     sign_in_with(ctx, req, subject, None)
 }
@@ -735,7 +862,7 @@ fn sign_in_with(
         Err(e) => return e.into_response(),
     };
     let mut response = issue_code(ctx, req, subject, auth_time, Some(sid));
-    if response.status() == StatusCode::FOUND {
+    if matches!(response.status(), StatusCode::FOUND | StatusCode::OK) {
         let cookies = auto_select
             .into_iter()
             .chain(session_set(&ctx.id, &ctx.path, &value));
@@ -757,8 +884,8 @@ pub(crate) fn resume(ctx: &IssuerCtx, req: &ValidRequest, session: &Session) -> 
     )
 }
 
-/// Stores a code grant for `subject` with the sign-in facts and redirects to the client with
-/// the code.
+/// Stores a code grant for `subject` with the sign-in facts and returns the code to the
+/// client: a redirect (query) or a `form_post` page.
 pub(crate) fn issue_code(
     ctx: &IssuerCtx,
     req: &ValidRequest,
@@ -796,6 +923,13 @@ pub(crate) fn issue_code(
     let mut pairs = vec![("code", code.as_str())];
     if let Some(state) = req.params.state.as_deref() {
         pairs.push(("state", state));
+    }
+    if req.response_mode == ResponseMode::FormPost {
+        let fields = pairs
+            .iter()
+            .map(|(k, v)| ((*k).to_owned(), (*v).to_owned()))
+            .collect();
+        return form_post_page(ctx, req.redirect_uri.clone(), fields);
     }
     let location = append_query(&req.redirect_uri, &pairs);
     match HeaderValue::try_from(location) {

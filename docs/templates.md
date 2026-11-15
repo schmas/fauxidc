@@ -1,11 +1,11 @@
 # Templates
 
-fauxidc renders four pages with [minijinja](https://docs.rs/minijinja) (Jinja syntax, HTML autoescape on):
-`login.html`, `error.html`, `signed_out.html` and `debugger.html`. The embedded defaults live in `assets/templates/`.
+fauxidc renders five pages with [minijinja](https://docs.rs/minijinja) (Jinja syntax, HTML autoescape on):
+`login.html`, `error.html`, `signed_out.html`, `debugger.html` and `form_post.html`. The embedded defaults live in `assets/templates/`.
 
 ## Overrides
 
-- `server.templates_dir`: a file named `login.html`, `error.html`, `signed_out.html` or `debugger.html` in this directory replaces the embedded one.
+- `server.templates_dir`: a file named `login.html`, `error.html`, `signed_out.html`, `debugger.html` or `form_post.html` in this directory replaces the embedded one.
 - `issuer.<id>.login_template`: a file path. It replaces the login page for that issuer only.
 - `server.static_dir`: files here take precedence over the embedded static files, served at `/_mock/static/<path>`.
 
@@ -36,6 +36,8 @@ Every context has `context_version` (integer, `2`). Fields are added in a minor 
 - `signed_out.html`: `signed_in_as` is always null.
 
 No field is removed or renamed.
+
+Added later in version 2: the optional template `form_post.html` (`response_mode=form_post`). Existing `templates_dir` overrides keep working.
 
 The autoescape writes `/` as `&#x2f;`, which a browser decodes. The `href` filter escapes like the autoescape but keeps `/`, for readable links: `<a href="{{ change_href|href }}">`.
 
@@ -103,6 +105,24 @@ The built-in page marks only that input.
 | `static_base` | string | URL prefix for static files, `/_mock/static`. |
 
 `signed_in_as` and `change_href` are optional fields. `signed_in_as` on `signed_out.html` is always null.
+
+### `form_post.html`
+
+`/authorize` renders this page for a request with `response_mode=form_post`, instead of the 302 of the query mode.
+The response has status 200 and `Cache-Control: no-store`. It is an optional template: existing `templates_dir` overrides keep working.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `context_version` | integer | Always `2`. |
+| `issuer_id` | string | Id of the issuer. |
+| `redirect_uri` | string | The validated `redirect_uri` of the request. Post the form here with `method="post"`. |
+| `fields` | list of `[name, value]` | The response parameters, in order: `code` and `state` on success, or `error`, `error_description` and `state` on an error. `state` is in the list only when the request sent it. |
+| `static_base` | string | URL prefix for static files, `/_mock/static`. |
+
+Render each pair of `fields` as `<input type="hidden" name="{{ pair[0] }}" value="{{ pair[1] }}">`, and the form as
+`<form method="post" action="{{ redirect_uri|href }}">`. Keep the autoescape on: `state` comes from the request.
+The built-in page submits the form with a short inline script and shows a submit button for a browser without JavaScript.
+fauxidc sends no `Content-Security-Policy` header, so an inline script works.
 
 ### `debugger.html`
 

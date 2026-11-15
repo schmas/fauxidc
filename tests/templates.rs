@@ -226,7 +226,7 @@ fn template_files() -> Vec<(String, String)> {
             std::fs::read_to_string(&path).unwrap(),
         ));
     }
-    assert_eq!(out.len(), 4);
+    assert_eq!(out.len(), 5);
     out
 }
 
