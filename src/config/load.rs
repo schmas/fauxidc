@@ -26,12 +26,16 @@ pub struct LoadInputs {
     pub cwd: PathBuf,
 }
 
-/// The merged configuration, the source of each value and the zero-config flag.
+/// The merged configuration, the source of each value, the zero-config flag and the config
+/// files that were read.
 #[derive(Debug, Clone)]
 pub struct Loaded {
     pub config: Config,
     pub sources: SourceMap,
     pub zero_config: bool,
+    /// The resolved config files (given, `FAUXIDC_CONFIG` or `./fauxidc.toml`). Hot reload
+    /// polls them. Empty for Zero config and for `load_str`.
+    pub files: Vec<PathBuf>,
 }
 
 impl LoadInputs {
@@ -101,6 +105,7 @@ pub fn load(inputs: &LoadInputs) -> Result<Loaded, ConfigErrors> {
     }
 
     let mut loaded = finish(merged, zero_config)?;
+    loaded.files = files;
     if zero_config && let Some(default) = loaded.config.issuer.get_mut("default") {
         // The Zero config Issuer URL follows the effective port, for example from `--port`.
         default.issuer_url = format!("http://localhost:{}/default", loaded.config.server.port);
@@ -132,6 +137,7 @@ fn finish(merged: Layer, zero_config: bool) -> Result<Loaded, ConfigErrors> {
         config,
         sources,
         zero_config,
+        files: Vec::new(),
     })
 }
 
@@ -267,6 +273,30 @@ mod tests {
         assert!(load(&i).unwrap().config.issuer.contains_key("b"));
         i.cwd = empty_tmp_dir();
         assert!(load(&i).unwrap().zero_config);
+    }
+
+    #[test]
+    fn loaded_files_lists_the_resolved_files() {
+        let a = write_tmp("[issuer.a]\nissuer_url = \"http://localhost:9000/a\"");
+        let mut i = inputs(&[]);
+        i.config_files = vec![a.clone()];
+        assert_eq!(load(&i).unwrap().files, vec![a.clone()]);
+
+        let l = load(&inputs(&[("FAUXIDC_CONFIG", a.to_str().unwrap())])).unwrap();
+        assert_eq!(l.files, vec![a]);
+
+        let i = inputs(&[]);
+        let local = i.cwd.join("fauxidc.toml");
+        std::fs::write(
+            &local,
+            "[issuer.b]\nissuer_url = \"http://localhost:9000/b\"",
+        )
+        .unwrap();
+        assert_eq!(load(&i).unwrap().files, vec![local]);
+
+        let l = load(&inputs(&[])).unwrap();
+        assert!(l.zero_config);
+        assert_eq!(l.files, Vec::<PathBuf>::new());
     }
 
     #[test]

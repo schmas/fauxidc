@@ -2,7 +2,10 @@ mod common;
 use common::*;
 
 use fauxidc::config::load_str;
-use fauxidc::reload::ReloadError;
+use std::sync::{Arc, Mutex};
+
+use fauxidc::config::LoadInputs;
+use fauxidc::reload::{ReloadError, watch_files};
 
 #[tokio::test]
 async fn reload_changes_routes_and_discovery() {
@@ -183,4 +186,149 @@ async fn cors_origins_follow_reload() {
     handle.apply(load_str(&next).unwrap().config).unwrap();
     let (_, h, _) = send(&app, preflight()).await;
     assert_eq!(h["access-control-allow-origin"], "http://localhost:4200");
+}
+
+struct CaptureWriter(Arc<Mutex<Vec<u8>>>);
+
+impl std::io::Write for CaptureWriter {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        self.0.lock().unwrap().extend_from_slice(buf);
+        Ok(buf.len())
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+/// A temp config file with `text`, its load inputs and the loaded config.
+fn config_file(text: &str) -> (PathBuf, LoadInputs, fauxidc::config::Loaded) {
+    let dir = tmp_dir();
+    let file = dir.join("fauxidc.toml");
+    std::fs::write(&file, text).unwrap();
+    let inputs = LoadInputs {
+        config_files: vec![file.clone()],
+        env: vec![],
+        flags: fauxidc::config::CliOverrides::default(),
+        cwd: dir,
+    };
+    let loaded = fauxidc::config::load(&inputs).unwrap();
+    (file, inputs, loaded)
+}
+
+async fn test_api_status(app: &Router, user: &str) -> StatusCode {
+    send(
+        app,
+        post_json("/_mock/auth0/token", &json!({ "user": user })),
+    )
+    .await
+    .0
+}
+
+#[tokio::test]
+async fn file_change_is_applied() {
+    let (file, inputs, loaded) = config_file(STRICT);
+    let (app, handle) = live_app_from(loaded.config.clone());
+    let _w = watch_files(
+        handle,
+        inputs,
+        loaded.files.clone(),
+        Duration::from_millis(50),
+    );
+    tokio::time::sleep(Duration::from_millis(120)).await;
+    std::fs::write(
+        &file,
+        format!("{STRICT}\n[user.carol]\nlabel = \"Carol\"\n"),
+    )
+    .unwrap();
+    wait_until(Duration::from_secs(3), || async {
+        test_api_status(&app, "carol").await == 200
+    })
+    .await;
+}
+
+#[tokio::test]
+async fn invalid_file_keeps_old_config_and_logs() {
+    let logs = Arc::new(Mutex::new(Vec::<u8>::new()));
+    let w = logs.clone();
+    let sub = tracing_subscriber::fmt()
+        .with_writer(move || CaptureWriter(w.clone()))
+        .with_ansi(false)
+        .finish();
+    let _guard = tracing::subscriber::set_default(sub);
+    let (file, inputs, loaded) = config_file(STRICT);
+    let (app, handle) = live_app_from(loaded.config.clone());
+    let _w = watch_files(
+        handle,
+        inputs,
+        loaded.files.clone(),
+        Duration::from_millis(50),
+    );
+    tokio::time::sleep(Duration::from_millis(120)).await;
+    std::fs::write(&file, "[server]\nprot = 1").unwrap();
+    let text = || String::from_utf8_lossy(&logs.lock().unwrap()).into_owned();
+    wait_until(Duration::from_millis(500), || async {
+        text().contains("config reload failed")
+    })
+    .await;
+    assert!(text().contains("prot"), "{}", text());
+    assert_eq!(test_api_status(&app, "alice").await, 200);
+}
+
+#[tokio::test]
+async fn same_mtime_different_length_reloads() {
+    let (file, inputs, loaded) = config_file(STRICT);
+    let first_mtime = std::fs::metadata(&file).unwrap().modified().unwrap();
+    let (app, handle) = live_app_from(loaded.config.clone());
+    let _w = watch_files(
+        handle,
+        inputs,
+        loaded.files.clone(),
+        Duration::from_millis(50),
+    );
+    tokio::time::sleep(Duration::from_millis(120)).await;
+    std::fs::write(
+        &file,
+        format!("{STRICT}\n[user.carol]\nlabel = \"Carol\"\n"),
+    )
+    .unwrap();
+    std::fs::File::options()
+        .write(true)
+        .open(&file)
+        .unwrap()
+        .set_modified(first_mtime)
+        .unwrap();
+    wait_until(Duration::from_secs(3), || async {
+        test_api_status(&app, "carol").await == 200
+    })
+    .await;
+}
+
+#[tokio::test]
+async fn touched_file_logs_no_error() {
+    let logs = Arc::new(Mutex::new(Vec::<u8>::new()));
+    let w = logs.clone();
+    let sub = tracing_subscriber::fmt()
+        .with_writer(move || CaptureWriter(w.clone()))
+        .with_ansi(false)
+        .finish();
+    let _guard = tracing::subscriber::set_default(sub);
+    let (file, inputs, loaded) = config_file(STRICT);
+    let (app, handle) = live_app_from(loaded.config.clone());
+    let _w = watch_files(
+        handle,
+        inputs,
+        loaded.files.clone(),
+        Duration::from_millis(50),
+    );
+    tokio::time::sleep(Duration::from_millis(120)).await;
+    std::fs::File::options()
+        .write(true)
+        .open(&file)
+        .unwrap()
+        .set_modified(std::time::SystemTime::now() + Duration::from_secs(5))
+        .unwrap();
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    let text = String::from_utf8_lossy(&logs.lock().unwrap()).into_owned();
+    assert!(!text.contains("ERROR"), "{text}");
+    assert_eq!(test_api_status(&app, "alice").await, 200);
 }

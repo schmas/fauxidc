@@ -108,6 +108,18 @@ An RS256 Issuer without `issuer.<id>.key_file` shares the server key (`FAUXIDC_K
 Any other Issuer has its own key: from its `key_file` if the file exists, else generated and saved to `key_file` when it is set.
 See [ADR 0003](docs/adr/0003-per-issuer-key-sets.md).
 
+### Hot reload
+
+fauxidc checks the config files for changes every second (modification time and length) and also reloads on SIGHUP.
+Env vars, inline config and CLI flags change only at restart.
+If the new config is invalid, fauxidc keeps the old config and logs the error.
+Codes, Sessions, refresh tokens, revocations and the Request log stay valid across a reload.
+A Session for a removed User fails at its next use.
+These keys need a restart; a change logs a warning and has no effect until then:
+`server.port`, `server.bind`, `server.log_format`, `server.request_log_size`, `server.key_file`,
+`issuer.<id>.signing_alg`, `issuer.<id>.key_file`.
+See [ADR 0004](docs/adr/0004-hot-reload-router-swap.md).
+
 A Client can authenticate with `private_key_jwt` (RFC 7523) at `/token`, `/introspect` and `/revoke`.
 Give it its public keys in `client.<key>.jwks` (an inline JWK set) or `client.<key>.jwks_uri`, not both.
 `jwks_uri` must be an `http://` URL; fauxidc caches the fetched set for 60 seconds and fetches it again for an unknown `kid`.

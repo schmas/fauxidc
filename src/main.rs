@@ -8,6 +8,7 @@ use clap::Parser;
 use fauxidc::cli::{Cli, Command};
 use fauxidc::config::{self, LoadInputs, Loaded};
 use fauxidc::error::StartError;
+use fauxidc::reload::{POLL_INTERVAL, on_sighup, watch_files};
 use fauxidc::{Server, StartOptions, healthcheck, logging};
 
 const DEFAULT_PORT: u16 = 9000;
@@ -75,6 +76,7 @@ async fn serve(loaded: Loaded, inputs: &LoadInputs) -> anyhow::Result<ExitCode> 
     let options = StartOptions {
         key_pem: env("FAUXIDC_KEY_PEM"),
     };
+    let files = loaded.files;
     let server = match Server::start_with(loaded.config, options).await {
         Ok(server) => server,
         Err(error) => {
@@ -87,6 +89,14 @@ async fn serve(loaded: Loaded, inputs: &LoadInputs) -> anyhow::Result<ExitCode> 
             });
         }
     };
+    // Env and inline values stay as at startup (spec 11): reloads reuse `inputs`.
+    let handle = server.reload_handle();
+    if !files.is_empty() {
+        watch_files(handle.clone(), inputs.clone(), files, POLL_INTERVAL);
+    }
+    if let Err(error) = on_sighup(handle, inputs.clone()) {
+        tracing::warn!("cannot listen for SIGHUP: {error}; reload on SIGHUP is off");
+    }
     wait_for_signal()
         .await
         .context("cannot wait for a signal")?;

@@ -131,3 +131,73 @@ fn healthcheck_against_running_server() {
     child.kill().unwrap();
     child.wait().unwrap();
 }
+
+#[cfg(unix)]
+#[tokio::test]
+async fn sighup_reloads_config() {
+    let port = free_port();
+    let text = format!(
+        "[server]\nport = {port}\n\n[issuer.auth0]\nissuer_url = \"http://localhost:{port}/auth0/\"\n\n[user.alice]\nlabel = \"Alice\"\n\n[user.bob]\nlabel = \"Bob\"\n"
+    );
+    let file = write_tmp(&text);
+    let mut child = fauxidc_cmd(&[
+        "--config",
+        file.to_str().unwrap(),
+        "--port",
+        &port.to_string(),
+    ])
+    .stdout(Stdio::null())
+    .stderr(Stdio::null())
+    .spawn()
+    .unwrap();
+    let client = reqwest::Client::new();
+    let base = format!("http://127.0.0.1:{port}");
+    let start = Instant::now();
+    while client
+        .get(format!("{base}/_mock/health"))
+        .send()
+        .await
+        .is_err()
+    {
+        assert!(
+            start.elapsed() < Duration::from_secs(5),
+            "server did not start"
+        );
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    let old_mtime = std::fs::metadata(&file).unwrap().modified().unwrap();
+    std::fs::write(&file, text.replace("[user.bob]", "[user.cob]")).unwrap();
+    std::fs::File::options()
+        .write(true)
+        .open(&file)
+        .unwrap()
+        .set_modified(old_mtime)
+        .unwrap();
+    let status = || async {
+        client
+            .post(format!("{base}/_mock/auth0/token"))
+            .json(&serde_json::json!({"user": "cob"}))
+            .send()
+            .await
+            .unwrap()
+            .status()
+            .as_u16()
+    };
+    tokio::time::sleep(Duration::from_millis(1500)).await;
+    assert_eq!(status().await, 400, "the poller must not see the change");
+    let hup = Command::new("kill")
+        .args(["-HUP", &child.id().to_string()])
+        .status()
+        .unwrap();
+    assert!(hup.success());
+    let start = Instant::now();
+    while status().await != 200 {
+        assert!(
+            start.elapsed() < Duration::from_secs(3),
+            "SIGHUP did not reload"
+        );
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    child.kill().unwrap();
+    let _ = child.wait();
+}
