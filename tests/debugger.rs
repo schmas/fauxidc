@@ -437,3 +437,18 @@ async fn token_endpoint_accepts_the_debugger_client() {
     assert_eq!(s, 200, "{b}");
     assert!(json(&b)["id_token"].is_string());
 }
+
+#[tokio::test]
+async fn debugger_shows_badges_and_code_blocks() {
+    let app = app(STRICT);
+    let at = access_token_for(&app, &[]).await;
+    let (_, _, b) = send(&app, post_form("/auth0/debugger", &[("token", &at)], &[])).await;
+    assert!(b.contains("badge-success"), "{b}");
+    assert!(b.contains("<pre") && b.contains("<code"));
+    assert!(b.contains("/_mock/static/fauxidc.css"));
+    assert!(!b.contains("login.css"));
+    let stranger = SigningKey::generate_for(SigningAlg::ES256).unwrap();
+    let t = sign_with(&stranger, &json!({"sub":"x"}));
+    let (_, _, b) = send(&app, post_form("/auth0/debugger", &[("token", &t)], &[])).await;
+    assert!(b.contains("badge-error"), "{b}");
+}

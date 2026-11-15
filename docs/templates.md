@@ -11,6 +11,18 @@ fauxidc renders four pages with [minijinja](https://docs.rs/minijinja) (Jinja sy
 
 A missing `login_template` file or a template syntax error stops the server at startup.
 
+## Styles
+
+The built-in pages link one stylesheet, `/_mock/static/fauxidc.css` (`{{ static_base|href }}/fauxidc.css` in a template).
+It is compiled at dev time with Tailwind CSS v4 and daisyUI v5 and embedded in the binary. The page needs no network.
+Light and dark themes follow the browser `prefers-color-scheme` setting.
+
+A custom template (`templates_dir` or `login_template`) can link the same file and use the classes that the built-in templates use.
+The compiled file has only those classes: it is built from `assets/templates/`, so another Tailwind or daisyUI class has no style.
+For other styles, put your own file in `server.static_dir` and link it.
+
+`/_mock/static/login.css`, the stylesheet of the old built-in pages, is still served, so old templates that link it keep working.
+
 ## Context version 1
 
 Every context has `context_version` (integer, `1`). Fields are added in a minor release only if they are optional for existing templates. Removing or renaming a field is a breaking release.

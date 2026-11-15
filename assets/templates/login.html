@@ -52,7 +52,7 @@ fauxidc
 </div>
 </fieldset>
 <details class="collapse collapse-arrow shrink-0 rounded-box border border-base-300 bg-base-100"{% if override_claims %} open{% endif %}>
-<summary class="collapse-title min-h-0 py-2.5 text-sm font-medium">Override claims <span class="font-normal text-base-content/60">· optional</span></summary>
+<summary class="collapse-title min-h-0 rounded-box py-2.5 text-sm font-medium focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary">Override claims <span class="font-normal text-base-content/60">· optional</span></summary>
 <div class="collapse-content flex flex-col gap-1.5">
 <label for="f-override" class="sr-only">Override claims (JSON)</label>
 <textarea id="f-override" name="override_claims" rows="2" class="textarea min-h-0 w-full font-mono text-xs leading-relaxed" placeholder='{"name": "Alice Example"}' spellcheck="false" aria-describedby="f-override-help">{{ override_claims }}</textarea>

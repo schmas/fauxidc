@@ -242,9 +242,6 @@ fn templates_have_no_external_urls() {
 #[test]
 fn templates_link_only_fauxidc_css() {
     for (name, text) in template_files() {
-        if name.ends_with("debugger.html") {
-            continue; // Task 12
-        }
         assert!(
             text.contains("{{ static_base|href }}/fauxidc.css"),
             "{name}"
@@ -263,4 +260,22 @@ fn compiled_css_has_the_used_components() {
     for class in [".card", ".btn", ".select", ".alert", ".collapse"] {
         assert!(css.contains(class), "{class}");
     }
+}
+
+#[test]
+fn debugger_code_blocks_wrap() {
+    let css = std::fs::read_to_string(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/assets/static/fauxidc.css"
+    ))
+    .unwrap();
+    assert!(css.contains("white-space:pre-wrap"), "wrap rule");
+    assert!(css.contains("overflow-wrap:anywhere"), "break rule");
+}
+
+#[test]
+fn templates_doc_names_the_stylesheet() {
+    let doc =
+        std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/docs/templates.md")).unwrap();
+    assert!(doc.contains("/_mock/static/fauxidc.css"));
 }
