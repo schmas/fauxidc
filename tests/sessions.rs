@@ -492,3 +492,23 @@ async fn request_without_max_age_ignores_the_session() {
     let (s, _, _) = send(&app, get_with(&authorize_url(&[]), &[("cookie", &cookie)])).await;
     assert_eq!(s, 200, "only prompt=none and max_age use the Session");
 }
+
+#[tokio::test]
+async fn prompt_none_with_max_age_zero_is_login_required() {
+    // Ruling 7: max_age=0 acts as prompt=login, which prompt=none forbids (OIDC Core 3.1.2.1).
+    let app = app(STRICT);
+    let (_, cookie) = login_with_session(&app).await;
+    let (_, h, _) = send(
+        &app,
+        get_with(
+            &authorize_url(&[("prompt", "none"), ("max_age", "0")]),
+            &[("cookie", &cookie)],
+        ),
+    )
+    .await;
+    assert_eq!(
+        query_param(&location(&h), "error").as_deref(),
+        Some("login_required")
+    );
+    assert!(query_param(&location(&h), "code").is_none());
+}

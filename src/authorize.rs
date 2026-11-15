@@ -284,6 +284,18 @@ async fn authorize_request(ctx: &IssuerCtx, headers: &HeaderMap, p: &AuthorizePa
         Err(rejection) => return reject(ctx, rejection),
     };
     if prompt.none {
+        // `max_age=0` acts as `prompt=login` (Ruling 7), which `prompt=none` forbids.
+        if prompt.force_login {
+            return reject(
+                ctx,
+                redirect_error(
+                    ctx,
+                    &request,
+                    "login_required",
+                    "prompt=none: max_age=0 requires a new sign-in",
+                ),
+            );
+        }
         return match silent_session(ctx, headers, &request, &prompt).await {
             Ok(session) => resume(ctx, &request, &session),
             Err(rejection) => reject(ctx, rejection),
