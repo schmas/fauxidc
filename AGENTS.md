@@ -60,7 +60,7 @@ scripts/conformance.sh                             # OpenID conformance suite (c
 ├── e2e/spa/      # SPA exit test (Node and Playwright, outside Cargo)
 ├── conformance/  # OpenID conformance suite plans and expected results
 ├── scripts/      # CSS build, image build, binary check, conformance runner
-├── docs/         # spec.md, configuration.md, test-api.md, features.md, templates.md, adr/, testing/
+├── docs/         # spec.md, configuration.md, test-api.md, features.md, templates.md, testcontainers.md, adr/, testing/
 └── .agents/      # plans and work files, git-ignored
 ```
 

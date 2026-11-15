@@ -142,6 +142,8 @@ With a mapped port, set `FAUXIDC_ISSUER_FROM_HOST=true`. Then `iss` and the disc
 so a client can use `http://localhost:<mapped port>/default` as its issuer. Zero config stays on.
 Tokens are then valid only through the host that minted them.
 See [docs/configuration.md](docs/configuration.md#issuer-url-and-endpoint-urls).
+For JVM tests, [docs/testcontainers.md](docs/testcontainers.md) has the `GenericContainer` setup, the wait strategy,
+a Spring Boot example and token minting from Java.
 
 ### Simulate a provider outage
 
