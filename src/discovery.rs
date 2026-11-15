@@ -3,19 +3,20 @@
 use axum::{Json, extract::State, http::HeaderMap};
 use serde_json::{Value, json};
 
+use crate::config::Endpoint;
 use crate::logging::record_endpoint;
 use crate::state::IssuerCtx;
 
 /// Returns the discovery document. `issuer` is fixed; endpoints follow the request.
 pub async fn document(State(ctx): State<IssuerCtx>, headers: HeaderMap) -> Json<Value> {
     record_endpoint(&ctx.id, "discovery");
-    let b = ctx.base_url(&headers);
+    let url = |e| ctx.endpoint_url(&headers, e);
     Json(json!({
         "issuer": ctx.issuer().issuer_url,
-        "authorization_endpoint": format!("{b}/authorize"),
-        "token_endpoint": format!("{b}/token"),
-        "userinfo_endpoint": format!("{b}/userinfo"),
-        "jwks_uri": format!("{b}/jwks"),
+        "authorization_endpoint": url(Endpoint::Authorize),
+        "token_endpoint": url(Endpoint::Token),
+        "userinfo_endpoint": url(Endpoint::Userinfo),
+        "jwks_uri": url(Endpoint::Jwks),
         "response_types_supported": ["code"],
         "response_modes_supported": ["query"],
         "grant_types_supported": ["authorization_code"],

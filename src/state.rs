@@ -6,7 +6,7 @@ use std::sync::{Arc, Mutex, PoisonError};
 use axum::http::HeaderMap;
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 
-use crate::config::{Claims, ClientConfig, Config, IssuerConfig};
+use crate::config::{Claims, ClientConfig, Config, Endpoint, IssuerConfig};
 use crate::error::{OAuthError, StartError};
 use crate::issuer::endpoint_base;
 use crate::keys::KeyHandle;
@@ -124,6 +124,26 @@ impl IssuerCtx {
     /// The URL that endpoint paths are appended to, without a trailing slash.
     pub fn base_url(&self, headers: &HeaderMap) -> String {
         endpoint_base(&self.app.config.server, self.issuer(), headers)
+    }
+
+    /// The router path of `e` relative to the Issuer path, for example `/oauth/token`.
+    pub fn endpoint_path(&self, e: Endpoint) -> &str {
+        self.issuer().paths.get(e)
+    }
+
+    /// The absolute URL of `e`: the base URL plus the endpoint path.
+    pub fn endpoint_url(&self, headers: &HeaderMap, e: Endpoint) -> String {
+        format!("{}{}", self.base_url(headers), self.endpoint_path(e))
+    }
+
+    /// The absolute path of `e` on this server, for HTML forms: the Issuer path plus
+    /// the endpoint path, with one `/` between them.
+    pub fn endpoint_href(&self, e: Endpoint) -> String {
+        format!(
+            "{}{}",
+            self.path.trim_end_matches('/'),
+            self.endpoint_path(e)
+        )
     }
 }
 

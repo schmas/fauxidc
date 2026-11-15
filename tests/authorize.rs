@@ -382,3 +382,20 @@ async fn missing_response_type_is_invalid_request() {
         "invalid_request"
     );
 }
+
+#[tokio::test]
+async fn login_form_posts_to_overridden_authorize() {
+    let cfg = STRICT.replace(
+        "[issuer.auth0]\n",
+        "[issuer.auth0]\npaths = { authorize = \"/oauth/authorize\" }\n",
+    );
+    let app = app(&cfg);
+    let url = authorize_url(&[]).replace("/auth0/authorize", "/auth0/oauth/authorize");
+    let (s, _, html) = send(&app, get(&url)).await;
+    assert_eq!(s, 200, "{html}");
+    // The template engine escapes `/` as `&#x2f;`; a browser decodes it.
+    assert!(
+        html.contains("action=\"&#x2f;auth0&#x2f;oauth&#x2f;authorize\""),
+        "{html}"
+    );
+}

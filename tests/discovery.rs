@@ -103,3 +103,37 @@ async fn discovery_does_not_wait_for_the_key() {
     .await;
     assert_eq!(r.unwrap().0, 200);
 }
+
+const OVERRIDES: &str = "[issuer.auth0]\nissuer_url = \"http://localhost:9000/auth0/\"\n\
+    paths = { authorize = \"/oauth/authorize\", token = \"/oauth/token\", jwks = \"/.keys\", userinfo = \"/me\" }\n";
+
+#[tokio::test]
+async fn discovery_publishes_path_overrides() {
+    let app = app(OVERRIDES);
+    let d = json(
+        &send(&app, get("/auth0/.well-known/openid-configuration"))
+            .await
+            .2,
+    );
+    assert_eq!(
+        d["token_endpoint"],
+        "http://localhost:9000/auth0/oauth/token"
+    );
+    assert_eq!(
+        d["authorization_endpoint"],
+        "http://localhost:9000/auth0/oauth/authorize"
+    );
+    assert_eq!(d["jwks_uri"], "http://localhost:9000/auth0/.keys");
+    assert_eq!(d["userinfo_endpoint"], "http://localhost:9000/auth0/me");
+    assert_eq!(send(&app, get("/auth0/.keys")).await.0, 200);
+    assert_eq!(send(&app, get("/auth0/jwks")).await.0, 404);
+}
+
+#[tokio::test]
+async fn root_issuer_override_has_single_slash() {
+    let app = app(
+        "[issuer.r]\nissuer_url = \"http://localhost:9000/\"\npaths = { token = \"/oauth/token\" }\n",
+    );
+    let d = json(&send(&app, get("/.well-known/openid-configuration")).await.2);
+    assert_eq!(d["token_endpoint"], "http://localhost:9000/oauth/token");
+}

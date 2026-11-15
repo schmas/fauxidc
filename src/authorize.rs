@@ -8,7 +8,7 @@ use axum::{
 use serde::{Deserialize, Serialize};
 
 use crate::clients::{ResolvedClient, find_client, redirect_uri_matches, register_lenient};
-use crate::config::Claims;
+use crate::config::{Claims, Endpoint};
 use crate::cookies::{auto_select_name, auto_select_set, read_cookie};
 use crate::error::{OAuthError, append_query};
 use crate::logging::{record_client, record_endpoint};
@@ -295,7 +295,7 @@ fn login_page(
         context_version: CONTEXT_VERSION,
         issuer_id: ctx.id.clone(),
         client_id: request.client.client_id.clone(),
-        action: format!("{}/authorize", ctx.path.trim_end_matches('/')),
+        action: ctx.endpoint_href(Endpoint::Authorize),
         users: ctx
             .app
             .config

@@ -13,6 +13,7 @@ use tower_http::cors::{Any, CorsLayer};
 use tower_http::trace::{DefaultOnResponse, TraceLayer};
 
 use crate::authorize;
+use crate::config::Endpoint;
 use crate::discovery;
 use crate::health;
 use crate::issuer::issuer_path;
@@ -46,17 +47,23 @@ pub fn build_router(state: Arc<AppState>) -> Router {
                 "/.well-known/oauth-authorization-server",
                 get(discovery::document).layer(cors.clone()),
             )
-            .route("/jwks", get(jwks::jwks).layer(cors.clone()))
             .route(
-                "/authorize",
+                ctx.endpoint_path(Endpoint::Jwks),
+                get(jwks::jwks).layer(cors.clone()),
+            )
+            .route(
+                ctx.endpoint_path(Endpoint::Authorize),
                 get(authorize::authorize_get).post(authorize::authorize_post),
             )
-            .route("/token", post(token_endpoint::token))
             .route(
-                "/userinfo",
+                ctx.endpoint_path(Endpoint::Token),
+                post(token_endpoint::token),
+            )
+            .route(
+                ctx.endpoint_path(Endpoint::Userinfo),
                 get(userinfo::userinfo).post(userinfo::userinfo),
             )
-            .with_state(ctx);
+            .with_state(ctx.clone());
         router = if path == "/" {
             router.merge(sub)
         } else {
