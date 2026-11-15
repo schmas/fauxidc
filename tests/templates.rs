@@ -134,3 +134,27 @@ async fn templates_dir_replaces_signed_out_page() {
     let (s, _, b) = send(&app, get("/auth0/endsession")).await;
     assert_eq!((s.as_u16(), b.as_str()), (200, "BYE auth0"));
 }
+
+#[tokio::test]
+async fn fauxidc_css_is_served() {
+    let (s, h, b) = send(&app(AUTH0), get("/_mock/static/fauxidc.css")).await;
+    assert_eq!(s, 200);
+    assert!(h["content-type"].to_str().unwrap().starts_with("text/css"));
+    assert!(
+        b.contains("prefers-color-scheme: dark") || b.contains("prefers-color-scheme:dark"),
+        "dark theme rule"
+    );
+}
+
+#[test]
+fn fauxidc_css_is_under_60_kb_and_has_no_external_urls() {
+    let css = std::fs::read_to_string(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/assets/static/fauxidc.css"
+    ))
+    .unwrap();
+    assert!(css.len() < 60 * 1024, "{} bytes", css.len());
+    for bad in ["http://", "https://", "url(//"] {
+        assert!(!css.contains(bad), "{bad}");
+    }
+}

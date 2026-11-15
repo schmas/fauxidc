@@ -132,6 +132,17 @@ jobs:
           docker logs fx 2>&1 | grep -q 'non-loopback'
           time docker stop fx
 
+  css:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Rebuild the page styles
+        run: scripts/build-css.sh
+      - name: Fail when the committed CSS differs
+        run: git diff --exit-code -- assets/static/fauxidc.css
+      - name: Check the CSS size (under 60 KB)
+        run: test "$(wc -c < assets/static/fauxidc.css)" -lt 61440
+
   spa-e2e:
     runs-on: ubuntu-latest
     steps:

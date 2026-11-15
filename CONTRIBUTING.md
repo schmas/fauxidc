@@ -16,6 +16,13 @@ cargo clippy --all-targets -- -D warnings
 cargo test
 ```
 
+## Page styles
+
+The built-in pages use `assets/static/fauxidc.css`, compiled with Tailwind CSS and daisyUI from `assets/css/fauxidc.css`.
+After you change a file in `assets/templates/` or `assets/css/`, run `scripts/build-css.sh` and commit the new `assets/static/fauxidc.css` in the same commit.
+The script downloads the pinned tools into `target/css-tools/` (needs `curl` and `shasum`). `cargo build` does not need it.
+The CI job `css` fails when the committed file differs from a fresh build.
+
 ## Rules
 
 - Use [Conventional Commits](https://www.conventionalcommits.org/). Releases and the CHANGELOG are generated from them.

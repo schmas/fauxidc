@@ -1,0 +1,6 @@
+/* Source of assets/static/fauxidc.css. Rebuild with scripts/build-css.sh. */
+@import "tailwindcss" source(none);
+@source "../templates";
+@plugin "../../target/css-tools/daisyui.mjs" {
+  themes: light --default, dark --prefersdark;
+}
