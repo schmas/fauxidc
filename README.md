@@ -260,8 +260,12 @@ The endpoint has no authentication. Never run fauxidc in production.
 `POST /_mock/{issuer-id}/rotate-key` gives the Issuer a new active signing key with its `signing_alg`.
 JWKS lists the new key first and keeps the older keys, so tokens signed before the rotation still verify.
 Add `?retire=true` to remove every older key in the same call; their tokens then fail.
+An Issuer keeps at most 10 keys: a rotation above the cap removes the oldest key.
 The response is `{"kid": <new kid>, "keys": [<kids in JWKS order>], "retired": [<removed kids>]}`.
+`retired` also lists a key that the cap removed.
 An unknown Issuer id gives 404.
+A request with an `Origin` header that is not the server's own origin gets 403 `access_denied`, so a web page cannot rotate the keys.
+`curl` and server-side test code send no `Origin` and are not affected.
 Rotated keys live in memory only: after a restart the Issuer returns to its configured key.
 Rotating an RS256 Issuer that shares the server key does not change the key of the other Issuers.
 
@@ -284,7 +288,7 @@ The body is JSON `{endpoint, status, error, count, delay_ms}`; unknown fields gi
 | `delay_ms` | Wait before the answer, at most 60000. Default 0. Without `status`, the request is only delayed and then handled normally. |
 
 A failed request gets the status and `{"error": <error>, "error_description": "injected failure"}`.
-A new POST for the same endpoint replaces the old entry. CORS preflights do not use up an entry.
+A new POST for the same endpoint replaces the old entry. CORS preflights and requests with a wrong method (405) do not use up an entry.
 Entries live in memory and survive a hot reload. An unknown Issuer id gives 404.
 `DELETE /_mock/{issuer-id}/fail-next` removes all entries of the Issuer and returns 204.
 

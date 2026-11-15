@@ -280,6 +280,9 @@ impl KeyHandle {
     }
 }
 
+/// The most keys one Issuer keeps: the active key plus `MAX_KEYS - 1` older keys.
+pub const MAX_KEYS: usize = 10;
+
 /// The keys of one Issuer: the active key signs; older keys still verify (by `kid`).
 #[derive(Clone)]
 pub struct KeySet {
@@ -315,19 +318,24 @@ impl KeySet {
         }
     }
 
-    /// A new set with `new` as the active key. The old active key and the older keys stay
-    /// (in that order) unless `retire` is set.
+    /// `new` becomes active; older keys follow, newest first, at most `MAX_KEYS - 1` of them.
+    /// Returns the set and the kids that the cap or `retire` removed.
     #[must_use]
-    pub fn rotated(&self, new: Arc<SigningKey>, retire: bool) -> KeySet {
-        let previous = if retire {
-            Vec::new()
-        } else {
-            self.iter().cloned().collect()
-        };
-        KeySet {
-            active: new,
-            previous,
-        }
+    pub fn rotated(&self, new: Arc<SigningKey>, retire: bool) -> (KeySet, Vec<String>) {
+        let mut previous: Vec<Arc<SigningKey>> = self.iter().cloned().collect();
+        let keep = if retire { 0 } else { MAX_KEYS - 1 };
+        let dropped = previous
+            .split_off(keep.min(previous.len()))
+            .into_iter()
+            .map(|k| k.kid.clone())
+            .collect();
+        (
+            KeySet {
+                active: new,
+                previous,
+            },
+            dropped,
+        )
     }
 
     /// Decodes and verifies `token`: the key by header `kid` (none: the active key), the header
@@ -360,7 +368,8 @@ impl KeySet {
 }
 
 /// The result of [`Keyring::rotate`]: the new `kid`, the `kid`s in JWKS order and the
-/// removed `kid`s.
+/// removed `kid`s. `retired` lists the keys that `retire` removed and the keys that the
+/// [`MAX_KEYS`] cap dropped.
 #[derive(Debug, Clone, Serialize)]
 pub struct Rotation {
     pub kid: String,
@@ -525,7 +534,7 @@ impl Keyring {
     }
 
     /// Generates a key of `alg` on a blocking thread, then makes it the Issuer's active key.
-    /// With `retire`, every older key is removed. The swap happens under one lock, so parallel
+    /// With `retire`, every older key is removed; else the oldest keys above [`MAX_KEYS`] are. The swap happens under one lock, so parallel
     /// rotations all land. The new key lives in memory only. Unknown Issuer id:
     /// [`KeyError::Unavailable`].
     pub async fn rotate(
@@ -543,13 +552,9 @@ impl Keyring {
         let mut slots = self.lock();
         let slot = slots.get_mut(issuer_id).ok_or(KeyError::Unavailable)?;
         let old = slot.current().ok_or(KeyError::Unavailable)?;
-        let set = Arc::new(old.rotated(new.clone(), retire));
+        let (set, retired) = old.rotated(new.clone(), retire);
+        let set = Arc::new(set);
         slot.set = Some(set.clone());
-        let retired = if retire {
-            old.iter().map(|k| k.kid.clone()).collect()
-        } else {
-            Vec::new()
-        };
         Ok(Rotation {
             kid: new.kid.clone(),
             keys: set.iter().map(|k| k.kid.clone()).collect(),
@@ -997,13 +1002,29 @@ mod tests {
         let a = Arc::new(test_key());
         let b = Arc::new(SigningKey::generate_for(SigningAlg::ES256).unwrap());
         let c = Arc::new(SigningKey::generate_for(SigningAlg::ES256).unwrap());
-        let set = KeySet::single(a.clone()).rotated(b.clone(), false);
-        let set = set.rotated(c.clone(), false);
+        let (set, _) = KeySet::single(a.clone()).rotated(b.clone(), false);
+        let (set, _) = set.rotated(c.clone(), false);
         let kids: Vec<&str> = set.iter().map(|k| k.kid.as_str()).collect();
         assert_eq!(kids, vec![c.kid.as_str(), b.kid.as_str(), a.kid.as_str()]);
-        let retired = set.rotated(a.clone(), true);
+        let (retired, dropped) = set.rotated(a.clone(), true);
         let kids: Vec<&str> = retired.iter().map(|k| k.kid.as_str()).collect();
         assert_eq!(kids, vec![a.kid.as_str()]);
+        assert_eq!(dropped, vec![c.kid.clone(), b.kid.clone(), a.kid.clone()]);
+    }
+
+    #[test]
+    fn rotated_caps_older_keys() {
+        let mut set = KeySet::single(Arc::new(test_key()));
+        for _ in 0..9 {
+            let next = Arc::new(SigningKey::generate_for(SigningAlg::ES256).unwrap());
+            set = set.rotated(next, false).0;
+        }
+        assert_eq!(set.previous.len(), 9);
+        let oldest = set.previous[8].kid.clone();
+        let next = Arc::new(SigningKey::generate_for(SigningAlg::ES256).unwrap());
+        let (set, dropped) = set.rotated(next, false);
+        assert_eq!(set.previous.len(), 9);
+        assert_eq!(dropped, vec![oldest]);
     }
 
     #[tokio::test]

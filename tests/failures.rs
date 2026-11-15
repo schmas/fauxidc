@@ -270,3 +270,59 @@ async fn delete_with_unknown_issuer_is_404() {
         .unwrap();
     assert_eq!(send(&app, del).await.0, 404);
 }
+
+#[tokio::test]
+async fn wrong_method_does_not_consume_a_failure() {
+    let app = app(STRICT);
+    send(
+        &app,
+        post_json("/_mock/auth0/fail-next", &json!({"endpoint":"token"})),
+    )
+    .await;
+    assert_eq!(send(&app, get("/auth0/token")).await.0, 405);
+    let form = [("grant_type", "client_credentials")];
+    let (s, _, _) = send(
+        &app,
+        post_form(
+            "/auth0/token",
+            &form,
+            &[("authorization", &basic("example-app", "local"))],
+        ),
+    )
+    .await;
+    assert_eq!(s, 500);
+}
+
+/// One request to the endpoint behind each `fail-next` key.
+fn endpoint_request(key: &str) -> Request<Body> {
+    match key {
+        "authorize" => get("/auth0/authorize"),
+        "token" => post_form("/auth0/token", &[], &[]),
+        "userinfo" => get("/auth0/userinfo"),
+        "jwks" => get("/auth0/jwks"),
+        "endsession" => get("/auth0/endsession"),
+        "introspect" => post_form("/auth0/introspect", &[], &[]),
+        "revoke" => post_form("/auth0/revoke", &[], &[]),
+        "debugger" => get("/auth0/debugger"),
+        "discovery" => get("/auth0/.well-known/openid-configuration"),
+        other => panic!("no request for {other}"),
+    }
+}
+
+#[tokio::test]
+async fn every_endpoint_key_is_used_by_its_endpoint() {
+    let app = app(STRICT);
+    for key in fauxidc::failures::ENDPOINTS {
+        let (s, _, b) = send(
+            &app,
+            post_json(
+                "/_mock/auth0/fail-next",
+                &json!({"endpoint": key, "status": 418}),
+            ),
+        )
+        .await;
+        assert_eq!(s, 200, "{key}: {b}");
+        assert_eq!(send(&app, endpoint_request(key)).await.0, 418, "{key}");
+        assert_ne!(send(&app, endpoint_request(key)).await.0, 418, "{key}");
+    }
+}

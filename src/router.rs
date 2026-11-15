@@ -168,8 +168,10 @@ fn issuer_router(ctx: &IssuerCtx, cors: &CorsLayer) -> Router {
 }
 
 /// Adds the Injected failure middleware of `target` to a route. It sits inside the CORS layer.
+/// `route_layer`: a request with a wrong method gets 405 and does not use up an Injected
+/// failure (plan Ruling 31).
 fn guarded(route: MethodRouter<IssuerCtx>, target: FailureTarget) -> MethodRouter<IssuerCtx> {
-    route.layer(axum::middleware::from_fn_with_state(
+    route.route_layer(axum::middleware::from_fn_with_state(
         target,
         failures::inject,
     ))

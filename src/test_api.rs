@@ -11,7 +11,7 @@ use axum::{
         Path, Query, State,
         rejection::{JsonRejection, QueryRejection},
     },
-    http::{HeaderValue, StatusCode, header},
+    http::{HeaderMap, HeaderValue, StatusCode, header},
     response::{IntoResponse, Response},
 };
 use serde::Deserialize;
@@ -67,16 +67,49 @@ pub struct RotateQuery {
     pub retire: bool,
 }
 
+/// `true` when `headers` has no `Origin`, or `Origin` equals "<scheme>://<Host>" of this
+/// request. The scheme is `https` when `server.tls` is on, else `http` (plan Ruling 4).
+fn same_origin_or_none(state: &AppState, headers: &HeaderMap) -> bool {
+    let Some(origin) = headers.get(header::ORIGIN) else {
+        return true;
+    };
+    let Some(host) = headers.get(header::HOST).and_then(|v| v.to_str().ok()) else {
+        return false;
+    };
+    let scheme = if state.config.server.tls.enabled() {
+        "https"
+    } else {
+        "http"
+    };
+    origin
+        .to_str()
+        .is_ok_and(|origin| origin == format!("{scheme}://{host}"))
+}
+
 /// `POST /_mock/{issuer_id}/rotate-key[?retire=true]`: a new active key with the Issuer's
-/// `signing_alg`; older keys stay in JWKS unless `retire=true`. 200 with the [`Rotation`]
-/// JSON; 404 `not_found` for an unknown Issuer id.
+/// `signing_alg`; older keys stay in JWKS unless `retire=true`, up to
+/// [`MAX_KEYS`](crate::keys::MAX_KEYS) keys. 200 with the [`Rotation`] JSON; 404 `not_found`
+/// for an unknown Issuer id; 403 `access_denied` for a cross-origin browser request (an
+/// `Origin` header that is not this request's own origin), checked first.
 ///
 /// [`Rotation`]: crate::keys::Rotation
 pub async fn rotate_key(
     State(state): State<Arc<AppState>>,
     Path(issuer_id): Path<String>,
+    headers: HeaderMap,
     query: Result<Query<RotateQuery>, QueryRejection>,
 ) -> Response {
+    if !same_origin_or_none(&state, &headers) {
+        return (
+            StatusCode::FORBIDDEN,
+            [(header::CACHE_CONTROL, HeaderValue::from_static("no-store"))],
+            Json(json!({
+                "error": "access_denied",
+                "error_description": "cross-origin Test API request",
+            })),
+        )
+            .into_response();
+    }
     let Some(issuer) = state.config.issuer.get(&issuer_id) else {
         return unknown_issuer(&issuer_id);
     };

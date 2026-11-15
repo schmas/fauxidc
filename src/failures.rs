@@ -18,6 +18,7 @@ use serde::Deserialize;
 use serde_json::json;
 
 use crate::error::OAuthError;
+use crate::logging::record_endpoint;
 use crate::state::{AppState, Store};
 use crate::test_api::unknown_issuer;
 
@@ -175,13 +176,15 @@ pub async fn apply(store: &Store, issuer_id: &str, endpoint: &str) -> Option<Res
     )
 }
 
-/// The route middleware: takes one use, sleeps `delay_ms`, then answers `status` with
+/// The route middleware: records the Issuer and endpoint on the request span, takes one use,
+/// sleeps `delay_ms`, then answers `status` with
 /// `{"error": error, "error_description": "injected failure"}` (Cache-Control: no-store), or
 /// calls `next` for a delay-only entry. `OPTIONS` requests (CORS preflights) pass through.
 pub async fn inject(State(target): State<FailureTarget>, req: Request, next: Next) -> Response {
     if req.method() == Method::OPTIONS {
         return next.run(req).await;
     }
+    record_endpoint(&target.issuer_id, target.endpoint);
     match apply(&target.store, &target.issuer_id, target.endpoint).await {
         Some(res) => res,
         None => next.run(req).await,

@@ -258,3 +258,74 @@ async fn rotate_rejects_a_bad_retire_value() {
     assert_eq!(s, 400);
     assert_eq!(json(&b)["error"], "invalid_request");
 }
+
+fn rotate_request(origin: Option<&str>) -> Request<Body> {
+    let mut b = Request::builder()
+        .method("POST")
+        .uri("/_mock/auth0/rotate-key?retire=true")
+        .header("host", "localhost:9000");
+    if let Some(origin) = origin {
+        b = b.header("origin", origin);
+    }
+    b.body(Body::empty()).unwrap()
+}
+
+#[tokio::test]
+async fn cross_origin_rotate_key_is_rejected() {
+    let app = app(AUTH0);
+    let before = json(&send(&app, get("/auth0/jwks")).await.2);
+    let (s, h, b) = send(&app, rotate_request(Some("http://evil.example.com"))).await;
+    assert_eq!(s, 403, "{b}");
+    assert_eq!(
+        json(&b),
+        json!({"error":"access_denied","error_description":"cross-origin Test API request"})
+    );
+    assert_eq!(h["cache-control"], "no-store");
+    assert_eq!(json(&send(&app, get("/auth0/jwks")).await.2), before);
+    assert_eq!(
+        send(&app, rotate_request(Some("http://localhost:9000")))
+            .await
+            .0,
+        200
+    );
+    assert_eq!(send(&app, rotate_request(None)).await.0, 200);
+}
+
+#[tokio::test]
+async fn cross_origin_check_runs_before_the_issuer_lookup() {
+    let req = Request::builder()
+        .method("POST")
+        .uri("/_mock/nope/rotate-key")
+        .header("host", "localhost:9000")
+        .header("origin", "http://evil.example.com")
+        .body(Body::empty())
+        .unwrap();
+    assert_eq!(send(&app(AUTH0), req).await.0, 403);
+}
+
+#[tokio::test]
+async fn rotation_keeps_at_most_ten_keys() {
+    let app = app(AUTH0);
+    let first = json(&send(&app, get("/auth0/jwks")).await.2)["keys"][0]["kid"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let mut last = Value::Null;
+    for _ in 0..12 {
+        let (s, _, b) = send(&app, post_json("/_mock/auth0/rotate-key", &json!({}))).await;
+        assert_eq!(s, 200, "{b}");
+        last = json(&b);
+    }
+    assert_eq!(last["keys"].as_array().unwrap().len(), 10, "{last}");
+    assert_eq!(last["retired"].as_array().unwrap().len(), 1, "{last}");
+    let jwks = json(&send(&app, get("/auth0/jwks")).await.2);
+    let kids: Vec<&str> = jwks["keys"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|k| k["kid"].as_str().unwrap())
+        .collect();
+    assert_eq!(kids.len(), 10);
+    assert!(!kids.contains(&first.as_str()), "the startup key is gone");
+    assert!(!kids.contains(&last["retired"][0].as_str().unwrap()));
+}
