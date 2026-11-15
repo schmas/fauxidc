@@ -151,12 +151,21 @@ mod with_tls {
         server.shutdown().await.unwrap();
     }
 
+    /// Uses a cap of 4 on the listener itself, so the test needs few file descriptors
+    /// (the server cap is [`fauxidc::tls::MAX_HANDSHAKES`], set by `TlsListener::new`).
     #[tokio::test]
     async fn handshakes_above_the_cap_wait() {
-        let server = start(tls_config()).await;
-        let addr = server.local_addr();
+        const CAP: usize = 4;
+        let tcp = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = tcp.local_addr().unwrap();
+        let config = fauxidc::tls::server_config(
+            std::path::Path::new(&fixture("cert.pem")),
+            std::path::Path::new(&fixture("key.pem")),
+        )
+        .unwrap();
+        let _listener = fauxidc::tls::TlsListener::with_max_handshakes(tcp, config, CAP);
         let mut idle = Vec::new();
-        for _ in 0..fauxidc::tls::MAX_HANDSHAKES {
+        for _ in 0..CAP {
             idle.push(tokio::net::TcpStream::connect(addr).await.unwrap());
         }
         // Let the listener accept them all: every handshake permit is now taken.
@@ -174,8 +183,6 @@ mod with_tls {
             .expect("the handshake finishes after one idle connection closes")
             .unwrap();
         assert!(done);
-        drop(idle);
-        server.shutdown().await.unwrap();
     }
 
     #[tokio::test]

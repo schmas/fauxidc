@@ -53,7 +53,7 @@ pub fn server_config(
 }
 
 /// Accepts TCP connections and runs each handshake on its own task (bounded by
-/// [`HANDSHAKE_TIMEOUT`], at most [`MAX_HANDSHAKES`] at once). Finished handshakes go through
+/// [`HANDSHAKE_TIMEOUT`], at most [`MAX_HANDSHAKES`] at once by default). Finished handshakes go through
 /// a channel to `accept`, so one stalled client never blocks the listener.
 pub struct TlsListener {
     addr: std::io::Result<SocketAddr>,
@@ -62,12 +62,23 @@ pub struct TlsListener {
 }
 
 impl TlsListener {
-    /// Starts accepting on `tcp`. Must run inside a tokio runtime.
+    /// Starts accepting on `tcp` with at most [`MAX_HANDSHAKES`] handshakes at once.
+    /// Must run inside a tokio runtime.
     pub fn new(tcp: TcpListener, config: Arc<rustls::ServerConfig>) -> TlsListener {
+        TlsListener::with_max_handshakes(tcp, config, MAX_HANDSHAKES)
+    }
+
+    /// Like [`TlsListener::new`], with at most `max_handshakes` handshakes at once.
+    /// Must run inside a tokio runtime.
+    pub fn with_max_handshakes(
+        tcp: TcpListener,
+        config: Arc<rustls::ServerConfig>,
+        max_handshakes: usize,
+    ) -> TlsListener {
         let addr = tcp.local_addr();
         let (tx, ready) = mpsc::channel(QUEUE);
         let acceptor = TlsAcceptor::from(config);
-        let acceptor_task = tokio::spawn(accept_loop(tcp, acceptor, tx));
+        let acceptor_task = tokio::spawn(accept_loop(tcp, acceptor, tx, max_handshakes));
         TlsListener {
             addr,
             ready,
@@ -86,8 +97,9 @@ async fn accept_loop(
     tcp: TcpListener,
     acceptor: TlsAcceptor,
     tx: mpsc::Sender<(TlsStream<TcpStream>, SocketAddr)>,
+    max_handshakes: usize,
 ) {
-    let permits = Arc::new(Semaphore::new(MAX_HANDSHAKES));
+    let permits = Arc::new(Semaphore::new(max_handshakes));
     loop {
         // The semaphore is never closed, so this only waits.
         let Ok(permit) = permits.clone().acquire_owned().await else {
