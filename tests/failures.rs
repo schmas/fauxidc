@@ -258,3 +258,15 @@ async fn preflight_does_not_consume_a_failure() {
     .await;
     assert_eq!(s, 503);
 }
+
+#[tokio::test]
+async fn delete_with_unknown_issuer_is_404() {
+    let app = app(STRICT);
+    let del = Request::builder()
+        .method("DELETE")
+        .uri("/_mock/nope/fail-next")
+        .header("host", "localhost:9000")
+        .body(Body::empty())
+        .unwrap();
+    assert_eq!(send(&app, del).await.0, 404);
+}

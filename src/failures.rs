@@ -139,8 +139,11 @@ pub async fn fail_next(
     Json(body).into_response()
 }
 
-/// `DELETE /_mock/{issuer_id}/fail-next`: removes every Injected failure of the Issuer. 204.
+/// `DELETE /_mock/{issuer_id}/fail-next`: removes every Injected failure of the Issuer. 204; 404 for an unknown Issuer id.
 pub async fn clear(State(state): State<Arc<AppState>>, Path(issuer_id): Path<String>) -> Response {
+    if !state.config.issuer.contains_key(&issuer_id) {
+        return unknown_issuer(&issuer_id);
+    }
     state.store.clear_failures(&issuer_id);
     StatusCode::NO_CONTENT.into_response()
 }
