@@ -2,7 +2,7 @@
 
 use axum::http::{HeaderMap, Uri, header::HOST};
 
-use crate::config::{IssuerConfig, ServerConfig};
+use crate::config::{Config, IssuerConfig, ServerConfig};
 
 /// Returns the path of an issuer URL without a trailing slash; `/` stays `/`.
 ///
@@ -25,6 +25,35 @@ pub fn issuer_path(issuer_url: &str) -> Result<String, String> {
     }
     let path = uri.path().trim_end_matches('/');
     Ok(if path.is_empty() { "/" } else { path }.to_owned())
+}
+
+/// `true` if `path` equals `prefix` or lies below it, matching whole segments.
+fn under(path: &str, prefix: &str) -> bool {
+    prefix == "/"
+        || path == prefix
+        || path
+            .strip_prefix(prefix)
+            .is_some_and(|rest| rest.starts_with('/'))
+}
+
+/// The Issuer whose path equals `path` or is a whole-segment prefix of it; the RFC 8414 form
+/// `/.well-known/oauth-authorization-server{issuer path}` maps to that Issuer. `/_mock/*` → None.
+pub fn issuer_for_path(config: &Config, path: &str) -> Option<String> {
+    if under(path, "/_mock") {
+        return None;
+    }
+    let path = match path.strip_prefix("/.well-known/oauth-authorization-server") {
+        Some("") => "/",
+        Some(rest) if rest.starts_with('/') => rest.trim_end_matches('/'),
+        _ => path,
+    };
+    config
+        .issuer
+        .iter()
+        .filter_map(|(id, issuer)| Some((id, issuer_path(&issuer.issuer_url).ok()?)))
+        .filter(|(_, p)| under(path, p))
+        .max_by_key(|(_, p)| p.len())
+        .map(|(id, _)| id.clone())
 }
 
 /// Returns the URL that endpoint paths are appended to, without a trailing slash.
@@ -96,6 +125,31 @@ mod tests {
             issuer_url: url.into(),
             ..Default::default()
         }
+    }
+
+    #[test]
+    fn issuer_for_path_matches_whole_segments() {
+        let cfg = crate::config::load_str(
+            "[issuer.auth0]\nissuer_url=\"http://h/auth0\"\n[issuer.okta]\nissuer_url=\"http://h/oauth2/default\"\n",
+        )
+        .unwrap()
+        .config;
+        let f = |p: &str| issuer_for_path(&cfg, p);
+        assert_eq!(f("/auth0/token").as_deref(), Some("auth0"));
+        assert_eq!(f("/auth0").as_deref(), Some("auth0"));
+        assert_eq!(f("/auth0x/token"), None);
+        assert_eq!(
+            f("/.well-known/oauth-authorization-server/auth0").as_deref(),
+            Some("auth0")
+        );
+        assert_eq!(f("/oauth2/default/v1/token").as_deref(), Some("okta"));
+        assert_eq!(f("/_mock/health"), None);
+        assert_eq!(f("/nothing"), None);
+        let root = crate::config::load_str("[issuer.r]\nissuer_url=\"http://h\"\n")
+            .unwrap()
+            .config;
+        assert_eq!(issuer_for_path(&root, "/anything").as_deref(), Some("r"));
+        assert_eq!(issuer_for_path(&root, "/_mock/health"), None);
     }
 
     #[test]

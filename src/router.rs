@@ -22,6 +22,7 @@ use crate::introspect;
 use crate::issuer::issuer_path;
 use crate::jwks;
 use crate::logging::{record_endpoint, request_span};
+use crate::request_log;
 use crate::revoke;
 use crate::state::{AppState, IssuerCtx};
 use crate::templates;
@@ -106,7 +107,20 @@ pub fn build_router(state: Arc<AppState>) -> Router {
             "/_mock/{issuer_id}/token",
             post(test_api::issue).with_state(state.clone()),
         )
-        .route("/_mock/health", get(health::health).with_state(state))
+        .route(
+            "/_mock/requests",
+            get(request_log::list)
+                .delete(request_log::clear)
+                .with_state(state.clone()),
+        )
+        .route(
+            "/_mock/health",
+            get(health::health).with_state(state.clone()),
+        )
+        .layer(axum::middleware::from_fn_with_state(
+            state,
+            request_log::record,
+        ))
         .layer(trace)
 }
 

@@ -23,6 +23,7 @@ pub mod jwks;
 pub mod keys;
 pub mod logging;
 pub mod refresh;
+pub mod request_log;
 pub mod revoke;
 pub mod router;
 pub mod server;

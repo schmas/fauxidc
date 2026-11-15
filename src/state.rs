@@ -11,6 +11,7 @@ use crate::config::{Claims, ClientConfig, Config, Endpoint, IssuerConfig};
 use crate::error::{OAuthError, StartError};
 use crate::issuer::endpoint_base;
 use crate::keys::KeyHandle;
+use crate::request_log::RequestLog;
 use crate::templates::Templates;
 
 /// The PKCE code challenge method.
@@ -145,16 +146,19 @@ pub struct AppState {
     pub keys: KeyHandle,
     pub store: Store,
     pub templates: Templates,
+    pub request_log: RequestLog,
 }
 
 impl AppState {
     pub fn new(config: Config, keys: KeyHandle) -> Result<AppState, StartError> {
         let templates = Templates::load(&config).map_err(StartError::Templates)?;
+        let request_log = RequestLog::new(config.server.request_log_size);
         Ok(AppState {
             config: Arc::new(config),
             keys,
             store: Store::default(),
             templates,
+            request_log,
         })
     }
 }
