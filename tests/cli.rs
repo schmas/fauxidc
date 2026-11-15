@@ -132,78 +132,83 @@ fn healthcheck_against_running_server() {
     child.wait().unwrap();
 }
 
-/// Starts the binary with a config file made by `config(port)` on a free port and waits for
-/// `/_mock/health`. Tries a new port when the child cannot bind (another socket may take the
-/// port between `free_port` and the bind).
+/// Starts the binary with the config file `text` on `--port 0` and returns the child and the
+/// address it bound, read from the JSON `listening` log line. No `free_port` race: the OS
+/// picks the port at the bind. The rest of the log is drained so a full pipe never blocks
+/// the server.
 #[cfg(unix)]
-async fn start_with_config(
-    client: &reqwest::Client,
-    config: impl Fn(u16) -> String,
-) -> (Child, u16, PathBuf, String) {
-    for _ in 0..5 {
-        let port = free_port();
-        let text = config(port);
-        let file = write_tmp(&text);
-        let mut child = fauxidc_cmd(&[
-            "--config",
-            file.to_str().unwrap(),
-            "--port",
-            &port.to_string(),
-        ])
-        .stdout(Stdio::null())
-        .stderr(Stdio::piped())
-        .spawn()
-        .unwrap();
-        let start = Instant::now();
-        loop {
-            let health = client
-                .get(format!("http://127.0.0.1:{port}/_mock/health"))
-                .send()
-                .await;
-            if health.is_ok() {
-                // Drain the logs so a full pipe never blocks the server.
-                let mut logs = child.stderr.take().unwrap();
-                std::thread::spawn(move || std::io::copy(&mut logs, &mut std::io::sink()));
-                return (child, port, file, text);
+fn start_with_config(text: &str) -> (Child, String, PathBuf) {
+    use std::io::BufRead;
+    let file = write_tmp(text);
+    let mut child = fauxidc_cmd(&[
+        "--config",
+        file.to_str().unwrap(),
+        "--port",
+        "0",
+        "--log-format",
+        "json",
+    ])
+    .stdout(Stdio::null())
+    .stderr(Stdio::piped())
+    .spawn()
+    .unwrap();
+    let logs = child.stderr.take().unwrap();
+    let (tx, rx) = std::sync::mpsc::channel::<Result<String, String>>();
+    std::thread::spawn(move || {
+        let mut tx = Some(tx);
+        let mut seen = String::new();
+        for line in std::io::BufReader::new(logs).lines() {
+            let Ok(line) = line else { break };
+            if let Some(sender) = &tx {
+                let event: serde_json::Value = serde_json::from_str(&line).unwrap_or_default();
+                if event["fields"]["message"] == "listening" {
+                    let addr = event["fields"]["addr"].as_str().unwrap_or_default();
+                    let _ = sender.send(Ok(addr.to_owned()));
+                    tx = None;
+                } else {
+                    seen.push_str(&line);
+                    seen.push('\n');
+                }
             }
-            if let Some(status) = child.try_wait().unwrap() {
-                let mut err = String::new();
-                std::io::Read::read_to_string(child.stderr.as_mut().unwrap(), &mut err).unwrap();
-                assert!(
-                    err.contains("cannot bind"),
-                    "server exited with {status}: {err}"
-                );
-                break;
-            }
-            assert!(
-                start.elapsed() < Duration::from_secs(5),
-                "server did not start"
-            );
-            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+        if let Some(sender) = tx {
+            let _ = sender.send(Err(seen));
+        }
+    });
+    match rx.recv_timeout(Duration::from_secs(5)) {
+        Ok(Ok(addr)) => (child, addr, file),
+        other => {
+            let _ = child.kill();
+            panic!("server did not start: {other:?}");
         }
     }
-    panic!("no free port after 5 tries");
+}
+
+/// Replaces `file` with `text` in one step, with the modification time set to `mtime`: a
+/// sibling file gets the text and the time, then a rename puts it in place. The poller never
+/// sees a new time.
+#[cfg(unix)]
+fn replace_keeping_mtime(file: &std::path::Path, text: &str, mtime: std::time::SystemTime) {
+    let tmp = file.with_extension("toml.new");
+    std::fs::write(&tmp, text).unwrap();
+    std::fs::File::options()
+        .write(true)
+        .open(&tmp)
+        .unwrap()
+        .set_modified(mtime)
+        .unwrap();
+    std::fs::rename(&tmp, file).unwrap();
 }
 
 #[cfg(unix)]
 #[tokio::test]
 async fn sighup_reloads_config() {
+    let text = "[issuer.auth0]\nissuer_url = \"http://localhost:9000/auth0/\"\n\n[user.alice]\nlabel = \"Alice\"\n\n[user.bob]\nlabel = \"Bob\"\n";
+    let (mut child, addr, file) = start_with_config(text);
     let client = reqwest::Client::builder().no_proxy().build().unwrap();
-    let (mut child, port, file, text) = start_with_config(&client, |port| {
-        format!(
-            "[server]\nport = {port}\n\n[issuer.auth0]\nissuer_url = \"http://localhost:{port}/auth0/\"\n\n[user.alice]\nlabel = \"Alice\"\n\n[user.bob]\nlabel = \"Bob\"\n"
-        )
-    })
-    .await;
-    let base = format!("http://127.0.0.1:{port}");
+    let base = format!("http://{addr}");
     let old_mtime = std::fs::metadata(&file).unwrap().modified().unwrap();
-    std::fs::write(&file, text.replace("[user.bob]", "[user.cob]")).unwrap();
-    std::fs::File::options()
-        .write(true)
-        .open(&file)
-        .unwrap()
-        .set_modified(old_mtime)
-        .unwrap();
+    replace_keeping_mtime(&file, &text.replace("[user.bob]", "[user.cob]"), old_mtime);
     let status = || async {
         client
             .post(format!("{base}/_mock/auth0/token"))
