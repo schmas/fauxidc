@@ -3,6 +3,7 @@
 mod common;
 use common::*;
 
+use axum::response::IntoResponse;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
@@ -478,26 +479,31 @@ async fn unreachable_jwks_uri_is_invalid_client() {
 
 #[tokio::test]
 async fn failed_fetch_is_not_cached() {
-    let port = {
-        let l = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
-        l.local_addr().unwrap().port()
-    };
-    let app = app(&cfg_uri(port));
-    let a = || assertion(claims(TOKEN_URL), SigningAlg::ES256, &CLIENT_KEY);
-    assert_eq!(cc(&app, &a()).await.0, 401);
-    // The JWKS host comes up on the same port: the next request fetches again.
-    let set = Arc::new(Mutex::new(json!({"keys": [CLIENT_KEY.jwk.clone()]})));
-    let listener = tokio::net::TcpListener::bind(("127.0.0.1", port))
-        .await
-        .unwrap();
+    // One listener for the whole test: no port is closed and bound again.
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let up = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let jwk = CLIENT_KEY.jwk.clone();
+    let flag = up.clone();
     let router = Router::new().route(
         "/jwks",
         axum::routing::get(move || {
-            let set = set.clone();
-            async move { axum::Json(set.lock().unwrap().clone()) }
+            let (flag, jwk) = (flag.clone(), jwk.clone());
+            async move {
+                if flag.load(Ordering::SeqCst) {
+                    axum::Json(json!({"keys": [jwk]})).into_response()
+                } else {
+                    axum::http::StatusCode::INTERNAL_SERVER_ERROR.into_response()
+                }
+            }
         }),
     );
     tokio::spawn(async move { axum::serve(listener, router).await.unwrap() });
+    let app = app(&cfg_uri(port));
+    let a = || assertion(claims(TOKEN_URL), SigningAlg::ES256, &CLIENT_KEY);
+    assert_eq!(cc(&app, &a()).await.0, 401);
+    // The JWKS host now answers: the next request fetches again.
+    up.store(true, Ordering::SeqCst);
     assert_eq!(cc(&app, &a()).await.0, 200);
 }
 

@@ -83,6 +83,9 @@ async fn serve(
         key_pem: env("FAUXIDC_KEY_PEM"),
     };
     let files = loaded.files;
+    // Install the stop handlers before the server logs `listening`: a signal that follows the
+    // log line must stop the server cleanly, not kill it.
+    let stop = stop_signal().context("cannot wait for a signal")?;
     let server = match Server::start_with(loaded.config, options).await {
         Ok(server) => server,
         Err(error) => {
@@ -110,26 +113,30 @@ async fn serve(
     if let Err(error) = on_sighup(handle, inputs.clone()) {
         tracing::warn!("cannot listen for SIGHUP: {error}; reload on SIGHUP is off");
     }
-    wait_for_signal()
-        .await
-        .context("cannot wait for a signal")?;
+    stop.await.context("cannot wait for a signal")?;
     tracing::info!("shutting down");
     server.shutdown().await.context("shutdown failed")?;
     Ok(ExitCode::SUCCESS)
 }
 
-async fn wait_for_signal() -> std::io::Result<()> {
+/// Registers the handlers for Ctrl-C and SIGTERM now and returns the future that waits for
+/// either one.
+fn stop_signal() -> std::io::Result<impl std::future::Future<Output = std::io::Result<()>>> {
     #[cfg(unix)]
     {
         use tokio::signal::unix::{SignalKind, signal};
         let mut term = signal(SignalKind::terminate())?;
-        tokio::select! {
-            result = tokio::signal::ctrl_c() => result,
-            _ = term.recv() => Ok(()),
-        }
+        let mut int = signal(SignalKind::interrupt())?;
+        Ok(async move {
+            tokio::select! {
+                _ = term.recv() => {}
+                _ = int.recv() => {}
+            }
+            Ok(())
+        })
     }
     #[cfg(not(unix))]
     {
-        tokio::signal::ctrl_c().await
+        Ok(tokio::signal::ctrl_c())
     }
 }

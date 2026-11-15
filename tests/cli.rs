@@ -1,4 +1,4 @@
-use std::net::{TcpListener, TcpStream};
+use std::net::TcpListener;
 use std::path::PathBuf;
 use std::process::{Child, Command, ExitStatus, Stdio};
 use std::time::{Duration, Instant};
@@ -24,22 +24,6 @@ fn write_tmp(text: &str) -> PathBuf {
     ));
     std::fs::write(&path, text).unwrap();
     path
-}
-
-fn free_port() -> u16 {
-    TcpListener::bind("127.0.0.1:0")
-        .unwrap()
-        .local_addr()
-        .unwrap()
-        .port()
-}
-
-fn wait_for_port(port: u16, timeout: Duration) {
-    let start = Instant::now();
-    while TcpStream::connect(("127.0.0.1", port)).is_err() {
-        assert!(start.elapsed() < timeout, "port {port} did not open");
-        std::thread::sleep(Duration::from_millis(20));
-    }
 }
 
 fn send_sigterm(child: &Child) {
@@ -95,13 +79,9 @@ fn config_check_ok() {
 }
 
 #[test]
+#[cfg(unix)]
 fn serve_starts_and_stops_on_sigterm() {
-    let port = free_port();
-    let mut child = fauxidc_cmd(&["--port", &port.to_string()])
-        .stderr(Stdio::null())
-        .spawn()
-        .unwrap();
-    wait_for_port(port, Duration::from_secs(2));
+    let (mut child, _addr) = start_server(&[]);
     send_sigterm(&child);
     let status = wait_timeout(&mut child, Duration::from_secs(2)).expect("stopped in time");
     assert!(status.success());
@@ -118,12 +98,12 @@ fn bind_failure_exits_1() {
 }
 
 #[test]
+#[cfg(unix)]
 fn healthcheck_against_running_server() {
-    let port = free_port();
-    let mut child = fauxidc_cmd(&["--port", &port.to_string()]).spawn().unwrap();
-    wait_for_port(port, Duration::from_secs(2));
+    let (mut child, addr) = start_server(&[]);
+    let port = addr.rsplit(':').next().unwrap().to_owned();
     assert!(
-        fauxidc_cmd(&["healthcheck", "--port", &port.to_string()])
+        fauxidc_cmd(&["healthcheck", "--port", &port])
             .status()
             .unwrap()
             .success()
@@ -132,26 +112,20 @@ fn healthcheck_against_running_server() {
     child.wait().unwrap();
 }
 
-/// Starts the binary with the config file `text` on `--port 0` and returns the child and the
-/// address it bound, read from the JSON `listening` log line. No `free_port` race: the OS
-/// picks the port at the bind. The rest of the log is drained so a full pipe never blocks
-/// the server.
+/// Starts the binary with `args` plus `--port 0 --log-format json` and returns the child and
+/// the address it bound, read from the JSON `listening` log line. The OS picks the port at the
+/// bind, so parallel runs never race for one. The rest of the log is drained so a full pipe
+/// never blocks the server.
 #[cfg(unix)]
-fn start_with_config(text: &str) -> (Child, String, PathBuf) {
+fn start_server(args: &[&str]) -> (Child, String) {
     use std::io::BufRead;
-    let file = write_tmp(text);
-    let mut child = fauxidc_cmd(&[
-        "--config",
-        file.to_str().unwrap(),
-        "--port",
-        "0",
-        "--log-format",
-        "json",
-    ])
-    .stdout(Stdio::null())
-    .stderr(Stdio::piped())
-    .spawn()
-    .unwrap();
+    let mut all: Vec<&str> = args.to_vec();
+    all.extend(["--port", "0", "--log-format", "json"]);
+    let mut child = fauxidc_cmd(&all)
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
     let logs = child.stderr.take().unwrap();
     let (tx, rx) = std::sync::mpsc::channel::<Result<String, String>>();
     std::thread::spawn(move || {
@@ -176,12 +150,21 @@ fn start_with_config(text: &str) -> (Child, String, PathBuf) {
         }
     });
     match rx.recv_timeout(Duration::from_secs(5)) {
-        Ok(Ok(addr)) => (child, addr, file),
+        Ok(Ok(addr)) => (child, addr),
         other => {
             let _ = child.kill();
             panic!("server did not start: {other:?}");
         }
     }
+}
+
+/// Starts the binary with the config file `text` and returns the child, the bound address and
+/// the config path.
+#[cfg(unix)]
+fn start_with_config(text: &str) -> (Child, String, PathBuf) {
+    let file = write_tmp(text);
+    let (child, addr) = start_server(&["--config", file.to_str().unwrap()]);
+    (child, addr, file)
 }
 
 /// Replaces `file` with `text` in one step, with the modification time set to `mtime`: a
