@@ -28,7 +28,7 @@ pub fn issuer_path(issuer_url: &str) -> Result<String, String> {
 }
 
 /// `true` if `path` equals `prefix` or lies below it, matching whole segments.
-fn under(path: &str, prefix: &str) -> bool {
+pub(crate) fn under(path: &str, prefix: &str) -> bool {
     prefix == "/"
         || path == prefix
         || path

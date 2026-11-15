@@ -26,7 +26,11 @@ pub fn origin_of(uri: &str) -> Option<String> {
     {
         return None;
     }
-    Some(format!("{scheme}://{}", authority.to_ascii_lowercase()))
+    let authority = authority.to_ascii_lowercase();
+    // Browsers omit the default port from `Origin`.
+    let default_port = if scheme == "https" { ":443" } else { ":80" };
+    let authority = authority.strip_suffix(default_port).unwrap_or(&authority);
+    Some(format!("{scheme}://{authority}"))
 }
 
 /// The union over every Client of this Issuer (`issuer` = the id or `"*"`): its `web_origins`
@@ -61,7 +65,9 @@ pub fn client_cors_layer(config: &Config, issuer_id: &str) -> CorsLayer {
         AllowOrigin::predicate(move |origin: &HeaderValue, _parts| {
             origin
                 .to_str()
-                .is_ok_and(|o| allowed.contains(&o.to_ascii_lowercase()))
+                .ok()
+                .and_then(origin_of)
+                .is_some_and(|o| allowed.contains(&o))
         })
     };
     CorsLayer::new()
@@ -85,6 +91,18 @@ mod tests {
         assert_eq!(
             origin_of("HTTPS://App.Example.com/cb").as_deref(),
             Some("https://app.example.com")
+        );
+        assert_eq!(
+            origin_of("https://app.example.com:443/cb").as_deref(),
+            Some("https://app.example.com")
+        );
+        assert_eq!(
+            origin_of("http://App.example.com:80").as_deref(),
+            Some("http://app.example.com")
+        );
+        assert_eq!(
+            origin_of("https://app.example.com:80/cb").as_deref(),
+            Some("https://app.example.com:80")
         );
         assert_eq!(origin_of("not a url"), None);
         assert_eq!(origin_of("ftp://example.com/x"), None);

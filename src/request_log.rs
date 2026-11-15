@@ -16,7 +16,7 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
-use crate::issuer::issuer_for_path;
+use crate::issuer::{issuer_for_path, under};
 use crate::state::{AppState, now_secs};
 
 /// The largest request body the log buffers. A larger body gets 413 while the log is on.
@@ -113,7 +113,7 @@ pub struct ListQuery {
 /// `/_mock/*` requests and a disabled log pass through untouched.
 pub async fn record(State(state): State<Arc<AppState>>, req: Request, next: Next) -> Response {
     let log = &state.request_log;
-    if !log.enabled() || req.uri().path().starts_with("/_mock") {
+    if !log.enabled() || under(req.uri().path(), "/_mock") {
         return next.run(req).await;
     }
     let (parts, body) = req.into_parts();

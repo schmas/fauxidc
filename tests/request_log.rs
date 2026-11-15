@@ -107,3 +107,11 @@ async fn oversized_body_is_413() {
     assert_eq!(s, 413);
     assert_eq!(json(&b)["error"], "invalid_request");
 }
+
+#[tokio::test]
+async fn issuer_path_starting_with_mock_prefix_is_logged() {
+    let app = app("[issuer.m]\nissuer_url = \"http://localhost:9000/_mockery\"\n");
+    send(&app, get("/_mockery/.well-known/openid-configuration")).await;
+    let (_, _, b) = send(&app, get("/_mock/requests")).await;
+    assert_eq!(json(&b).as_array().unwrap().len(), 1);
+}
