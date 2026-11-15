@@ -375,7 +375,7 @@ fn capture_logs() -> (
 
 #[tokio::test]
 async fn half_written_file_is_not_applied() {
-    // Poll every 100 ms. Write a valid prefix of the file that lacks [user.carol] and keep it
+    // Poll every 200 ms. Write a valid prefix of the file that lacks [user.carol] and keep it
     // for less than one poll interval, then write the full file. At most one poll sees the
     // cut file, so the debounce never applies it: carol stays valid the whole time.
     // (STRICT already has bob, so the plan's [user.bob] is carol here.)
@@ -386,13 +386,13 @@ async fn half_written_file_is_not_applied() {
         handle.clone(),
         inputs,
         loaded.files.clone(),
-        Duration::from_millis(100),
+        Duration::from_millis(200),
         SystemTime::now() - Duration::from_secs(5),
     );
-    tokio::time::sleep(Duration::from_millis(250)).await;
+    tokio::time::sleep(Duration::from_millis(450)).await;
     std::fs::write(&file, STRICT).unwrap(); // cut: no carol
     let start = std::time::Instant::now();
-    while start.elapsed() < Duration::from_millis(90) {
+    while start.elapsed() < Duration::from_millis(100) {
         assert_eq!(
             test_api_status(&app, "carol").await,
             200,
@@ -402,7 +402,7 @@ async fn half_written_file_is_not_applied() {
     }
     std::fs::write(&file, format!("{full}\n# saved\n")).unwrap(); // full again, new length
     let start = std::time::Instant::now();
-    while start.elapsed() < Duration::from_millis(400) {
+    while start.elapsed() < Duration::from_millis(700) {
         assert_eq!(
             test_api_status(&app, "carol").await,
             200,
@@ -468,4 +468,38 @@ async fn change_before_first_poll_is_applied() {
         test_api_status(&app, "carol").await == 200
     })
     .await;
+}
+
+#[tokio::test]
+async fn failed_apply_is_retried_after_the_cause_is_fixed() {
+    // The apply fails because the login template file is missing. After the file is created,
+    // the same config applies on the next reload (for example SIGHUP).
+    let (file, inputs, loaded) = config_file(STRICT);
+    let (_app, handle) = live_app_from(loaded.config.clone());
+    let template = file.with_file_name("login.html");
+    let next = STRICT.replace(
+        "[issuer.auth0]\n",
+        &format!(
+            "[issuer.auth0]\nlogin_template = \"{}\"\n",
+            template.display()
+        ),
+    );
+    std::fs::write(&file, next).unwrap();
+    assert!(
+        !fauxidc::reload::reload_from(&handle, &inputs),
+        "the template is missing"
+    );
+    std::fs::copy(
+        concat!(env!("CARGO_MANIFEST_DIR"), "/assets/templates/login.html"),
+        &template,
+    )
+    .unwrap();
+    assert!(
+        fauxidc::reload::reload_from(&handle, &inputs),
+        "the same config applies once the template exists"
+    );
+    assert_eq!(
+        handle.current().config.issuer["auth0"].login_template,
+        template.display().to_string()
+    );
 }

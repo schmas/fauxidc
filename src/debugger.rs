@@ -309,16 +309,28 @@ fn debugger_cookie_path(ctx: &IssuerCtx) -> String {
     ctx.endpoint_href(Endpoint::Debugger)
 }
 
-/// `GET {debugger}/callback`: needs the state cookie equal to `state`, then takes the flow by
-/// `state` (no or another cookie, unknown, reused, expired or of another Issuer: 400 with
-/// "unknown or expired state"), redeems the code in-process and shows the decoded tokens. An
-/// `error` from `/authorize` is shown on the page. Every response clears the state cookie.
+/// `GET {debugger}/callback`: needs the state cookie equal to `state` (else 400 with "unknown
+/// or expired state", also for an `error` from `/authorize`), then takes the flow by `state`
+/// (unknown, reused, expired or of another Issuer: the same 400), redeems the code in-process
+/// and shows the decoded tokens. With the cookie, an `error` from `/authorize` is shown on the
+/// page. Only a response for the cookie's own flow clears the cookie, so a stale callback does
+/// not break the flow in progress.
 pub async fn callback(
     State(ctx): State<IssuerCtx>,
     headers: HeaderMap,
     Query(q): Query<CallbackQuery>,
 ) -> Response {
     record_endpoint(&ctx.id, "debugger");
+    let cookie = read_cookie(&headers, &debugger_name(&ctx.id));
+    let bound = q
+        .state
+        .as_deref()
+        .is_some_and(|s| cookie.as_deref() == Some(s));
+    if !bound {
+        let mut page = context(&ctx, &headers);
+        page.error = Some(UNKNOWN_STATE.to_owned());
+        return render(&ctx, StatusCode::BAD_REQUEST, &page);
+    }
     let mut response = callback_page(&ctx, &headers, &q).await;
     if let Some(clear) = debugger_clear(&ctx.id, &debugger_cookie_path(&ctx)) {
         response.headers_mut().append(header::SET_COOKIE, clear);
@@ -326,13 +338,12 @@ pub async fn callback(
     response
 }
 
+/// The callback for a `state` that equals the state cookie.
 async fn callback_page(ctx: &IssuerCtx, headers: &HeaderMap, q: &CallbackQuery) -> Response {
     let mut page = context(ctx, headers);
-    let cookie = read_cookie(headers, &debugger_name(&ctx.id));
     let flow = q
         .state
         .as_deref()
-        .filter(|s| cookie.as_deref() == Some(*s))
         .and_then(|s| ctx.app.store.take_flow(s))
         .filter(|f| f.issuer_id == ctx.id);
     if let Some(error) = q.error.as_deref() {

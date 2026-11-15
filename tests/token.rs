@@ -296,3 +296,25 @@ async fn unknown_grant_type_is_unsupported() {
         (400, Some("unsupported_grant_type"))
     );
 }
+
+#[tokio::test]
+async fn body_above_the_limit_is_an_oauth_json_error() {
+    // With the Request log on, its middleware answers 413 JSON first; without it, the token
+    // handler sees the axum body limit (2 MB).
+    let big = "x".repeat(3 * 1024 * 1024);
+    let cfg = format!("[server]\nrequest_log_size = 0\n{STRICT}");
+    let (s, _, b) = send(
+        &app(&cfg),
+        post_form(
+            "/auth0/token",
+            &[("grant_type", "client_credentials"), ("pad", &big)],
+            &[],
+        ),
+    )
+    .await;
+    assert_eq!(s, 400, "{}", &b[..b.len().min(200)]);
+    assert_eq!(
+        json(&b),
+        json!({"error":"invalid_request","error_description":"malformed form body"})
+    );
+}

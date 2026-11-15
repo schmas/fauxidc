@@ -355,13 +355,50 @@ async fn configured_debugger_client_wins() {
 
 #[tokio::test]
 async fn authorize_error_is_shown() {
+    let app = app(STRICT);
+    let (_, h, _) = send(&app, get("/auth0/debugger/start")).await;
+    let state = query_param(&location(&h), "state").unwrap();
+    let cookie = state_cookie(&h);
     let (s, _, b) = send(
-        &app(STRICT),
-        get("/auth0/debugger/callback?error=access_denied&error_description=no"),
+        &app,
+        get_with(
+            &format!(
+                "/auth0/debugger/callback?error=access_denied&error_description=no&state={state}"
+            ),
+            &[("cookie", &cookie)],
+        ),
     )
     .await;
     assert_eq!(s, 200);
     assert!(b.contains("access_denied"));
+}
+
+#[tokio::test]
+async fn authorize_error_without_the_state_cookie_is_not_shown() {
+    let (s, _, b) = send(
+        &app(STRICT),
+        get("/auth0/debugger/callback?error=x&error_description=spoofed%20text&state=s"),
+    )
+    .await;
+    assert_eq!(s, 400);
+    assert!(b.contains("unknown or expired state"), "{b}");
+    assert!(!b.contains("spoofed text"), "{b}");
+}
+
+#[tokio::test]
+async fn stale_callback_keeps_the_cookie_of_the_flow_in_progress() {
+    let app = app(STRICT);
+    let (cb_a, _cookie_a) = run_to_callback(&app).await;
+    let (cb_b, cookie_b) = run_to_callback(&app).await;
+    // Tab A's callback with tab B's cookie fails and must not clear the cookie.
+    let (s, h, _) = send(&app, get_with(&cb_a, &[("cookie", &cookie_b)])).await;
+    assert_eq!(s, 400);
+    assert!(
+        set_cookie(&h, "fauxidc_debugger_auth0").is_none(),
+        "the stale callback cleared the cookie"
+    );
+    let (s, _, b) = send(&app, get_with(&cb_b, &[("cookie", &cookie_b)])).await;
+    assert_eq!(s, 200, "{b}");
 }
 
 #[tokio::test]

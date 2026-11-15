@@ -3,7 +3,10 @@
 use axum::{
     Form, Json,
     body::{Body, Bytes},
-    extract::{FromRequest, Request, State, rejection::FormRejection},
+    extract::{
+        FromRequest, Request, State,
+        rejection::{BytesRejection, FormRejection},
+    },
     http::{HeaderMap, HeaderValue, Method, header},
     response::{IntoResponse, Response},
 };
@@ -140,8 +143,20 @@ fn check_single_audience(body: &[u8]) -> Result<(), OAuthError> {
 }
 
 /// `POST /token`.
-pub async fn token(State(ctx): State<IssuerCtx>, headers: HeaderMap, body: Bytes) -> Response {
+pub async fn token(
+    State(ctx): State<IssuerCtx>,
+    headers: HeaderMap,
+    body: Result<Bytes, BytesRejection>,
+) -> Response {
     record_endpoint(&ctx.id, "token");
+    // A body above the limit gets the OAuth JSON error, as with the `Form` extractor.
+    let body = match body {
+        Ok(body) => body,
+        Err(rejection) => {
+            tracing::info!(issuer = %ctx.id, "token request rejected: {rejection}");
+            return OAuthError::json("invalid_request", "malformed form body").into_response();
+        }
+    };
     if let Err(e) = check_single_audience(&body) {
         tracing::info!(issuer = %ctx.id, "token request rejected: repeated audience");
         return e.into_response();

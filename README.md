@@ -234,7 +234,7 @@ exact debugger callback URL that `/start` builds for the request (`{issuer}/debu
 host, or on `public_base_url` when it is set). It needs PKCE with S256, also in Lenient mode. A configured Client with
 `client_id = "debugger"` replaces it. The PKCE verifier stays on the server for 600 s.
 `/start` sets the cookie `fauxidc_debugger_<issuer id>` with the flow `state`; the callback needs it, so the flow
-must finish in the browser that started it.
+must finish in the browser that started it. Without the matching cookie, the callback answers 400, also for an error from `/authorize`.
 
 The page also shows "Signed in as <label> · change" when the Auto-select cookie names a configured User.
 The "change" link (`{issuer}/debugger?forget=1`) clears the cookie.

@@ -141,8 +141,9 @@ pub const POLL_INTERVAL: Duration = Duration::from_secs(1);
 ///
 /// The new load is compared with `handle.last_loaded()`, not with the running config (plan
 /// Ruling 27): equal → "config unchanged", no apply. So a touch of an unchanged file does
-/// nothing, and a change of a restart-only key warns once. On a successful apply, or on an
-/// apply error, the new load becomes `last_loaded`.
+/// nothing, and a change of a restart-only key warns once. Only a successful apply makes the
+/// new load `last_loaded`: after an apply error (for example a missing template file), the next
+/// reload or SIGHUP tries the same config again.
 pub fn reload_from(handle: &ReloadHandle, inputs: &LoadInputs) -> bool {
     let config = match load(inputs) {
         Ok(loaded) => loaded.config,
@@ -159,10 +160,11 @@ pub fn reload_from(handle: &ReloadHandle, inputs: &LoadInputs) -> bool {
         tracing::info!("config unchanged");
         return false;
     }
-    let result = handle.apply(config.clone());
-    handle.set_last_loaded(config);
-    match result {
-        Ok(_) => true,
+    match handle.apply(config.clone()) {
+        Ok(_) => {
+            handle.set_last_loaded(config);
+            true
+        }
         Err(error) => {
             tracing::error!("config reload failed; keeping the old config\n{error}");
             false
