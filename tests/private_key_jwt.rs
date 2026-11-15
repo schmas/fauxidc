@@ -500,3 +500,72 @@ async fn failed_fetch_is_not_cached() {
     tokio::spawn(async move { axum::serve(listener, router).await.unwrap() });
     assert_eq!(cc(&app, &a()).await.0, 200);
 }
+
+#[tokio::test]
+async fn future_nbf_is_rejected() {
+    let mut c = claims(TOKEN_URL);
+    c["nbf"] = json!(now() + 300);
+    assert_eq!(
+        cc(&app(&cfg()), &assertion(c, SigningAlg::ES256, &CLIENT_KEY))
+            .await
+            .0,
+        401
+    );
+    let mut c = claims(TOKEN_URL);
+    c["nbf"] = json!(now() - 5);
+    assert_eq!(
+        cc(&app(&cfg()), &assertion(c, SigningAlg::ES256, &CLIENT_KEY))
+            .await
+            .0,
+        200
+    );
+}
+
+/// Each claim rule alone: the assertion with one claim changed or removed is `invalid_client`.
+#[tokio::test]
+async fn each_claim_rule_is_checked() {
+    let cases: [(&str, Option<Value>); 7] = [
+        ("iss", Some(json!("example-app"))),
+        ("iss", None),
+        ("aud", Some(json!("http://localhost:9000/auth0/userinfo"))),
+        ("aud", None),
+        ("exp", None),
+        ("jti", None),
+        ("sub", Some(json!("example-app"))),
+    ];
+    for (name, value) in cases {
+        let mut c = claims(TOKEN_URL);
+        match &value {
+            Some(v) => c[name] = v.clone(),
+            None => {
+                c.as_object_mut().unwrap().remove(name);
+            }
+        }
+        let (s, j) = cc(&app(&cfg()), &assertion(c, SigningAlg::ES256, &CLIENT_KEY)).await;
+        assert_eq!(
+            (s.as_u16(), j["error"].as_str()),
+            (401, Some("invalid_client")),
+            "{name} = {value:?}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn replayed_jti_in_a_new_assertion_is_rejected() {
+    let app = app(&cfg());
+    let first = claims(TOKEN_URL);
+    let mut second = claims(TOKEN_URL);
+    second["jti"] = first["jti"].clone();
+    second["exp"] = json!(now() + 120);
+    assert_eq!(
+        cc(&app, &assertion(first, SigningAlg::ES256, &CLIENT_KEY))
+            .await
+            .0,
+        200
+    );
+    let (s, j) = cc(&app, &assertion(second, SigningAlg::ES256, &CLIENT_KEY)).await;
+    assert_eq!(
+        (s.as_u16(), j["error"].as_str()),
+        (401, Some("invalid_client"))
+    );
+}

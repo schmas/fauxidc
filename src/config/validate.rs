@@ -447,6 +447,12 @@ fn check_client_keys(key: &str, client: &ClientConfig, c: &mut Collector<'_>) {
         return;
     }
     let message = match absolute_http(uri) {
+        Some(u)
+            if u.scheme_str() == Some("http")
+                && u.authority().is_some_and(|a| a.as_str().contains('@')) =>
+        {
+            format!("client.{key}.jwks_uri: userinfo (user@) is not allowed (\"{uri}\")")
+        }
         Some(u) if u.scheme_str() == Some("http") => return,
         Some(_) => format!(
             "client.{key}.jwks_uri: https is not supported, use an http:// URL or an inline jwks (\"{uri}\")"
@@ -780,6 +786,14 @@ mod tests {
             "{e:?}"
         );
         assert!(!errs(&format!("{A}[client.backend]\njwks_uri = \"/jwks\"\n")).is_empty());
+        let e = errs(&format!(
+            "{A}[client.backend]\njwks_uri = \"http://u:p@127.0.0.1/jwks\"\n"
+        ));
+        assert!(
+            e.iter()
+                .any(|m| m.contains("client.backend.jwks_uri") && m.contains("userinfo")),
+            "{e:?}"
+        );
         assert!(
             errs(&format!(
                 "{A}[client.backend]\njwks_uri = \"http://127.0.0.1:8080/jwks\"\n"

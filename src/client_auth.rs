@@ -288,11 +288,16 @@ async fn authenticate_assertion(
         .filter(|s| !s.is_empty());
     let now = now_secs();
     let exp = claims.get("exp").and_then(Value::as_u64).unwrap_or(now);
-    let first_use = jti.is_some_and(|jti| {
-        ctx.app
+    // Only a verified assertion uses up its `jti`: Lenient mode must not let any caller fill
+    // the store with unverified entries.
+    let first_use = match (jti, verified.is_some()) {
+        (Some(jti), true) => ctx
+            .app
             .store
-            .use_assertion_jti(&client.client_id, jti, exp, now)
-    });
+            .use_assertion_jti(&client.client_id, jti, exp, now),
+        (Some(_), false) => true,
+        (None, _) => false,
+    };
     ctx.enforce(first_use, || {
         if jti.is_some() {
             "client assertion was already used"
@@ -393,6 +398,7 @@ async fn verify_assertion(
     ];
     let mut validation = Validation::new(alg.jwt());
     validation.leeway = 0;
+    validation.validate_nbf = true;
     validation.set_issuer(&[&client.client_id]);
     validation.set_audience(&audience);
     validation.set_required_spec_claims(&["exp", "iss", "sub", "aud"]);
@@ -651,6 +657,49 @@ claims = { email = "bob@example.com", name = "Bobby Viewer" }
         assert_eq!(kids(Some("e"), SigningAlg::RS256), vec!["r", "any"]);
         assert_eq!(kids(Some("h"), SigningAlg::ES256), vec!["e"]);
         assert!(assertion_alg(Algorithm::HS256).is_none());
+    }
+
+    #[test]
+    fn lenient_does_not_store_jti_of_unverified_assertion() {
+        let client_key = crate::keys::SigningKey::generate_for(SigningAlg::ES256).unwrap();
+        let other = crate::keys::SigningKey::generate_for(SigningAlg::ES256).unwrap();
+        let jwk: Vec<String> = client_key
+            .jwk
+            .as_object()
+            .unwrap()
+            .iter()
+            .map(|(k, v)| format!("{k} = {v}"))
+            .collect();
+        let cfg = format!(
+            "{}[client.backend]\njwks = {{ keys = [ {{ {} }} ] }}\n",
+            CFG.replace("[issuer.auth0]\n", "[issuer.auth0]\nlenient = true\n"),
+            jwk.join(", ")
+        );
+        let ctx = test_ctx(&cfg, "auth0");
+        let mut header = jsonwebtoken::Header::new(Algorithm::ES256);
+        header.kid = Some(other.kid.clone());
+        let claims = serde_json::json!({
+            "iss": "backend", "sub": "backend", "aud": "http://localhost:9000/auth0/",
+            "exp": now_secs() + 60, "jti": "j-1",
+        });
+        let assertion = jsonwebtoken::encode(&header, &claims, &other.encoding).unwrap();
+        let creds = ClientCredentials {
+            client_assertion_type: Some(ASSERTION_TYPE),
+            client_assertion: Some(&assertion),
+            ..ClientCredentials::default()
+        };
+        let a = tokio::runtime::Builder::new_current_thread()
+            .build()
+            .unwrap()
+            .block_on(authenticate_client(
+                &ctx,
+                &HeaderMap::new(),
+                Endpoint::Token,
+                creds,
+            ))
+            .unwrap();
+        assert_eq!(a.method, AuthMethod::PrivateKeyJwt);
+        assert!(ctx.app.store.used_assertions.lock().unwrap().is_empty());
     }
 
     #[test]
