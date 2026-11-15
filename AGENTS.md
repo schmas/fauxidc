@@ -19,6 +19,7 @@ The repo is public: use neutral names only (`example-app`, `alice@example.com`, 
 | JWT | `jsonwebtoken` with `rust_crypto` (not `aws_lc_rs`) |
 | Keys | `rsa`, `p256` |
 | Data | `serde`, `serde_json`, `toml` |
+| Config schema | `schemars` |
 | Templates | `minijinja`, `rust-embed` |
 | CLI | `clap` derive |
 | Logs | `tracing`, `tracing-subscriber` |

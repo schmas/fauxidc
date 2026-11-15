@@ -1,3 +1,4 @@
+#:schema https://raw.githubusercontent.com/schmas/fauxidc/main/schema/fauxidc.schema.json
 # Plain OAuth 2.0 / OpenID Connect Issuer with default endpoint paths.
 # Run: fauxidc --config examples/generic.toml
 # Discovery: http://localhost:9000/generic/.well-known/openid-configuration

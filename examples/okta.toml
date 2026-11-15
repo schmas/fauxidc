@@ -1,3 +1,4 @@
+#:schema https://raw.githubusercontent.com/schmas/fauxidc/main/schema/fauxidc.schema.json
 # Example Issuer in the style of a hosted tenant with a path prefix and no trailing slash.
 # Run: fauxidc --config examples/okta.toml
 # Discovery: http://localhost:9000/oauth2/default/.well-known/openid-configuration

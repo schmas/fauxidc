@@ -278,3 +278,176 @@ async fn cognito_example_logs_in() {
     assert_eq!(s, 302, "{b}");
     assert_eq!(location(&h), "http://localhost:3000/");
 }
+
+fn example_files() -> Vec<std::path::PathBuf> {
+    let mut files: Vec<_> = std::fs::read_dir("examples")
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .filter(|p| p.extension().is_some_and(|x| x == "toml"))
+        .collect();
+    files.sort();
+    assert!(files.len() >= EXAMPLES.len(), "{files:?}");
+    files
+}
+
+#[test]
+fn examples_point_at_the_schema() {
+    let want = format!("#:schema {}", fauxidc::config::SCHEMA_URL);
+    for f in example_files() {
+        let text = std::fs::read_to_string(&f).unwrap();
+        assert_eq!(text.lines().next(), Some(want.as_str()), "{}", f.display());
+    }
+}
+
+/// A small JSON Schema validator for the keywords the config schema uses. It panics on a
+/// keyword it does not know, so a new keyword in the schema cannot pass unchecked.
+#[allow(clippy::too_many_lines)] // one flat match over the schema keywords
+fn validate(root: &Value, schema: &Value, v: &Value, at: &str, errs: &mut Vec<String>) {
+    let Some(obj) = schema.as_object() else {
+        if schema == &Value::Bool(false) {
+            errs.push(format!("{at}: not allowed"));
+        }
+        return;
+    };
+    for (key, val) in obj {
+        match key.as_str() {
+            "$schema" | "$id" | "title" | "description" | "default" | "$defs" | "examples"
+            | "format" => {}
+            "$ref" => {
+                let name = val.as_str().unwrap().strip_prefix("#/$defs/").unwrap();
+                validate(root, &root["$defs"][name], v, at, errs);
+            }
+            "type" => {
+                let ok = |t: &str| match t {
+                    "object" => v.is_object(),
+                    "array" => v.is_array(),
+                    "string" => v.is_string(),
+                    "boolean" => v.is_boolean(),
+                    "null" => v.is_null(),
+                    "integer" => v.is_i64() || v.is_u64(),
+                    "number" => v.is_number(),
+                    other => panic!("unknown type {other}"),
+                };
+                let types: Vec<&str> = match val {
+                    Value::String(t) => vec![t],
+                    Value::Array(a) => a.iter().map(|t| t.as_str().unwrap()).collect(),
+                    _ => panic!("bad type"),
+                };
+                if !types.iter().any(|t| ok(t)) {
+                    errs.push(format!("{at}: expected {types:?}, got {v}"));
+                }
+            }
+            "enum" => {
+                if !val.as_array().unwrap().contains(v) {
+                    errs.push(format!("{at}: {v} not in {val}"));
+                }
+            }
+            "const" => {
+                if val != v {
+                    errs.push(format!("{at}: expected {val}"));
+                }
+            }
+            "minimum" => {
+                if v.as_f64().is_some_and(|n| n < val.as_f64().unwrap()) {
+                    errs.push(format!("{at}: below {val}"));
+                }
+            }
+            "maximum" => {
+                if v.as_f64().is_some_and(|n| n > val.as_f64().unwrap()) {
+                    errs.push(format!("{at}: above {val}"));
+                }
+            }
+            "anyOf" | "oneOf" => {
+                let passes = val
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .filter(|s| {
+                        let mut e = Vec::new();
+                        validate(root, s, v, at, &mut e);
+                        e.is_empty()
+                    })
+                    .count();
+                if passes == 0 || (key == "oneOf" && passes != 1) {
+                    errs.push(format!("{at}: {key} matched {passes} branches for {v}"));
+                }
+            }
+            "properties" | "additionalProperties" | "propertyNames" => {
+                let Some(map) = v.as_object() else { continue };
+                for (k, child) in map {
+                    let sub = format!("{at}/{k}");
+                    match key.as_str() {
+                        "properties" => {
+                            if let Some(s) = val.get(k) {
+                                validate(root, s, child, &sub, errs);
+                            }
+                        }
+                        "additionalProperties" => {
+                            if obj.get("properties").and_then(|p| p.get(k)).is_none() {
+                                validate(root, val, child, &sub, errs);
+                            }
+                        }
+                        _ => {
+                            assert_eq!(val["pattern"], "^[a-z0-9_]+$", "unknown key pattern");
+                            if k.is_empty()
+                                || !k.chars().all(|c| {
+                                    c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_'
+                                })
+                            {
+                                errs.push(format!("{sub}: key does not match the pattern"));
+                            }
+                        }
+                    }
+                }
+            }
+            "items" => {
+                for (i, child) in v.as_array().into_iter().flatten().enumerate() {
+                    validate(root, val, child, &format!("{at}/{i}"), errs);
+                }
+            }
+            "required" => {
+                for name in val.as_array().unwrap() {
+                    if v.as_object()
+                        .is_some_and(|m| !m.contains_key(name.as_str().unwrap()))
+                    {
+                        errs.push(format!("{at}: missing {name}"));
+                    }
+                }
+            }
+            other => panic!("the test validator does not know the keyword {other}"),
+        }
+    }
+}
+
+fn check(schema: &Value, doc: &Value) -> Vec<String> {
+    let mut errs = Vec::new();
+    validate(schema, schema, doc, "", &mut errs);
+    errs
+}
+
+#[test]
+fn examples_validate_against_the_schema() {
+    let schema: Value = serde_json::from_str(&fauxidc::config::schema_json()).unwrap();
+    for f in example_files() {
+        let doc: toml::Value = toml::from_str(&std::fs::read_to_string(&f).unwrap()).unwrap();
+        let doc = serde_json::to_value(doc).unwrap();
+        let errs = check(&schema, &doc);
+        assert!(errs.is_empty(), "{}: {errs:#?}", f.display());
+    }
+}
+
+#[test]
+fn the_schema_validator_flags_bad_configs() {
+    let schema: Value = serde_json::from_str(&fauxidc::config::schema_json()).unwrap();
+    for bad in [
+        "[server]\nprot = 1",
+        "[issuer.Bad-Id]\nlenient = true",
+        "[issuer.a]\nsigning_alg = \"HS256\"",
+        "[client.a]\nredirect_uris = \"x\"",
+        "[issuer.a.custom_user]\nlabl = \"x\"",
+    ] {
+        let doc: toml::Value = toml::from_str(bad).unwrap();
+        let doc = serde_json::to_value(doc).unwrap();
+        assert!(!check(&schema, &doc).is_empty(), "{bad}");
+    }
+}

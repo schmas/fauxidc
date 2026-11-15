@@ -30,8 +30,12 @@ pub struct Cli {
 pub enum Command {
     /// Print the merged config with the source of each value
     Config {
+        /// Only validate the config
         #[arg(long)]
         check: bool,
+        /// Print the JSON Schema of the config file and read no config
+        #[arg(long, conflicts_with = "check")]
+        schema: bool,
     },
     /// Exit 0 if the server answers /_mock/health with 200
     Healthcheck {
@@ -72,6 +76,12 @@ mod tests {
     fn global_flags_work_after_the_subcommand() {
         let cli = Cli::parse_from(["fauxidc", "config", "--check", "--config", "a.toml"]);
         assert_eq!(cli.config, vec![PathBuf::from("a.toml")]);
-        assert!(matches!(cli.command, Some(Command::Config { check: true })));
+        assert!(matches!(
+            cli.command,
+            Some(Command::Config {
+                check: true,
+                schema: false
+            })
+        ));
     }
 }

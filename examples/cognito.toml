@@ -1,3 +1,4 @@
+#:schema https://raw.githubusercontent.com/schmas/fauxidc/main/schema/fauxidc.schema.json
 # Example Issuer in the style of an Amazon Cognito user pool.
 # Run: fauxidc --config examples/cognito.toml
 # Discovery: http://localhost:9000/us-east-1_example/.well-known/openid-configuration

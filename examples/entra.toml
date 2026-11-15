@@ -1,3 +1,4 @@
+#:schema https://raw.githubusercontent.com/schmas/fauxidc/main/schema/fauxidc.schema.json
 # Example Issuer in the style of a Microsoft Entra ID v2.0 tenant.
 # Run: fauxidc --config examples/entra.toml
 # Discovery: http://localhost:9000/00000000-0000-0000-0000-000000000000/v2.0/.well-known/openid-configuration

@@ -2,23 +2,33 @@
 
 use std::collections::BTreeMap;
 
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 /// A JSON object of claims.
 pub type Claims = serde_json::Map<String, serde_json::Value>;
 
 /// Root configuration.
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(default, deny_unknown_fields)]
 pub struct Config {
+    /// Server-wide settings.
     pub server: ServerConfig,
+    /// Issuers by Issuer id (lowercase letters, digits and `_`).
+    #[schemars(extend("propertyNames" = {"pattern": "^[a-z0-9_]+$"}))]
     pub issuer: BTreeMap<String, IssuerConfig>,
+    /// Clients by key (lowercase letters, digits and `_`).
+    #[schemars(extend("propertyNames" = {"pattern": "^[a-z0-9_]+$"}))]
     pub client: BTreeMap<String, ClientConfig>,
+    /// Users by key (lowercase letters, digits and `_`).
+    #[schemars(extend("propertyNames" = {"pattern": "^[a-z0-9_]+$"}))]
     pub user: BTreeMap<String, UserConfig>,
 }
 
 /// Log output format.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, clap::ValueEnum)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, JsonSchema, clap::ValueEnum,
+)]
 #[serde(rename_all = "lowercase")]
 pub enum LogFormat {
     #[default]
@@ -27,7 +37,7 @@ pub enum LogFormat {
 }
 
 /// The JWS algorithm an Issuer signs its tokens with.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, JsonSchema)]
 pub enum SigningAlg {
     #[default]
     RS256,
@@ -58,27 +68,38 @@ impl SigningAlg {
 }
 
 /// Server-wide settings.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(default, deny_unknown_fields)]
 pub struct ServerConfig {
+    /// The listening port. Default 9000.
     pub port: u16,
+    /// The listening address. Default 127.0.0.1.
     pub bind: String,
+    /// The public base URL of the server. Empty: derived from the request.
     pub public_base_url: String,
+    /// Trust `X-Forwarded-*` request headers when it builds URLs.
     pub trust_forwarded_headers: bool,
+    /// PEM file of the server signing key. Empty: generated, not saved.
     pub key_file: String,
+    /// Directory of template overrides. Empty: the built-in templates.
     pub templates_dir: String,
+    /// Directory of static file overrides. Empty: the built-in files.
     pub static_dir: String,
+    /// The log output format.
     pub log_format: LogFormat,
+    /// The number of requests the Request log keeps.
     pub request_log_size: usize,
     /// HTTPS from PEM files. Needs a build with the `tls` feature.
     pub tls: TlsConfig,
 }
 
 /// `[server.tls]`: the PEM certificate chain and private key of the HTTPS listener.
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(default, deny_unknown_fields)]
 pub struct TlsConfig {
+    /// PEM certificate chain file.
     pub cert_file: String,
+    /// PEM private key file.
     pub key_file: String,
 }
 
@@ -108,19 +129,30 @@ impl Default for ServerConfig {
 }
 
 /// One issuer (a mounted OIDC provider).
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(default, deny_unknown_fields)]
 pub struct IssuerConfig {
+    /// The issuer URL (the `iss` claim). Empty: derived from the Issuer id.
     pub issuer_url: String,
+    /// The public base URL of this Issuer. Empty: the server value.
     pub public_base_url: String,
+    /// Lenient mode: skip the strict checks of the authorize and token requests.
     pub lenient: bool,
+    /// Auto-select the only User and skip the login page.
     pub auto_login: bool,
+    /// Require a `nonce` in authorize requests.
     pub require_nonce: bool,
+    /// Template of the `sub` claim. Empty: the User key.
     pub sub_template: String,
+    /// Claims added to every token of this Issuer.
     pub default_claims: Claims,
+    /// Template file of the login page. Empty: the built-in page.
     pub login_template: String,
+    /// Token and code lifetimes of this Issuer.
     pub lifetimes: Lifetimes,
+    /// Endpoint paths below the Issuer path.
     pub paths: EndpointPaths,
+    /// Extra names for end-session request parameters, alias to standard name.
     pub logout_param_aliases: BTreeMap<String, String>,
     /// The JWS algorithm of this Issuer's tokens.
     pub signing_alg: SigningAlg,
@@ -136,7 +168,7 @@ pub struct IssuerConfig {
 pub const USERNAME_PLACEHOLDER: &str = "{username}";
 
 /// `[issuer.<id>.custom_user]`: the Custom user template of the login page.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(default, deny_unknown_fields)]
 pub struct CustomUserConfig {
     /// The dropdown label. Default "Custom…".
@@ -185,15 +217,22 @@ impl Endpoint {
 }
 
 /// Endpoint paths below the Issuer path.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(default, deny_unknown_fields)]
 pub struct EndpointPaths {
+    /// Authorize endpoint path.
     pub authorize: String,
+    /// Token endpoint path.
     pub token: String,
+    /// Userinfo endpoint path.
     pub userinfo: String,
+    /// JWKS endpoint path.
     pub jwks: String,
+    /// End-session endpoint path.
     pub endsession: String,
+    /// Introspection endpoint path.
     pub introspect: String,
+    /// Revocation endpoint path.
     pub revoke: String,
     /// Routed in M3; the key is accepted and validated now.
     pub debugger: String,
@@ -248,12 +287,16 @@ impl EndpointPaths {
 }
 
 /// Token and code lifetimes in seconds.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(default, deny_unknown_fields)]
 pub struct Lifetimes {
+    /// ID token lifetime in seconds.
     pub id_token: u64,
+    /// Access token lifetime in seconds.
     pub access_token: u64,
+    /// Refresh token lifetime in seconds.
     pub refresh_token: u64,
+    /// Authorization code lifetime in seconds.
     pub code: u64,
 }
 
@@ -269,12 +312,16 @@ impl Default for Lifetimes {
 }
 
 /// Per-client lifetime overrides. Unset fields inherit from the issuer.
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(default, deny_unknown_fields)]
 pub struct LifetimesOverride {
+    /// ID token lifetime in seconds.
     pub id_token: Option<u64>,
+    /// Access token lifetime in seconds.
     pub access_token: Option<u64>,
+    /// Refresh token lifetime in seconds.
     pub refresh_token: Option<u64>,
+    /// Authorization code lifetime in seconds.
     pub code: Option<u64>,
 }
 
@@ -292,23 +339,38 @@ impl Lifetimes {
 }
 
 /// One OAuth client.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(default, deny_unknown_fields)]
 pub struct ClientConfig {
+    /// The Issuer id this Client belongs to. `*`: every Issuer.
     pub issuer: String,
+    /// The client id. Unset: the Client key.
     pub client_id: Option<String>,
+    /// The client secret. Unset: a public Client.
     pub client_secret: Option<String>,
+    /// Allowed redirect URIs.
     pub redirect_uris: Vec<String>,
+    /// Allowed post-logout redirect URIs.
     pub post_logout_redirect_uris: Vec<String>,
+    /// Allowed CORS origins. Unset: derived from the redirect URIs.
     pub web_origins: Option<Vec<String>>,
+    /// Allowed grant types.
     pub grant_types: Vec<String>,
+    /// Allowed scopes.
     pub scopes: Vec<String>,
+    /// The `aud` claim of access tokens. Empty: the client id.
     pub audience: String,
+    /// Require PKCE in authorize requests.
     pub require_pkce: bool,
+    /// Issue a new refresh token at each refresh.
     pub rotate_refresh_tokens: bool,
+    /// Seconds in which a rotated refresh token still works.
     pub refresh_reuse_leeway_secs: u64,
+    /// Claim overrides for ID tokens.
     pub id_claims: Claims,
+    /// Claim overrides for access tokens.
     pub access_claims: Claims,
+    /// Lifetime overrides of this Client.
     pub lifetimes: LifetimesOverride,
     /// Inline JWK set for `private_key_jwt` (RFC 7523): `{ keys = [ .. ] }`.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -344,18 +406,23 @@ impl Default for ClientConfig {
 }
 
 /// One mock user.
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(default, deny_unknown_fields)]
 pub struct UserConfig {
+    /// The label on the login page.
     pub label: String,
+    /// Claims of this User in every Issuer.
     pub claims: Claims,
+    /// Per-Issuer claims, by Issuer id.
+    #[schemars(extend("propertyNames" = {"pattern": "^[a-z0-9_]+$"}))]
     pub issuer: BTreeMap<String, UserIssuerConfig>,
 }
 
 /// Per-issuer claims for a user.
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(default, deny_unknown_fields)]
 pub struct UserIssuerConfig {
+    /// Claims of this User in this Issuer.
     pub claims: Claims,
 }
 

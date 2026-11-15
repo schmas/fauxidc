@@ -177,6 +177,7 @@ If no file, no inline config and no `FAUXIDC__*` vars are given:
 
 - `fauxidc config` prints the merged config with the source of each value (default, `file:line`, inline, env, flag), then exits. Secrets are masked.
 - `fauxidc config --check` only validates. Exit 0 or 2. For CI.
+- `fauxidc config --schema` prints the JSON Schema (draft 2020-12) of the config file, derived from the config structs. It reads no config and conflicts with `--check`. The output is committed as `schema/fauxidc.schema.json`; a test fails on drift.
 
 ### 5.8 Implementation
 
@@ -334,6 +335,7 @@ None in M1 and M2. M3 adds an optional `tls` cargo feature with `rustls` (ring) 
 | JWT | `jsonwebtoken` with `rust_crypto` (not `aws_lc_rs`) |
 | Keys | `rsa`, `p256` |
 | Data | `serde`, `serde_json`, `toml` |
+| Config schema | `schemars` |
 | Templates | `minijinja`, `rust-embed` |
 | CLI | `clap` derive |
 | Logs | `tracing`, `tracing-subscriber` |

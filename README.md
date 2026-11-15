@@ -126,6 +126,14 @@ Every source rejects unknown keys. Invalid config stops the server with exit cod
 
 - `fauxidc config` prints the merged config and the source of each value.
 - `fauxidc config --check` only validates the config.
+- `fauxidc config --schema` prints the JSON Schema of the config file. It reads no config.
+
+The schema is committed as [schema/fauxidc.schema.json](schema/fauxidc.schema.json).
+For completion and key checks in an editor with Taplo or Even Better TOML, add this first line to your config file:
+
+```toml
+#:schema https://raw.githubusercontent.com/schmas/fauxidc/main/schema/fauxidc.schema.json
+```
 
 The full reference is in [docs/spec.md](docs/spec.md), section 5.
 

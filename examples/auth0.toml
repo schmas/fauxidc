@@ -1,3 +1,4 @@
+#:schema https://raw.githubusercontent.com/schmas/fauxidc/main/schema/fauxidc.schema.json
 # Example Issuer in the style of a hosted tenant with a trailing-slash URL.
 # Run: fauxidc --config examples/auth0.toml
 # Discovery: http://localhost:9000/auth0/.well-known/openid-configuration

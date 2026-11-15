@@ -26,6 +26,11 @@ async fn main() -> ExitCode {
 }
 
 async fn run(cli: Cli) -> anyhow::Result<ExitCode> {
+    // The schema reads no config source, so an invalid config file cannot stop it.
+    if let Some(Command::Config { schema: true, .. }) = cli.command {
+        print!("{}", config::schema_json());
+        return Ok(ExitCode::SUCCESS);
+    }
     let inputs = LoadInputs::from_process(cli.config.clone(), cli.overrides())
         .context("cannot read the working directory")?;
     // Taken before the load: a file saved during the load is reloaded at the first poll.
@@ -47,7 +52,7 @@ async fn run(cli: Cli) -> anyhow::Result<ExitCode> {
             eprintln!("{errors}");
             Ok(ExitCode::from(2))
         }
-        (Some(Command::Config { check }), Ok(loaded)) => {
+        (Some(Command::Config { check, .. }), Ok(loaded)) => {
             if !check {
                 print!("{}", config::render(&loaded));
             }

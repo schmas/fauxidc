@@ -236,3 +236,33 @@ fn tls_config_without_the_feature_exits_2() {
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert!(stderr.contains("tls feature"), "{stderr}");
 }
+
+#[test]
+fn schema_flag_reads_no_config() {
+    let dir = std::env::temp_dir().join(format!("fauxidc-cli-schema-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("fauxidc.toml"), "this is = not [valid").unwrap();
+    let out = fauxidc_cmd(&["config", "--schema"])
+        .current_dir(&dir)
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let committed = std::fs::read_to_string(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/schema/fauxidc.schema.json"
+    ))
+    .unwrap();
+    assert_eq!(String::from_utf8(out.stdout).unwrap(), committed);
+}
+
+#[test]
+fn schema_conflicts_with_check() {
+    let out = fauxidc_cmd(&["config", "--schema", "--check"])
+        .output()
+        .unwrap();
+    assert_eq!(out.status.code(), Some(2));
+}

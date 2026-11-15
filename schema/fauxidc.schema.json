@@ -1,0 +1,589 @@
+{
+  "$id": "https://raw.githubusercontent.com/schmas/fauxidc/main/schema/fauxidc.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "fauxidc config",
+  "description": "Root configuration.",
+  "type": "object",
+  "properties": {
+    "client": {
+      "description": "Clients by key (lowercase letters, digits and `_`).",
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/ClientConfig"
+      },
+      "default": {},
+      "propertyNames": {
+        "pattern": "^[a-z0-9_]+$"
+      }
+    },
+    "issuer": {
+      "description": "Issuers by Issuer id (lowercase letters, digits and `_`).",
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/IssuerConfig"
+      },
+      "default": {},
+      "propertyNames": {
+        "pattern": "^[a-z0-9_]+$"
+      }
+    },
+    "server": {
+      "description": "Server-wide settings.",
+      "$ref": "#/$defs/ServerConfig",
+      "default": {
+        "bind": "127.0.0.1",
+        "key_file": "",
+        "log_format": "text",
+        "port": 9000,
+        "public_base_url": "",
+        "request_log_size": 500,
+        "static_dir": "",
+        "templates_dir": "",
+        "tls": {
+          "cert_file": "",
+          "key_file": ""
+        },
+        "trust_forwarded_headers": false
+      }
+    },
+    "user": {
+      "description": "Users by key (lowercase letters, digits and `_`).",
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/UserConfig"
+      },
+      "default": {},
+      "propertyNames": {
+        "pattern": "^[a-z0-9_]+$"
+      }
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "ClientConfig": {
+      "description": "One OAuth client.",
+      "type": "object",
+      "properties": {
+        "access_claims": {
+          "description": "Claim overrides for access tokens.",
+          "type": "object",
+          "additionalProperties": true,
+          "default": {}
+        },
+        "audience": {
+          "description": "The `aud` claim of access tokens. Empty: the client id.",
+          "type": "string",
+          "default": ""
+        },
+        "client_id": {
+          "description": "The client id. Unset: the Client key.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "client_secret": {
+          "description": "The client secret. Unset: a public Client.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "grant_types": {
+          "description": "Allowed grant types.",
+          "type": "array",
+          "default": [
+            "authorization_code",
+            "refresh_token"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "id_claims": {
+          "description": "Claim overrides for ID tokens.",
+          "type": "object",
+          "additionalProperties": true,
+          "default": {}
+        },
+        "issuer": {
+          "description": "The Issuer id this Client belongs to. `*`: every Issuer.",
+          "type": "string",
+          "default": "*"
+        },
+        "jwks": {
+          "description": "Inline JWK set for `private_key_jwt` (RFC 7523): `{ keys = [ .. ] }`.",
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": true
+        },
+        "jwks_uri": {
+          "description": "`http://` URL of the Client JWK set for `private_key_jwt`. Empty: none.",
+          "type": "string",
+          "default": ""
+        },
+        "lifetimes": {
+          "description": "Lifetime overrides of this Client.",
+          "$ref": "#/$defs/LifetimesOverride",
+          "default": {
+            "access_token": null,
+            "code": null,
+            "id_token": null,
+            "refresh_token": null
+          }
+        },
+        "post_logout_redirect_uris": {
+          "description": "Allowed post-logout redirect URIs.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          }
+        },
+        "redirect_uris": {
+          "description": "Allowed redirect URIs.",
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          }
+        },
+        "refresh_reuse_leeway_secs": {
+          "description": "Seconds in which a rotated refresh token still works.",
+          "type": "integer",
+          "format": "uint64",
+          "default": 0,
+          "minimum": 0
+        },
+        "require_pkce": {
+          "description": "Require PKCE in authorize requests.",
+          "type": "boolean",
+          "default": false
+        },
+        "rotate_refresh_tokens": {
+          "description": "Issue a new refresh token at each refresh.",
+          "type": "boolean",
+          "default": true
+        },
+        "scopes": {
+          "description": "Allowed scopes.",
+          "type": "array",
+          "default": [
+            "openid",
+            "profile",
+            "email",
+            "offline_access"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "web_origins": {
+          "description": "Allowed CORS origins. Unset: derived from the redirect URIs.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "default": null,
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "CustomUserConfig": {
+      "description": "`[issuer.<id>.custom_user]`: the Custom user template of the login page.",
+      "type": "object",
+      "properties": {
+        "claims": {
+          "description": "Claims with `{username}` placeholders in string values.",
+          "type": "object",
+          "additionalProperties": true,
+          "default": {}
+        },
+        "label": {
+          "description": "The dropdown label. Default \"Custom…\".",
+          "type": "string",
+          "default": "Custom…"
+        }
+      },
+      "additionalProperties": false
+    },
+    "EndpointPaths": {
+      "description": "Endpoint paths below the Issuer path.",
+      "type": "object",
+      "properties": {
+        "authorize": {
+          "description": "Authorize endpoint path.",
+          "type": "string",
+          "default": "/authorize"
+        },
+        "debugger": {
+          "description": "Routed in M3; the key is accepted and validated now.",
+          "type": "string",
+          "default": "/debugger"
+        },
+        "endsession": {
+          "description": "End-session endpoint path.",
+          "type": "string",
+          "default": "/endsession"
+        },
+        "introspect": {
+          "description": "Introspection endpoint path.",
+          "type": "string",
+          "default": "/introspect"
+        },
+        "jwks": {
+          "description": "JWKS endpoint path.",
+          "type": "string",
+          "default": "/jwks"
+        },
+        "revoke": {
+          "description": "Revocation endpoint path.",
+          "type": "string",
+          "default": "/revoke"
+        },
+        "token": {
+          "description": "Token endpoint path.",
+          "type": "string",
+          "default": "/token"
+        },
+        "userinfo": {
+          "description": "Userinfo endpoint path.",
+          "type": "string",
+          "default": "/userinfo"
+        }
+      },
+      "additionalProperties": false
+    },
+    "IssuerConfig": {
+      "description": "One issuer (a mounted OIDC provider).",
+      "type": "object",
+      "properties": {
+        "auto_login": {
+          "description": "Auto-select the only User and skip the login page.",
+          "type": "boolean",
+          "default": false
+        },
+        "custom_user": {
+          "description": "The Custom user template of the login page. None: the subject + JSON fields.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CustomUserConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "default_claims": {
+          "description": "Claims added to every token of this Issuer.",
+          "type": "object",
+          "additionalProperties": true,
+          "default": {}
+        },
+        "issuer_url": {
+          "description": "The issuer URL (the `iss` claim). Empty: derived from the Issuer id.",
+          "type": "string",
+          "default": ""
+        },
+        "key_file": {
+          "description": "PEM file of this Issuer's own key. Empty: an RS256 Issuer uses the server key, any\nother Issuer gets a generated key that is not saved.",
+          "type": "string",
+          "default": ""
+        },
+        "lenient": {
+          "description": "Lenient mode: skip the strict checks of the authorize and token requests.",
+          "type": "boolean",
+          "default": false
+        },
+        "lifetimes": {
+          "description": "Token and code lifetimes of this Issuer.",
+          "$ref": "#/$defs/Lifetimes",
+          "default": {
+            "access_token": 3600,
+            "code": 60,
+            "id_token": 3600,
+            "refresh_token": 86400
+          }
+        },
+        "login_template": {
+          "description": "Template file of the login page. Empty: the built-in page.",
+          "type": "string",
+          "default": ""
+        },
+        "logout_param_aliases": {
+          "description": "Extra names for end-session request parameters, alias to standard name.",
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "default": {}
+        },
+        "paths": {
+          "description": "Endpoint paths below the Issuer path.",
+          "$ref": "#/$defs/EndpointPaths",
+          "default": {
+            "authorize": "/authorize",
+            "debugger": "/debugger",
+            "endsession": "/endsession",
+            "introspect": "/introspect",
+            "jwks": "/jwks",
+            "revoke": "/revoke",
+            "token": "/token",
+            "userinfo": "/userinfo"
+          }
+        },
+        "public_base_url": {
+          "description": "The public base URL of this Issuer. Empty: the server value.",
+          "type": "string",
+          "default": ""
+        },
+        "require_nonce": {
+          "description": "Require a `nonce` in authorize requests.",
+          "type": "boolean",
+          "default": false
+        },
+        "signing_alg": {
+          "description": "The JWS algorithm of this Issuer's tokens.",
+          "$ref": "#/$defs/SigningAlg",
+          "default": "RS256"
+        },
+        "sub_template": {
+          "description": "Template of the `sub` claim. Empty: the User key.",
+          "type": "string",
+          "default": ""
+        }
+      },
+      "additionalProperties": false
+    },
+    "Lifetimes": {
+      "description": "Token and code lifetimes in seconds.",
+      "type": "object",
+      "properties": {
+        "access_token": {
+          "description": "Access token lifetime in seconds.",
+          "type": "integer",
+          "format": "uint64",
+          "default": 3600,
+          "minimum": 0
+        },
+        "code": {
+          "description": "Authorization code lifetime in seconds.",
+          "type": "integer",
+          "format": "uint64",
+          "default": 60,
+          "minimum": 0
+        },
+        "id_token": {
+          "description": "ID token lifetime in seconds.",
+          "type": "integer",
+          "format": "uint64",
+          "default": 3600,
+          "minimum": 0
+        },
+        "refresh_token": {
+          "description": "Refresh token lifetime in seconds.",
+          "type": "integer",
+          "format": "uint64",
+          "default": 86400,
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    },
+    "LifetimesOverride": {
+      "description": "Per-client lifetime overrides. Unset fields inherit from the issuer.",
+      "type": "object",
+      "properties": {
+        "access_token": {
+          "description": "Access token lifetime in seconds.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "default": null,
+          "minimum": 0
+        },
+        "code": {
+          "description": "Authorization code lifetime in seconds.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "default": null,
+          "minimum": 0
+        },
+        "id_token": {
+          "description": "ID token lifetime in seconds.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "default": null,
+          "minimum": 0
+        },
+        "refresh_token": {
+          "description": "Refresh token lifetime in seconds.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "default": null,
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    },
+    "LogFormat": {
+      "description": "Log output format.",
+      "type": "string",
+      "enum": [
+        "text",
+        "json"
+      ]
+    },
+    "ServerConfig": {
+      "description": "Server-wide settings.",
+      "type": "object",
+      "properties": {
+        "bind": {
+          "description": "The listening address. Default 127.0.0.1.",
+          "type": "string",
+          "default": "127.0.0.1"
+        },
+        "key_file": {
+          "description": "PEM file of the server signing key. Empty: generated, not saved.",
+          "type": "string",
+          "default": ""
+        },
+        "log_format": {
+          "description": "The log output format.",
+          "$ref": "#/$defs/LogFormat",
+          "default": "text"
+        },
+        "port": {
+          "description": "The listening port. Default 9000.",
+          "type": "integer",
+          "format": "uint16",
+          "default": 9000,
+          "maximum": 65535,
+          "minimum": 0
+        },
+        "public_base_url": {
+          "description": "The public base URL of the server. Empty: derived from the request.",
+          "type": "string",
+          "default": ""
+        },
+        "request_log_size": {
+          "description": "The number of requests the Request log keeps.",
+          "type": "integer",
+          "format": "uint",
+          "default": 500,
+          "minimum": 0
+        },
+        "static_dir": {
+          "description": "Directory of static file overrides. Empty: the built-in files.",
+          "type": "string",
+          "default": ""
+        },
+        "templates_dir": {
+          "description": "Directory of template overrides. Empty: the built-in templates.",
+          "type": "string",
+          "default": ""
+        },
+        "tls": {
+          "description": "HTTPS from PEM files. Needs a build with the `tls` feature.",
+          "$ref": "#/$defs/TlsConfig",
+          "default": {
+            "cert_file": "",
+            "key_file": ""
+          }
+        },
+        "trust_forwarded_headers": {
+          "description": "Trust `X-Forwarded-*` request headers when it builds URLs.",
+          "type": "boolean",
+          "default": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "SigningAlg": {
+      "description": "The JWS algorithm an Issuer signs its tokens with.",
+      "type": "string",
+      "enum": [
+        "RS256",
+        "ES256",
+        "PS256"
+      ]
+    },
+    "TlsConfig": {
+      "description": "`[server.tls]`: the PEM certificate chain and private key of the HTTPS listener.",
+      "type": "object",
+      "properties": {
+        "cert_file": {
+          "description": "PEM certificate chain file.",
+          "type": "string",
+          "default": ""
+        },
+        "key_file": {
+          "description": "PEM private key file.",
+          "type": "string",
+          "default": ""
+        }
+      },
+      "additionalProperties": false
+    },
+    "UserConfig": {
+      "description": "One mock user.",
+      "type": "object",
+      "properties": {
+        "claims": {
+          "description": "Claims of this User in every Issuer.",
+          "type": "object",
+          "additionalProperties": true,
+          "default": {}
+        },
+        "issuer": {
+          "description": "Per-Issuer claims, by Issuer id.",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/UserIssuerConfig"
+          },
+          "default": {},
+          "propertyNames": {
+            "pattern": "^[a-z0-9_]+$"
+          }
+        },
+        "label": {
+          "description": "The label on the login page.",
+          "type": "string",
+          "default": ""
+        }
+      },
+      "additionalProperties": false
+    },
+    "UserIssuerConfig": {
+      "description": "Per-issuer claims for a user.",
+      "type": "object",
+      "properties": {
+        "claims": {
+          "description": "Claims of this User in this Issuer.",
+          "type": "object",
+          "additionalProperties": true,
+          "default": {}
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

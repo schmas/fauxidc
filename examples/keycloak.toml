@@ -1,3 +1,4 @@
+#:schema https://raw.githubusercontent.com/schmas/fauxidc/main/schema/fauxidc.schema.json
 # Example Issuer in the style of a Keycloak realm.
 # Run: fauxidc --config examples/keycloak.toml
 # Discovery: http://localhost:9000/realms/example/.well-known/openid-configuration
