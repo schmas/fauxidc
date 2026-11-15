@@ -25,6 +25,7 @@ pub const CONTEXT_VERSION: u32 = 1;
 
 const LOGIN: &str = "login.html";
 const ERROR: &str = "error.html";
+const SIGNED_OUT: &str = "signed_out.html";
 
 #[derive(RustEmbed)]
 #[folder = "assets/templates"]
@@ -70,6 +71,16 @@ pub struct ErrorContext {
     pub static_base: String,
 }
 
+/// The context of `signed_out.html`. Version 1.
+#[derive(Debug, Clone, Serialize)]
+pub struct SignedOutContext {
+    pub context_version: u32,
+    pub issuer_id: String,
+    /// The Client of the logout request, when known.
+    pub client_id: Option<String>,
+    pub static_base: String,
+}
+
 /// The compiled templates: embedded defaults, `templates_dir` overrides and per-issuer login pages.
 pub struct Templates {
     env: Environment<'static>,
@@ -81,7 +92,7 @@ impl Templates {
         let mut env = Environment::new();
         env.set_auto_escape_callback(|_| AutoEscape::Html);
         let dir = &config.server.templates_dir;
-        for name in [LOGIN, ERROR] {
+        for name in [LOGIN, ERROR, SIGNED_OUT] {
             let source = if dir.is_empty() {
                 None
             } else {
@@ -120,6 +131,11 @@ impl Templates {
     /// Renders the error page.
     pub fn render_error(&self, ctx: &ErrorContext) -> Result<String, String> {
         self.render(ERROR, ctx)
+    }
+
+    /// Renders the signed-out page of `/endsession`.
+    pub fn render_signed_out(&self, ctx: &SignedOutContext) -> Result<String, String> {
+        self.render(SIGNED_OUT, ctx)
     }
 
     fn render(&self, name: &str, ctx: &impl Serialize) -> Result<String, String> {

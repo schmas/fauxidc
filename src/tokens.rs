@@ -115,6 +115,30 @@ pub fn verify_access_token(
         .map_err(|e| bearer(&e.to_string()))
 }
 
+/// Verify an `id_token_hint` (RP-Initiated Logout 1.0 section 2): RS256, header `typ` = `JWT`,
+/// `iss` = `issuer_url`. `exp` is NOT checked: an expired hint is accepted.
+pub fn verify_id_token_hint(
+    key: &SigningKey,
+    issuer_url: &str,
+    token: &str,
+) -> Result<Claims, OAuthError> {
+    let invalid =
+        |d: &str| OAuthError::json("invalid_request", format!("id_token_hint is invalid: {d}"));
+    let header = jsonwebtoken::decode_header(token).map_err(|_| invalid("malformed token"))?;
+    if header.typ.as_deref() != Some("JWT") {
+        return Err(invalid("not an id_token"));
+    }
+    let mut validation = Validation::new(Algorithm::RS256);
+    validation.leeway = 0;
+    validation.validate_exp = false;
+    validation.validate_aud = false;
+    validation.set_issuer(&[issuer_url]);
+    validation.set_required_spec_claims(&["iss"]);
+    jsonwebtoken::decode::<Claims>(token, &key.decoding, &validation)
+        .map(|data| data.claims)
+        .map_err(|e| invalid(&e.to_string()))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -222,6 +246,19 @@ mod tests {
         assert!(verify_access_token(&key(), "http://h/b", &at).is_err());
         let idt = sign_id_token(&key(), id_input("http://h/a")).unwrap();
         assert!(verify_access_token(&key(), "http://h/a", &idt).is_err());
+    }
+
+    #[test]
+    fn id_token_hint_accepts_expired_and_rejects_access_tokens() {
+        let mut i = id_input("http://h/a");
+        i.lifetime = 0;
+        let t = sign_id_token(&key(), i).unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(1100));
+        let c = verify_id_token_hint(&key(), "http://h/a", &t).unwrap();
+        assert_eq!(c["aud"], "example-app");
+        assert!(verify_id_token_hint(&key(), "http://h/b", &t).is_err());
+        let at = sign_access_token(&key(), access_input("http://h/a")).unwrap();
+        assert!(verify_id_token_hint(&key(), "http://h/a", &at).is_err());
     }
 
     #[test]

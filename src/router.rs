@@ -15,6 +15,7 @@ use tower_http::trace::{DefaultOnResponse, TraceLayer};
 use crate::authorize;
 use crate::config::Endpoint;
 use crate::discovery;
+use crate::endsession;
 use crate::health;
 use crate::issuer::issuer_path;
 use crate::jwks;
@@ -62,6 +63,10 @@ pub fn build_router(state: Arc<AppState>) -> Router {
             .route(
                 ctx.endpoint_path(Endpoint::Userinfo),
                 get(userinfo::userinfo).post(userinfo::userinfo),
+            )
+            .route(
+                ctx.endpoint_path(Endpoint::Endsession),
+                get(endsession::endsession_get).post(endsession::endsession_post),
             )
             .with_state(ctx.clone());
         router = if path == "/" {

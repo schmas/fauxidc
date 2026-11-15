@@ -1,11 +1,11 @@
 # Templates
 
-fauxidc renders two pages with [minijinja](https://docs.rs/minijinja) (Jinja syntax, HTML autoescape on):
-`login.html` and `error.html`. The embedded defaults live in `assets/templates/`.
+fauxidc renders three pages with [minijinja](https://docs.rs/minijinja) (Jinja syntax, HTML autoescape on):
+`login.html`, `error.html` and `signed_out.html`. The embedded defaults live in `assets/templates/`.
 
 ## Overrides
 
-- `server.templates_dir`: a file named `login.html` or `error.html` in this directory replaces the embedded one.
+- `server.templates_dir`: a file named `login.html`, `error.html` or `signed_out.html` in this directory replaces the embedded one.
 - `issuer.<id>.login_template`: a file path. It replaces the login page for that issuer only.
 - `server.static_dir`: files here take precedence over the embedded static files, served at `/_mock/static/<path>`.
 
@@ -44,4 +44,15 @@ The form fields the server reads: `user` (a user `id` or `__custom__`), `custom_
 | `context_version` | integer | Always `1`. |
 | `issuer_id` | string | Id of the issuer. |
 | `message` | string | The error message. |
+| `static_base` | string | URL prefix for static files, `/_mock/static`. |
+
+### `signed_out.html`
+
+`/endsession` renders this page when the request has no `post_logout_redirect_uri`. It is a new, optional template: existing `templates_dir` overrides keep working, and the context version stays `1`.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `context_version` | integer | Always `1`. |
+| `issuer_id` | string | Id of the issuer. |
+| `client_id` | string or null | The Client of the logout request, from `client_id` or `id_token_hint`, when known. |
 | `static_base` | string | URL prefix for static files, `/_mock/static`. |

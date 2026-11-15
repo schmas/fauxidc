@@ -325,7 +325,7 @@ fn login_page(
     }
 }
 
-fn error_page(ctx: &IssuerCtx, status: StatusCode, message: String) -> Response {
+pub(crate) fn error_page(ctx: &IssuerCtx, status: StatusCode, message: String) -> Response {
     let context = ErrorContext {
         context_version: CONTEXT_VERSION,
         issuer_id: ctx.id.clone(),

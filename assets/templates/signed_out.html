@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Signed out</title>
+<link rel="stylesheet" href="{{ static_base }}/login.css">
+</head>
+<body>
+<main>
+<h1>Signed out</h1>
+<p class="meta">{% if client_id %}Client: {{ client_id }} · {% endif %}Issuer: {{ issuer_id }}</p>
+<p>You are signed out.</p>
+</main>
+</body>
+</html>

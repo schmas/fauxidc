@@ -122,3 +122,15 @@ async fn per_issuer_login_template() {
     ));
     assert_eq!(send(&app, get(&authorize_url(&[]))).await.2, "ISSUER PAGE");
 }
+
+#[tokio::test]
+async fn templates_dir_replaces_signed_out_page() {
+    let dir = tmp_dir();
+    std::fs::write(dir.join("signed_out.html"), "BYE {{ issuer_id }}").unwrap();
+    let app = app(&format!(
+        "[server]\ntemplates_dir = \"{}\"\n{STRICT}",
+        dir.display()
+    ));
+    let (s, _, b) = send(&app, get("/auth0/endsession")).await;
+    assert_eq!((s.as_u16(), b.as_str()), (200, "BYE auth0"));
+}

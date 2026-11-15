@@ -24,13 +24,50 @@ pub fn auto_select_name(issuer_id: &str) -> String {
 ///
 /// Returns `None` if the value is not a valid header value.
 pub fn auto_select_set(issuer_id: &str, issuer_path: &str, user_id: &str) -> Option<HeaderValue> {
-    let path = match issuer_path.trim_end_matches('/') {
-        "" => "/",
-        trimmed => trimmed,
-    };
+    let path = cookie_path(issuer_path);
     let name = auto_select_name(issuer_id);
     HeaderValue::try_from(format!(
         "{name}={user_id}; Path={path}; HttpOnly; SameSite=Lax; Max-Age=31536000"
     ))
     .ok()
+}
+
+/// The `Set-Cookie` value that removes the auto-select cookie (same path as `auto_select_set`).
+///
+/// Returns `None` if the value is not a valid header value.
+pub fn auto_select_clear(issuer_id: &str, issuer_path: &str) -> Option<HeaderValue> {
+    let path = cookie_path(issuer_path);
+    let name = auto_select_name(issuer_id);
+    HeaderValue::try_from(format!(
+        "{name}=; Path={path}; HttpOnly; SameSite=Lax; Max-Age=0"
+    ))
+    .ok()
+}
+
+/// The cookie `Path`: the Issuer path without a trailing slash, or `/`.
+fn cookie_path(issuer_path: &str) -> &str {
+    match issuer_path.trim_end_matches('/') {
+        "" => "/",
+        trimmed => trimmed,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn clear_uses_the_set_path() {
+        assert_eq!(
+            auto_select_clear("auth0", "/auth0/").unwrap(),
+            "fauxidc_user_auth0=; Path=/auth0; HttpOnly; SameSite=Lax; Max-Age=0"
+        );
+        assert!(
+            auto_select_clear("r", "/")
+                .unwrap()
+                .to_str()
+                .unwrap()
+                .contains("Path=/;")
+        );
+    }
 }
