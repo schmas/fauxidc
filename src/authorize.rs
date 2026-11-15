@@ -33,6 +33,12 @@ pub struct AuthorizeParams {
     pub prompt: Option<String>,
     pub audience: Option<String>,
     pub resource: Option<String>,
+    /// A request object (OIDC Core 6.1). Not supported; never posted back by the login form.
+    #[serde(skip_serializing)]
+    pub request: Option<String>,
+    /// A request object by reference (OIDC Core 6.2). Not supported; never posted back.
+    #[serde(skip_serializing)]
+    pub request_uri: Option<String>,
 }
 
 impl AuthorizeParams {
@@ -114,6 +120,18 @@ fn validate(ctx: &IssuerCtx, p: &AuthorizeParams) -> Result<ValidRequest, Reject
             description: description.to_owned(),
         })
     };
+
+    // OIDC Core 3.1.2.6: request objects are not supported, in both modes.
+    if p.request.as_deref().is_some_and(|v| !v.is_empty()) {
+        let rule = "request objects are not supported";
+        tracing::info!(issuer = %ctx.id, "{rule}");
+        return Err(fail("request_not_supported", rule));
+    }
+    if p.request_uri.as_deref().is_some_and(|v| !v.is_empty()) {
+        let rule = "request_uri is not supported";
+        tracing::info!(issuer = %ctx.id, "{rule}");
+        return Err(fail("request_uri_not_supported", rule));
+    }
 
     match p.response_type.as_deref().filter(|v| !v.is_empty()) {
         Some("code") => {}
@@ -218,24 +236,30 @@ pub async fn authorize_get(
     headers: HeaderMap,
     Query(p): Query<AuthorizeParams>,
 ) -> Response {
+    authorize_request(&ctx, &headers, &p)
+}
+
+/// An authorization request, sent by `GET` or as a `POST` form without a `user` field
+/// (OIDC Core 3.1.2.1): validate, then sign in without the page or show the login page.
+fn authorize_request(ctx: &IssuerCtx, headers: &HeaderMap, p: &AuthorizeParams) -> Response {
     record_endpoint(&ctx.id, "authorize");
     if let Some(client_id) = p.client_id.as_deref() {
         record_client(client_id);
     }
-    match validate(&ctx, &p) {
-        Ok(request) => match skip_login(&ctx, &request, &headers) {
+    match validate(ctx, p) {
+        Ok(request) => match skip_login(ctx, &request, headers) {
             Some(id) => issue_code(
-                &ctx,
+                ctx,
                 &request,
                 Subject::User {
                     id,
                     overrides: Claims::new(),
                 },
             ),
-            None => login_page(&ctx, &request, StatusCode::OK, None, &KeptInput::default()),
+            None => login_page(ctx, &request, StatusCode::OK, None, &KeptInput::default()),
         },
         Err(Rejection::Redirect(error)) => error.into_response(),
-        Err(Rejection::Page(status, message)) => error_page(&ctx, status, message),
+        Err(Rejection::Page(status, message)) => error_page(ctx, status, message),
     }
 }
 
@@ -361,8 +385,16 @@ fn parse_claims(text: &str) -> Option<Claims> {
     }
 }
 
-/// `POST {issuer}/authorize`: the login form submit.
-pub async fn authorize_post(State(ctx): State<IssuerCtx>, Form(f): Form<LoginForm>) -> Response {
+/// `POST {issuer}/authorize`: the login form submit, or an authorization request sent as a
+/// form when there is no `user` field.
+pub async fn authorize_post(
+    State(ctx): State<IssuerCtx>,
+    headers: HeaderMap,
+    Form(f): Form<LoginForm>,
+) -> Response {
+    if f.user.is_none() {
+        return authorize_request(&ctx, &headers, &f.params);
+    }
     record_endpoint(&ctx.id, "authorize");
     if let Some(client_id) = f.params.client_id.as_deref() {
         record_client(client_id);

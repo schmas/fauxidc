@@ -156,3 +156,13 @@ async fn m2_grants_and_offline_access_are_published() {
             .contains(&json!("offline_access"))
     );
 }
+
+#[tokio::test]
+async fn request_and_claims_parameters_unsupported() {
+    let (s, _, b) = send(&app(AUTH0), get("/auth0/.well-known/openid-configuration")).await;
+    assert_eq!(s, 200);
+    let j = json(&b);
+    assert_eq!(j["request_parameter_supported"], false);
+    assert_eq!(j["request_uri_parameter_supported"], false);
+    assert_eq!(j["claims_parameter_supported"], false);
+}

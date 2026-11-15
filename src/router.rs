@@ -68,8 +68,8 @@ pub fn build_router(state: Arc<AppState>) -> Router {
             )
             .route(
                 ctx.endpoint_path(Endpoint::Userinfo),
-                get(userinfo::userinfo)
-                    .post(userinfo::userinfo)
+                get(userinfo::userinfo_get)
+                    .post(userinfo::userinfo_post)
                     .layer(client_cors.clone()),
             )
             .route(

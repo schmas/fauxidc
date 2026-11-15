@@ -74,3 +74,44 @@ async fn userinfo_accepts_post_and_lowercase_scheme() {
     assert_eq!(s, 200, "{b}");
     assert_eq!(json(&b)["sub"], "auth0|alice");
 }
+
+#[tokio::test]
+async fn post_body_access_token() {
+    let app = app(STRICT);
+    let at = access_token_for(&app, &[("scope", "openid email")]).await;
+    let (s, _, b) = send(
+        &app,
+        post_form("/auth0/userinfo", &[("access_token", &at)], &[]),
+    )
+    .await;
+    assert_eq!(s, 200, "{b}");
+    assert_eq!(json(&b)["sub"], "auth0|alice");
+}
+
+#[tokio::test]
+async fn header_and_body_token_is_invalid_request() {
+    let app = app(STRICT);
+    let at = access_token_for(&app, &[]).await;
+    let (s, _, b) = send(
+        &app,
+        post_form(
+            "/auth0/userinfo",
+            &[("access_token", &at)],
+            &[("authorization", &format!("Bearer {at}"))],
+        ),
+    )
+    .await;
+    assert_eq!(s, 400, "{b}");
+    assert_eq!(json(&b)["error"], "invalid_request");
+}
+
+#[tokio::test]
+async fn post_without_any_token_is_bearer_missing() {
+    let (s, h, _) = send(
+        &app(STRICT),
+        post_form("/auth0/userinfo", &[("other", "x")], &[]),
+    )
+    .await;
+    assert_eq!(s, 401);
+    assert_eq!(h["www-authenticate"], "Bearer");
+}

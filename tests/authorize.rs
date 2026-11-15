@@ -399,3 +399,66 @@ async fn login_form_posts_to_overridden_authorize() {
         "{html}"
     );
 }
+
+#[tokio::test]
+async fn authorize_post_without_user_is_an_authorization_request() {
+    let form = [
+        ("client_id", "example-app"),
+        ("response_type", "code"),
+        ("scope", "openid"),
+        (
+            "redirect_uri",
+            "http://localhost:3000/api/auth/callback/auth0",
+        ),
+        ("state", "st"),
+    ];
+    let (s, _, b) = send(&app(STRICT), post_form("/auth0/authorize", &form, &[])).await;
+    assert_eq!(s, 200, "{b}");
+    assert!(b.contains("Alice Admin") && !b.contains("Choose a user"));
+}
+
+#[tokio::test]
+async fn request_object_is_not_supported() {
+    let (s, h, _) = send(
+        &app(STRICT),
+        get(&authorize_url(&[("request", "eyJhbGciOiJub25lIn0.e30.")])),
+    )
+    .await;
+    assert_eq!(s, 302);
+    assert_eq!(
+        query_param(&location(&h), "error").as_deref(),
+        Some("request_not_supported")
+    );
+    assert_eq!(query_param(&location(&h), "state").as_deref(), Some("st"));
+    let (s, h, _) = send(
+        &app(STRICT),
+        get(&authorize_url(&[(
+            "request_uri",
+            "https://rp.example.com/r",
+        )])),
+    )
+    .await;
+    assert_eq!(s, 302);
+    assert_eq!(
+        query_param(&location(&h), "error").as_deref(),
+        Some("request_uri_not_supported")
+    );
+}
+
+#[tokio::test]
+async fn request_object_is_not_supported_in_lenient_mode() {
+    let lenient = STRICT.replace(
+        "sub_template = \"auth0|{user_id}\"",
+        "sub_template = \"auth0|{user_id}\"\nlenient = true",
+    );
+    let (s, h, _) = send(
+        &app(&lenient),
+        get(&authorize_url(&[("request", "eyJhbGciOiJub25lIn0.e30.")])),
+    )
+    .await;
+    assert_eq!(s, 302);
+    assert_eq!(
+        query_param(&location(&h), "error").as_deref(),
+        Some("request_not_supported")
+    );
+}
