@@ -24,6 +24,8 @@ Only the pinned or unusual choices. The full crate table and the rejected crates
 - Tailwind CSS v4 and daisyUI v5 at dev time only, through `scripts/build-css.sh`. Not a Cargo dependency.
 - `schemars` generates the config JSON Schema.
 - Releases: `release-plz` in registry mode. It publishes the crate to crates.io with trusted publishing (OIDC, `release` environment); no registry token secret.
+  The `release-pr` job opens the release PR with a GitHub App token (`schmas-fauxidc-release`, secrets
+  `RELEASE_APP_CLIENT_ID` and `RELEASE_APP_KEY`), so CI and Conformance run on it.
 
 A new dependency needs a reason in the PR.
 
