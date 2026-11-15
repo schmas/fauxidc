@@ -368,3 +368,131 @@ async fn discovery_lists_the_token_exchange_grant() {
             .contains(&json!(GRANT))
     );
 }
+
+/// Exchanges `subject` with `actor` as an access token actor on `auth0`.
+async fn exchange_as(app: &Router, subject: &str, actor: &str) -> (StatusCode, Value) {
+    exchange(
+        app,
+        "auth0",
+        &[
+            ("subject_token", subject),
+            ("actor_token", actor),
+            ("actor_token_type", AT_TYPE),
+        ],
+    )
+    .await
+}
+
+#[tokio::test]
+async fn actor_token_adds_act() {
+    let app = app(&cfg());
+    let subject = test_at(&app, "auth0", json!({"user":"alice"})).await;
+    let actor = test_at(&app, "es", json!({"sub":"svc-orders"})).await;
+    let (s, j) = exchange_as(&app, &subject, &actor).await;
+    assert_eq!(s, 200, "{j}");
+    let c = at_of(&j);
+    assert_eq!(c["act"], json!({"sub":"svc-orders"}));
+    assert_eq!(c["sub"], claims_of(&subject)["sub"]);
+}
+
+#[tokio::test]
+async fn prior_act_nests_inside_the_new_act() {
+    let app = app(&cfg());
+    let subject = test_at(&app, "auth0", json!({"user":"alice"})).await;
+    let a1 = test_at(&app, "auth0", json!({"sub":"svc-a"})).await;
+    let a2 = test_at(&app, "auth0", json!({"sub":"svc-b"})).await;
+    let (_, j1) = exchange_as(&app, &subject, &a1).await;
+    let first = j1["access_token"].as_str().unwrap().to_owned();
+    let (s, j2) = exchange_as(&app, &first, &a2).await;
+    assert_eq!(s, 200, "{j2}");
+    assert_eq!(
+        at_of(&j2)["act"],
+        json!({"sub":"svc-b","act":{"sub":"svc-a"}})
+    );
+}
+
+#[tokio::test]
+async fn subject_act_is_dropped_without_actor_token() {
+    let app = app(&cfg());
+    let subject = test_at(&app, "auth0", json!({"user":"alice"})).await;
+    let a1 = test_at(&app, "auth0", json!({"sub":"svc-a"})).await;
+    let (_, j1) = exchange_as(&app, &subject, &a1).await;
+    let first = j1["access_token"].as_str().unwrap().to_owned();
+    assert!(claims_of(&first).get("act").is_some());
+    let (s, j) = exchange(&app, "auth0", &[("subject_token", &first)]).await;
+    assert_eq!(s, 200, "{j}");
+    assert!(at_of(&j).get("act").is_none());
+}
+
+#[tokio::test]
+async fn invalid_actor_token_is_rejected() {
+    let app = app(&cfg());
+    let subject = access_token_for(&app, &[]).await;
+    let bad = unsigned_jwt(
+        &json!({"alg":"none"}),
+        &json!({"iss":"http://localhost:9000/auth0/","sub":"svc"}),
+    );
+    let (s, j) = exchange_as(&app, &subject, &bad).await;
+    assert_eq!(
+        (s.as_u16(), j["error"].as_str()),
+        (400, Some("invalid_request"))
+    );
+}
+
+#[tokio::test]
+async fn actor_token_needs_a_valid_actor_token_type() {
+    let app = app(&cfg());
+    let subject = access_token_for(&app, &[]).await;
+    let actor = test_at(&app, "auth0", json!({"sub":"svc"})).await;
+    assert_eq!(
+        exchange(
+            &app,
+            "auth0",
+            &[("subject_token", &subject), ("actor_token_type", AT_TYPE)]
+        )
+        .await
+        .0,
+        400
+    );
+    assert_eq!(
+        exchange(
+            &app,
+            "auth0",
+            &[("subject_token", &subject), ("actor_token", &actor)]
+        )
+        .await
+        .0,
+        400
+    );
+    assert_eq!(
+        exchange(
+            &app,
+            "auth0",
+            &[
+                ("subject_token", &subject),
+                ("actor_token", &actor),
+                (
+                    "actor_token_type",
+                    "urn:ietf:params:oauth:token-type:refresh_token"
+                )
+            ]
+        )
+        .await
+        .0,
+        400
+    );
+}
+
+#[tokio::test]
+async fn lenient_accepts_an_unverified_actor_token() {
+    let cfg = cfg().replace("[issuer.auth0]\n", "[issuer.auth0]\nlenient = true\n");
+    let app = app(&cfg);
+    let subject = test_at(&app, "auth0", json!({"user":"alice"})).await;
+    let actor = unsigned_jwt(
+        &json!({"alg":"none"}),
+        &json!({"iss":"https://idp.example.com/","sub":"ext-svc"}),
+    );
+    let (s, j) = exchange_as(&app, &subject, &actor).await;
+    assert_eq!(s, 200, "{j}");
+    assert_eq!(at_of(&j)["act"], json!({"sub":"ext-svc"}));
+}

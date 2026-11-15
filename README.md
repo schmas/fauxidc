@@ -136,6 +136,8 @@ The Client must authenticate and must list the grant in `grant_types`. It is not
 The result is an access token of this Issuer, with no id_token and no refresh token.
 It has `sub` and the User claims of the subject token. `aud` is `audience`, else `resource`,
 else the Client `audience`, else the `client_id`. `scope` is the `scope` parameter, else the subject token `scope`.
+An `actor_token` (with `actor_token_type`, checked like the subject token) adds `act = {"sub": <actor sub>}`.
+If the subject token has an `act` claim, it goes inside as `act.act`. Without an `actor_token`, the result has no `act`.
 
 ```toml
 [client.gateway]

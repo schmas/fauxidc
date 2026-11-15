@@ -162,7 +162,18 @@ fn split_scope(value: Option<&str>) -> Option<Vec<String>> {
     (!scope.is_empty()).then_some(scope)
 }
 
-/// The token exchange grant (RFC 8693 2.1, plan Ruling 8).
+/// The `act` claim (RFC 8693 4.1): the actor's `sub`, with the subject token's `act` object
+/// nested inside as the prior actor.
+fn act_claim(actor: &Claims, subject: &Claims) -> Value {
+    let mut act = json!({ "sub": actor.get("sub").cloned().unwrap_or(Value::Null) });
+    if let Some(prior) = subject.get("act").filter(|v| v.is_object()) {
+        act["act"] = prior.clone();
+    }
+    act
+}
+
+/// The token exchange grant (RFC 8693 2.1, plan Ruling 8). With an `actor_token`, the new
+/// token gets an `act` claim (Ruling 9).
 pub async fn grant(
     ctx: &IssuerCtx,
     headers: &HeaderMap,
@@ -184,10 +195,27 @@ pub async fn grant(
         )));
     }
 
+    let actor_token = f.actor_token.as_deref().filter(|v| !v.is_empty());
+    let actor_type = f.actor_token_type.as_deref().filter(|v| !v.is_empty());
+    match (actor_token, actor_type) {
+        (Some(_), None) => return Err(invalid_request("actor_token_type is missing")),
+        (None, Some(_)) => {
+            return Err(invalid_request(
+                "actor_token_type was sent without actor_token",
+            ));
+        }
+        (Some(_), Some(t)) => check_input_type(t, "actor_token_type")?,
+        (None, None) => {}
+    }
+
     let subject = token_claims(ctx, subject_token, "subject_token").await?;
     let mut claims = subject.clone();
     for name in DROPPED_CLAIMS {
         claims.remove(name);
+    }
+    if let Some(actor_token) = actor_token {
+        let actor = token_claims(ctx, actor_token, "actor_token").await?;
+        claims.insert("act".to_owned(), act_claim(&actor, &subject));
     }
 
     let non_empty = |v: Option<&str>| v.filter(|s| !s.is_empty()).map(str::to_owned);
@@ -250,6 +278,23 @@ mod tests {
         assert!(decode_unverified(&format!("{t}.x")).is_err());
         let not_object = format!("{}.{}.", enc(&json!({"alg":"none"})), enc(&json!([1])));
         assert!(decode_unverified(&not_object).is_err());
+    }
+
+    #[test]
+    fn act_nests_the_prior_actor() {
+        let obj = |v: Value| v.as_object().unwrap().clone();
+        let actor = obj(json!({"sub": "svc-b", "act": {"sub": "x"}}));
+        assert_eq!(
+            act_claim(&actor, &obj(json!({"sub": "alice"}))),
+            json!({"sub": "svc-b"})
+        );
+        let subject = obj(json!({"sub": "alice", "act": {"sub": "svc-a"}}));
+        assert_eq!(
+            act_claim(&actor, &subject),
+            json!({"sub": "svc-b", "act": {"sub": "svc-a"}})
+        );
+        let not_object = obj(json!({"sub": "alice", "act": "svc-a"}));
+        assert_eq!(act_claim(&actor, &not_object), json!({"sub": "svc-b"}));
     }
 
     #[test]
