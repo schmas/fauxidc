@@ -4,7 +4,7 @@ use common::*;
 use axum::Router;
 use serde_json::Value;
 
-const EXAMPLES: [&str; 4] = ["auth0", "okta", "generic", "keycloak"];
+const EXAMPLES: [&str; 6] = ["auth0", "okta", "generic", "keycloak", "entra", "cognito"];
 const PKCE_VERIFIER: &str = "example-verifier-0123456789-0123456789-0123456789";
 
 fn load_inputs(file: &str) -> fauxidc::config::LoadInputs {
@@ -218,4 +218,47 @@ async fn keycloak_example_logs_in() {
         claims_of(t["id_token"].as_str().unwrap())["preferred_username"],
         "alice"
     );
+}
+
+#[tokio::test]
+async fn entra_example_logs_in() {
+    let app = app_from_config(load_example("entra"));
+    let t = login_and_token(
+        &app,
+        "/00000000-0000-0000-0000-000000000000/v2.0",
+        "example-app",
+        Some("local"),
+        "http://localhost:3000/callback",
+        "alice",
+        "openid profile email",
+    )
+    .await;
+    let id = claims_of(t["id_token"].as_str().unwrap());
+    assert_eq!(id["tid"], "00000000-0000-0000-0000-000000000000");
+    assert!(id["oid"].as_str().unwrap().starts_with("00000000-"));
+    assert_eq!(id["preferred_username"], "alice@example.test");
+    let at = claims_of(t["access_token"].as_str().unwrap());
+    assert_eq!(at["aud"], "api://example-app");
+}
+
+#[tokio::test]
+async fn cognito_example_logs_in() {
+    let app = app_from_config(load_example("cognito"));
+    let t = login_and_token(
+        &app,
+        "/us-east-1_example",
+        "example-app",
+        Some("local"),
+        "http://localhost:3000/callback",
+        "alice",
+        "openid profile email",
+    )
+    .await;
+    let id = claims_of(t["id_token"].as_str().unwrap());
+    assert_eq!(id["cognito:username"], "alice");
+    assert_eq!(id["token_use"], "id");
+    let at = claims_of(t["access_token"].as_str().unwrap());
+    assert_eq!(at["token_use"], "access");
+    assert_eq!(at["client_id"], "example-app");
+    assert_eq!(at["cognito:groups"][0], "admin");
 }

@@ -1,0 +1,28 @@
+# Example Issuer in the style of a Microsoft Entra ID v2.0 tenant.
+# Run: fauxidc --config examples/entra.toml
+# Discovery: http://localhost:9000/00000000-0000-0000-0000-000000000000/v2.0/.well-known/openid-configuration
+#
+# Config cannot express one Entra behavior. Real Entra endpoints are at `/<tenant>/oauth2/v2.0/*`
+# and the keys are at `/<tenant>/discovery/v2.0/keys`. These paths are outside the Issuer path.
+# fauxidc endpoints are always below the Issuer path. An app must read the endpoints from
+# discovery. Most SDKs do.
+
+[issuer.entra]
+issuer_url = "http://localhost:9000/00000000-0000-0000-0000-000000000000/v2.0"
+default_claims = { tid = "00000000-0000-0000-0000-000000000000", ver = "2.0" }
+
+[client.entra_app]
+issuer = "entra"
+client_id = "example-app"
+client_secret = "local"
+redirect_uris = ["http://localhost:3000/callback"]
+post_logout_redirect_uris = ["http://localhost:3000/"]
+audience = "api://example-app"
+
+[user.alice]
+label = "Alice Admin"
+claims = { oid = "00000000-0000-0000-0000-00000000a11c", preferred_username = "alice@example.test", email = "alice@example.test", name = "Alice Admin", roles = ["Admin"] }
+
+[user.bob]
+label = "Bobby Viewer"
+claims = { oid = "00000000-0000-0000-0000-0000000000b0", preferred_username = "bob@example.test", email = "bob@example.test", name = "Bobby Viewer", roles = ["Viewer"] }

@@ -93,6 +93,10 @@ The `examples/` directory has:
   (confidential), `spa` (public) and `service` (`client_credentials`), and a commented Custom user template.
 - `keycloak.toml`: Issuer `keycloak` at `http://localhost:9000/realms/example`, with the
   `/protocol/openid-connect/*` paths, `realm_access.roles` and `preferred_username`.
+- `entra.toml`: Issuer `entra` at `http://localhost:9000/00000000-0000-0000-0000-000000000000/v2.0`, with
+  `tid`, `oid`, `preferred_username` and `roles` claims.
+- `cognito.toml`: Issuer `cognito` at `http://localhost:9000/us-east-1_example`, with `/oauth2/*` paths,
+  `cognito:username`, `cognito:groups` and `token_use` claims.
 - `docker-compose.yml`: runs the published image with `auth0.toml`.
 
 `auth0.toml` and `okta.toml` define the confidential Client `example-app`, the public SPA Client `example-spa`
