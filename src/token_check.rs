@@ -137,6 +137,7 @@ mod tests {
                 auth_time: 1,
                 nonce: None,
                 lifetime: 60,
+                sid: None,
             },
         )
         .unwrap();

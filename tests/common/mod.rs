@@ -193,9 +193,8 @@ pub fn header_of(jwt: &str) -> Value {
     serde_json::from_slice(&bytes).unwrap()
 }
 
-/// Posts the login form for alice and returns the `code` from the `Location` header.
-/// `extra` adds or replaces form fields.
-pub async fn login_code(app: &Router, extra: &[(&str, &str)]) -> String {
+/// The login form for alice as example-app. `extra` adds or replaces form fields.
+pub fn login_fields<'a>(extra: &[(&'a str, &'a str)]) -> Vec<(&'a str, &'a str)> {
     let mut form: Vec<(&str, &str)> = vec![
         ("client_id", "example-app"),
         (
@@ -211,21 +210,30 @@ pub async fn login_code(app: &Router, extra: &[(&str, &str)]) -> String {
         form.retain(|&(a, _)| a != k);
         form.push((k, v));
     }
-    let (s, h, b) = send(app, post_form("/auth0/authorize", &form, &[])).await;
+    form
+}
+
+/// Posts the login form for alice and returns the `code` from the `Location` header.
+/// `extra` adds or replaces form fields.
+pub async fn login_code(app: &Router, extra: &[(&str, &str)]) -> String {
+    let (s, h, b) = send(
+        app,
+        post_form("/auth0/authorize", &login_fields(extra), &[]),
+    )
+    .await;
     assert_eq!(s, 302, "{b}");
     query_param(&location(&h), "code").unwrap()
 }
 
-/// Logs alice in with `extra` login fields, exchanges the code as example-app, returns the JSON body.
-pub async fn token_response_for(app: &Router, extra: &[(&str, &str)]) -> Value {
-    let code = login_code(app, extra).await;
+/// Exchanges `code` at `/auth0/token` as example-app, asserts 200 and returns the JSON body.
+pub async fn exchange_code_for(app: &Router, code: &str) -> Value {
     let (s, _, b) = send(
         app,
         post_form(
             "/auth0/token",
             &[
                 ("grant_type", "authorization_code"),
-                ("code", &code),
+                ("code", code),
                 (
                     "redirect_uri",
                     "http://localhost:3000/api/auth/callback/auth0",
@@ -237,6 +245,22 @@ pub async fn token_response_for(app: &Router, extra: &[(&str, &str)]) -> Value {
     .await;
     assert_eq!(s, 200, "{b}");
     json(&b)
+}
+
+/// Logs alice in with `extra` login fields, exchanges the code as example-app, returns the JSON body.
+pub async fn token_response_for(app: &Router, extra: &[(&str, &str)]) -> Value {
+    let code = login_code(app, extra).await;
+    exchange_code_for(app, &code).await
+}
+
+/// The `name=value` part of the `Set-Cookie` header for cookie `name`, if any.
+pub fn set_cookie(h: &HeaderMap, name: &str) -> Option<String> {
+    let prefix = format!("{name}=");
+    h.get_all("set-cookie")
+        .iter()
+        .filter_map(|v| v.to_str().ok())
+        .find(|c| c.starts_with(&prefix))
+        .map(|c| c.split(';').next().unwrap_or(c).to_owned())
 }
 
 /// Logs alice in, exchanges the code at `/auth0/token` as example-app and returns the access token.

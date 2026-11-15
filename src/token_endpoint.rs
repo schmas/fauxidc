@@ -212,6 +212,7 @@ async fn exchange_code(
             scope: &grant.scope,
             audience: grant.audience.as_deref(),
             auth_time: grant.auth_time,
+            sid: grant.sid.as_deref(),
             nonce: grant.nonce.as_deref(),
             refresh: RefreshMode::ByPolicy,
             refresh_scope: None,
@@ -238,6 +239,8 @@ pub(crate) struct UserGrant<'a> {
     /// Request audience; `None` → Client audience → `client_id`.
     pub audience: Option<&'a str>,
     pub auth_time: u64,
+    /// The Session `sid` for the ID token; only a code from a sign-in at `/authorize` has one.
+    pub sid: Option<&'a str>,
     pub nonce: Option<&'a str>,
     pub refresh: RefreshMode,
     /// Scope of a new refresh token; `None` uses `scope`. A narrowed refresh keeps the
@@ -335,6 +338,7 @@ pub(crate) fn issue_user_tokens(
                 auth_time: g.auth_time,
                 nonce: g.nonce,
                 lifetime: id_lifetime,
+                sid: g.sid,
             },
         )?);
     }

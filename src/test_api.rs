@@ -191,6 +191,7 @@ async fn respond(ctx: &IssuerCtx, req: TestTokenRequest) -> Result<serde_json::V
             scope: &scope,
             audience: req.audience.as_deref(),
             auth_time: now_secs(),
+            sid: None,
             nonce: None,
             refresh: RefreshMode::ByPolicy,
             refresh_scope: None,

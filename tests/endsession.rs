@@ -17,7 +17,12 @@ fn logout_config(base: &str) -> String {
 }
 
 fn clears_auto_select(h: &HeaderMap) {
-    let cookie = h["set-cookie"].to_str().unwrap();
+    let cookie = h
+        .get_all("set-cookie")
+        .iter()
+        .map(|v| v.to_str().unwrap())
+        .find(|c| c.starts_with("fauxidc_user_auth0="))
+        .unwrap();
     assert!(
         cookie.starts_with("fauxidc_user_auth0=;") && cookie.contains("Max-Age=0"),
         "{cookie}"
@@ -187,6 +192,7 @@ async fn bad_id_token_hint_is_error_page() {
             auth_time: 1,
             nonce: None,
             lifetime: 60,
+            sid: None,
         },
     )
     .unwrap();

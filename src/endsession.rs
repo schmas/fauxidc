@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use axum::{
     Form,
     extract::{Query, State},
-    http::{HeaderValue, StatusCode, header},
+    http::{HeaderMap, HeaderValue, StatusCode, header},
     response::{Html, IntoResponse, Response},
 };
 use serde_json::Value;
@@ -13,7 +13,7 @@ use serde_json::Value;
 use crate::authorize::error_page;
 use crate::clients::{find_client, redirect_uri_matches};
 use crate::config::Claims;
-use crate::cookies::auto_select_clear;
+use crate::cookies::{auto_select_clear, read_cookie, session_clear, session_name};
 use crate::error::{OAuthError, append_query};
 use crate::logging::{record_client, record_endpoint};
 use crate::state::IssuerCtx;
@@ -83,17 +83,19 @@ pub fn apply_aliases(
 /// `GET {issuer}/endsession`.
 pub async fn endsession_get(
     State(ctx): State<IssuerCtx>,
+    headers: HeaderMap,
     Query(raw): Query<Vec<(String, String)>>,
 ) -> Response {
-    endsession(&ctx, raw).await
+    endsession(&ctx, &headers, raw).await
 }
 
 /// `POST {issuer}/endsession` with a form body.
 pub async fn endsession_post(
     State(ctx): State<IssuerCtx>,
+    headers: HeaderMap,
     Form(raw): Form<Vec<(String, String)>>,
 ) -> Response {
-    endsession(&ctx, raw).await
+    endsession(&ctx, &headers, raw).await
 }
 
 /// `true` if the `aud` claim is `client_id` or an array that holds it.
@@ -118,7 +120,7 @@ fn hint_client(claims: &Claims) -> Option<String> {
         .map(str::to_owned)
 }
 
-async fn endsession(ctx: &IssuerCtx, raw: Vec<(String, String)>) -> Response {
+async fn endsession(ctx: &IssuerCtx, request: &HeaderMap, raw: Vec<(String, String)>) -> Response {
     record_endpoint(&ctx.id, "endsession");
     let p = apply_aliases(raw, &ctx.issuer().logout_param_aliases);
     let reject = |message: String| error_page(ctx, StatusCode::BAD_REQUEST, message);
@@ -203,10 +205,17 @@ async fn endsession(ctx: &IssuerCtx, raw: Vec<(String, String)>) -> Response {
             }
         }
     };
+    // The Session is deleted on the server too, so its cookie value never works again.
+    if let Some(value) = read_cookie(request, &session_name(&ctx.id)) {
+        ctx.app.store.sessions.remove(&value);
+    }
     let headers = response.headers_mut();
     headers.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
-    if let Some(cookie) = auto_select_clear(&ctx.id, &ctx.path) {
-        headers.insert(header::SET_COOKIE, cookie);
+    let cookies = auto_select_clear(&ctx.id, &ctx.path)
+        .into_iter()
+        .chain(session_clear(&ctx.id, &ctx.path));
+    for cookie in cookies {
+        headers.append(header::SET_COOKIE, cookie);
     }
     response
 }

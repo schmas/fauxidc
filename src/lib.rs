@@ -28,6 +28,7 @@ pub mod request_log;
 pub mod revoke;
 pub mod router;
 pub mod server;
+pub mod session;
 pub mod state;
 pub mod templates;
 pub mod test_api;

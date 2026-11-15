@@ -229,7 +229,12 @@ async fn remember_sets_cookie_and_next_request_skips_page() {
         post_form("/auth0/authorize", &login_form(&[("remember", "on")]), &[]),
     )
     .await;
-    let cookie = h["set-cookie"].to_str().unwrap().to_string();
+    let cookie = h
+        .get_all("set-cookie")
+        .iter()
+        .map(|v| v.to_str().unwrap().to_owned())
+        .find(|c| c.starts_with("fauxidc_user_auth0="))
+        .unwrap();
     assert!(
         cookie.starts_with("fauxidc_user_auth0=alice;")
             && cookie.contains("Path=/auth0")
@@ -298,7 +303,7 @@ async fn custom_user_is_not_remembered() {
         ),
     )
     .await;
-    assert!(h.get("set-cookie").is_none());
+    assert!(set_cookie(&h, "fauxidc_user_auth0").is_none());
 }
 
 #[tokio::test]

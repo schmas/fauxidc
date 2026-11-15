@@ -1,4 +1,4 @@
-//! The auto-select cookie: it remembers which configured user signed in.
+//! The Auto-select cookie (it remembers which configured User signed in) and the Session cookie.
 
 use axum::http::{HeaderMap, HeaderValue, header};
 
@@ -44,6 +44,35 @@ pub fn auto_select_clear(issuer_id: &str, issuer_path: &str) -> Option<HeaderVal
     .ok()
 }
 
+/// The name of the Session cookie of one Issuer.
+pub fn session_name(issuer_id: &str) -> String {
+    format!("fauxidc_session_{issuer_id}")
+}
+
+/// The `Set-Cookie` value of a Session: a browser-session cookie (no `Max-Age`).
+///
+/// Returns `None` if the value is not a valid header value.
+pub fn session_set(issuer_id: &str, issuer_path: &str, value: &str) -> Option<HeaderValue> {
+    let path = cookie_path(issuer_path);
+    let name = session_name(issuer_id);
+    HeaderValue::try_from(format!(
+        "{name}={value}; Path={path}; HttpOnly; SameSite=Lax"
+    ))
+    .ok()
+}
+
+/// The `Set-Cookie` value that removes the Session cookie (same path as `session_set`).
+///
+/// Returns `None` if the value is not a valid header value.
+pub fn session_clear(issuer_id: &str, issuer_path: &str) -> Option<HeaderValue> {
+    let path = cookie_path(issuer_path);
+    let name = session_name(issuer_id);
+    HeaderValue::try_from(format!(
+        "{name}=; Path={path}; HttpOnly; SameSite=Lax; Max-Age=0"
+    ))
+    .ok()
+}
+
 /// The cookie `Path`: the Issuer path without a trailing slash, or `/`.
 fn cookie_path(issuer_path: &str) -> &str {
     match issuer_path.trim_end_matches('/') {
@@ -68,6 +97,18 @@ mod tests {
                 .to_str()
                 .unwrap()
                 .contains("Path=/;")
+        );
+    }
+
+    #[test]
+    fn session_cookie_has_no_max_age_and_clear_uses_its_path() {
+        assert_eq!(
+            session_set("auth0", "/auth0/", "v").unwrap(),
+            "fauxidc_session_auth0=v; Path=/auth0; HttpOnly; SameSite=Lax"
+        );
+        assert_eq!(
+            session_clear("auth0", "/auth0/").unwrap(),
+            "fauxidc_session_auth0=; Path=/auth0; HttpOnly; SameSite=Lax; Max-Age=0"
         );
     }
 }

@@ -7,11 +7,13 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 
+use crate::claims::{ClaimTarget, build_claims};
 use crate::clients::{ResolvedClient, find_client, redirect_uri_matches, register_lenient};
 use crate::config::{Claims, Endpoint};
-use crate::cookies::{auto_select_name, auto_select_set, read_cookie};
+use crate::cookies::{auto_select_name, auto_select_set, read_cookie, session_name, session_set};
 use crate::error::{OAuthError, append_query};
 use crate::logging::{record_client, record_endpoint};
+use crate::session::Session;
 use crate::state::{CodeGrant, IssuerCtx, PkceMethod, Subject, now_secs};
 use crate::templates::{CONTEXT_VERSION, ErrorContext, LoginContext, STATIC_BASE, UserOption};
 
@@ -174,15 +176,6 @@ fn validate(ctx: &IssuerCtx, p: &AuthorizeParams) -> Result<ValidRequest, Reject
     })
     .map_err(|rule| fail("invalid_request", &rule))?;
 
-    if p.prompt
-        .as_deref()
-        .is_some_and(|v| v.split_whitespace().any(|w| w == "none"))
-    {
-        let rule = "prompt=none: no session exists";
-        tracing::info!(issuer = %ctx.id, "{rule}");
-        return Err(fail("login_required", rule));
-    }
-
     Ok(ValidRequest {
         redirect_uri: redirect_uri.to_owned(),
         scope: p
@@ -240,27 +233,73 @@ pub async fn authorize_get(
 }
 
 /// An authorization request, sent by `GET` or as a `POST` form without a `user` field
-/// (OIDC Core 3.1.2.1): validate, then sign in without the page or show the login page.
+/// (OIDC Core 3.1.2.1): validate; `prompt=none` uses the Session only; else sign in without
+/// the page (Auto-select, `auto_login`) or show the login page.
 fn authorize_request(ctx: &IssuerCtx, headers: &HeaderMap, p: &AuthorizeParams) -> Response {
     record_endpoint(&ctx.id, "authorize");
     if let Some(client_id) = p.client_id.as_deref() {
         record_client(client_id);
     }
-    match validate(ctx, p) {
-        Ok(request) => match skip_login(ctx, &request, headers) {
-            Some(id) => issue_code(
-                ctx,
-                &request,
-                Subject::User {
-                    id,
-                    overrides: Claims::new(),
-                },
-            ),
-            None => login_page(ctx, &request, StatusCode::OK, None, &KeptInput::default()),
-        },
-        Err(Rejection::Redirect(error)) => error.into_response(),
-        Err(Rejection::Page(status, message)) => error_page(ctx, status, message),
+    let request = match validate(ctx, p) {
+        Ok(request) => request,
+        Err(rejection) => return reject(ctx, rejection),
+    };
+    let prompt_none = p
+        .prompt
+        .as_deref()
+        .is_some_and(|v| v.split_whitespace().any(|w| w == "none"));
+    if prompt_none {
+        return match silent_session(ctx, headers, &request) {
+            Ok(session) => resume(ctx, &request, &session),
+            Err(rejection) => reject(ctx, rejection),
+        };
     }
+    match skip_login(ctx, &request, headers) {
+        Some(id) => sign_in(
+            ctx,
+            &request,
+            Subject::User {
+                id,
+                overrides: Claims::new(),
+            },
+        ),
+        None => login_page(ctx, &request, StatusCode::OK, None, &KeptInput::default()),
+    }
+}
+
+fn reject(ctx: &IssuerCtx, rejection: Rejection) -> Response {
+    match rejection {
+        Rejection::Redirect(error) => error.into_response(),
+        Rejection::Page(status, message) => error_page(ctx, status, message),
+    }
+}
+
+/// A redirect to the request `redirect_uri` with `error` and the rule text as description.
+fn redirect_error(
+    ctx: &IssuerCtx,
+    req: &ValidRequest,
+    error: &'static str,
+    rule: &str,
+) -> Rejection {
+    tracing::info!(issuer = %ctx.id, "{rule}");
+    Rejection::Redirect(OAuthError::Redirect {
+        redirect_uri: req.redirect_uri.clone(),
+        state: req.params.state.clone(),
+        error,
+        description: rule.to_owned(),
+    })
+}
+
+/// `prompt=none`: the Session named by this Issuer's Session cookie, if it exists for this
+/// Issuer. Else a `login_required` redirect.
+fn silent_session(
+    ctx: &IssuerCtx,
+    headers: &HeaderMap,
+    req: &ValidRequest,
+) -> Result<Session, Rejection> {
+    read_cookie(headers, &session_name(&ctx.id))
+        .and_then(|value| ctx.app.store.sessions.get(&ctx.id, &value))
+        .ok_or_else(|| redirect_error(ctx, req, "login_required", "prompt=none: no session exists"))
 }
 
 /// The configured user to sign in without the login page, if any.
@@ -401,8 +440,7 @@ pub async fn authorize_post(
     }
     let request = match validate(&ctx, &f.params) {
         Ok(request) => request,
-        Err(Rejection::Redirect(error)) => return error.into_response(),
-        Err(Rejection::Page(status, message)) => return error_page(&ctx, status, message),
+        Err(rejection) => return reject(&ctx, rejection),
     };
     let kept = KeptInput {
         user: f.user.clone(),
@@ -417,13 +455,7 @@ pub async fn authorize_post(
                 (Subject::User { id, .. }, true) => auto_select_set(&ctx.id, &ctx.path, id),
                 _ => None,
             };
-            let mut response = issue_code(&ctx, &request, subject);
-            if let Some(cookie) = remembered
-                && response.status() == StatusCode::FOUND
-            {
-                response.headers_mut().append(header::SET_COOKIE, cookie);
-            }
-            response
+            sign_in_with(&ctx, &request, subject, remembered)
         }
         Err(message) => {
             tracing::info!(issuer = %ctx.id, "login rejected: {message}");
@@ -465,8 +497,74 @@ fn subject_from_form(ctx: &IssuerCtx, f: &LoginForm) -> Result<Subject, &'static
     })
 }
 
-/// Stores a code grant for `subject` and redirects to the client with the code.
-pub(crate) fn issue_code(ctx: &IssuerCtx, req: &ValidRequest, subject: Subject) -> Response {
+/// Creates a Session for `subject` (`auth_time` = now, new `sid`), issues the code with them,
+/// and on a 302 appends the Session cookie. The merged `sub` comes from the ID token claims.
+pub(crate) fn sign_in(ctx: &IssuerCtx, req: &ValidRequest, subject: Subject) -> Response {
+    sign_in_with(ctx, req, subject, None)
+}
+
+/// [`sign_in`], with an Auto-select cookie appended before the Session cookie.
+fn sign_in_with(
+    ctx: &IssuerCtx,
+    req: &ValidRequest,
+    subject: Subject,
+    auto_select: Option<HeaderValue>,
+) -> Response {
+    let sub = build_claims(
+        &ctx.app.config,
+        &ctx.id,
+        &req.client.config,
+        &subject,
+        ClaimTarget::IdToken,
+    )
+    .get("sub")
+    .and_then(serde_json::Value::as_str)
+    .unwrap_or_default()
+    .to_owned();
+    let session = Session {
+        issuer_id: ctx.id.clone(),
+        subject: subject.clone(),
+        sub,
+        sid: uuid::Uuid::new_v4().to_string(),
+        auth_time: now_secs(),
+    };
+    let (auth_time, sid) = (session.auth_time, session.sid.clone());
+    let value = match ctx.app.store.sessions.create(session) {
+        Ok(value) => value,
+        Err(e) => return e.into_response(),
+    };
+    let mut response = issue_code(ctx, req, subject, auth_time, Some(sid));
+    if response.status() == StatusCode::FOUND {
+        let cookies = auto_select
+            .into_iter()
+            .chain(session_set(&ctx.id, &ctx.path, &value));
+        for cookie in cookies {
+            response.headers_mut().append(header::SET_COOKIE, cookie);
+        }
+    }
+    response
+}
+
+/// Issues a code for an existing Session (its `auth_time` and `sid`). No new cookie.
+pub(crate) fn resume(ctx: &IssuerCtx, req: &ValidRequest, session: &Session) -> Response {
+    issue_code(
+        ctx,
+        req,
+        session.subject.clone(),
+        session.auth_time,
+        Some(session.sid.clone()),
+    )
+}
+
+/// Stores a code grant for `subject` with the sign-in facts and redirects to the client with
+/// the code.
+pub(crate) fn issue_code(
+    ctx: &IssuerCtx,
+    req: &ValidRequest,
+    subject: Subject,
+    auth_time: u64,
+    sid: Option<String>,
+) -> Response {
     let lifetimes = ctx
         .issuer()
         .lifetimes
@@ -486,8 +584,9 @@ pub(crate) fn issue_code(ctx: &IssuerCtx, req: &ValidRequest, subject: Subject) 
         pkce: req.pkce.clone(),
         audience,
         subject,
-        auth_time: now,
+        auth_time,
         expires_at: now + lifetimes.code,
+        sid,
     };
     let code = match ctx.app.store.insert_code(grant) {
         Ok(code) => code,

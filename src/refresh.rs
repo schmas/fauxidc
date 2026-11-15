@@ -146,6 +146,7 @@ pub async fn refresh_grant(
             scope: &scope,
             audience: claims.token_aud.as_deref(),
             auth_time: claims.auth_time,
+            sid: None,
             nonce: None,
             refresh,
             refresh_scope: Some(&original),

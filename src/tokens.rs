@@ -16,6 +16,8 @@ pub struct IdTokenInput<'a> {
     pub auth_time: u64,
     pub nonce: Option<&'a str>,
     pub lifetime: i64,
+    /// The Session `sid` claim; `None` omits it.
+    pub sid: Option<&'a str>,
 }
 
 /// Inputs for an RFC 9068 access token.
@@ -67,6 +69,9 @@ pub fn sign_id_token(key: &SigningKey, input: IdTokenInput<'_>) -> Result<String
     ];
     if let Some(nonce) = input.nonce {
         protocol.push(("nonce", json!(nonce)));
+    }
+    if let Some(sid) = input.sid {
+        protocol.push(("sid", json!(sid)));
     }
     set_protocol(&mut claims, protocol);
     sign(key, "JWT", &claims)
@@ -184,6 +189,7 @@ mod tests {
             auth_time: 1,
             nonce: None,
             lifetime: 60,
+            sid: None,
         }
     }
 
@@ -206,10 +212,11 @@ mod tests {
             IdTokenInput {
                 issuer_url: "http://localhost:9000/auth0/",
                 client_id: "example-app",
-                claims: obj(json!({"sub": "auth0|alice"})),
+                claims: obj(json!({"sub": "auth0|alice", "sid": "user-value"})),
                 auth_time: 100,
                 nonce: Some("n1"),
                 lifetime: 3600,
+                sid: Some("s-1"),
             },
         )
         .unwrap();
@@ -221,6 +228,7 @@ mod tests {
         assert_eq!(c["azp"], "example-app");
         assert_eq!(c["nonce"], "n1");
         assert_eq!(c["auth_time"], 100);
+        assert_eq!(c["sid"], "s-1");
         assert_eq!(
             c["exp"].as_u64().unwrap() - c["iat"].as_u64().unwrap(),
             3600

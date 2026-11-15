@@ -14,6 +14,7 @@ use crate::issuer::endpoint_base;
 use crate::jwks_fetch::CACHE_TTL_SECS;
 use crate::keys::{KeyHandle, KeySet, Keyring};
 use crate::request_log::RequestLog;
+use crate::session::SessionStore;
 use crate::templates::Templates;
 
 /// The PKCE code challenge method.
@@ -46,6 +47,8 @@ pub struct CodeGrant {
     pub subject: Subject,
     pub auth_time: u64,
     pub expires_at: u64,
+    /// The Session `sid` of the sign-in; the ID token carries it.
+    pub sid: Option<String>,
 }
 
 /// The current time in seconds since the Unix epoch.
@@ -70,6 +73,8 @@ pub struct Store {
     pub used_assertions: Mutex<HashMap<(String, String), u64>>,
     /// Fetched Client JWK sets by `jwks_uri`: when they were fetched, and the set.
     pub jwks_cache: Mutex<HashMap<String, (u64, Arc<JwkSet>)>>,
+    /// Sessions by cookie value.
+    pub sessions: SessionStore,
 }
 
 /// When a refresh token was first used, and when it expires.
@@ -291,6 +296,7 @@ mod tests {
             },
             auth_time: now_secs(),
             expires_at: now_secs() + 60,
+            sid: None,
         };
         let code = store.insert_code(grant).unwrap();
         assert!(store.take_code(&code).is_some());
