@@ -13,6 +13,7 @@ use rsa::PrivateKey;
 use rsa::pkcs1::DecodeRsaPrivateKey;
 use rsa::pkcs8::{DecodePrivateKey, EncodePrivateKey, LineEnding};
 use rsa::traits::PublicKeyParts;
+use serde::Serialize;
 use sha2::{Digest, Sha256};
 use tokio::sync::watch;
 
@@ -314,6 +315,21 @@ impl KeySet {
         }
     }
 
+    /// A new set with `new` as the active key. The old active key and the older keys stay
+    /// (in that order) unless `retire` is set.
+    #[must_use]
+    pub fn rotated(&self, new: Arc<SigningKey>, retire: bool) -> KeySet {
+        let previous = if retire {
+            Vec::new()
+        } else {
+            self.iter().cloned().collect()
+        };
+        KeySet {
+            active: new,
+            previous,
+        }
+    }
+
     /// Decodes and verifies `token`: the key by header `kid` (none: the active key), the header
     /// `alg` must equal the key's `alg`. `configure` adds the caller's checks to the
     /// [`jsonwebtoken::Validation`]; it cannot change the algorithm. Errors are short text.
@@ -341,6 +357,15 @@ impl KeySet {
             .map(|data| (header, data.claims))
             .map_err(|e| e.to_string())
     }
+}
+
+/// The result of [`Keyring::rotate`]: the new `kid`, the `kid`s in JWKS order and the
+/// removed `kid`s.
+#[derive(Debug, Clone, Serialize)]
+pub struct Rotation {
+    pub kid: String,
+    pub keys: Vec<String>,
+    pub retired: Vec<String>,
 }
 
 struct Slot {
@@ -434,6 +459,39 @@ impl Keyring {
         self.lock()
             .values()
             .all(|slot| slot.set.is_some() || slot.handle.try_get().is_some())
+    }
+
+    /// Generates a key of `alg` on a blocking thread, then makes it the Issuer's active key.
+    /// With `retire`, every older key is removed. The swap happens under one lock, so parallel
+    /// rotations all land. The new key lives in memory only. Unknown Issuer id:
+    /// [`KeyError::Unavailable`].
+    pub async fn rotate(
+        &self,
+        issuer_id: &str,
+        alg: SigningAlg,
+        retire: bool,
+    ) -> Result<Rotation, KeyError> {
+        // The first key must exist before it can become an older key.
+        self.key_set(issuer_id).await?;
+        let new = tokio::task::spawn_blocking(move || SigningKey::generate_for(alg))
+            .await
+            .map_err(|e| KeyError::Generate(e.to_string()))??;
+        let new = Arc::new(new);
+        let mut slots = self.lock();
+        let slot = slots.get_mut(issuer_id).ok_or(KeyError::Unavailable)?;
+        let old = slot.current().ok_or(KeyError::Unavailable)?;
+        let set = Arc::new(old.rotated(new.clone(), retire));
+        slot.set = Some(set.clone());
+        let retired = if retire {
+            old.iter().map(|k| k.kid.clone()).collect()
+        } else {
+            Vec::new()
+        };
+        Ok(Rotation {
+            kid: new.kid.clone(),
+            keys: set.iter().map(|k| k.kid.clone()).collect(),
+            retired,
+        })
     }
 
     /// The server key handle.
@@ -864,6 +922,48 @@ mod tests {
         let (header, claims) = set.verify(&t, |v| v.validate_aud = false).unwrap();
         assert_eq!(header.kid.as_deref(), Some(old.kid.as_str()));
         assert_eq!(claims["sub"], "x");
+    }
+
+    #[test]
+    fn rotated_keeps_order_and_retire_drops_older_keys() {
+        let a = Arc::new(test_key());
+        let b = Arc::new(SigningKey::generate_for(SigningAlg::ES256).unwrap());
+        let c = Arc::new(SigningKey::generate_for(SigningAlg::ES256).unwrap());
+        let set = KeySet::single(a.clone()).rotated(b.clone(), false);
+        let set = set.rotated(c.clone(), false);
+        let kids: Vec<&str> = set.iter().map(|k| k.kid.as_str()).collect();
+        assert_eq!(kids, vec![c.kid.as_str(), b.kid.as_str(), a.kid.as_str()]);
+        let retired = set.rotated(a.clone(), true);
+        let kids: Vec<&str> = retired.iter().map(|k| k.kid.as_str()).collect();
+        assert_eq!(kids, vec![a.kid.as_str()]);
+    }
+
+    #[tokio::test]
+    async fn parallel_rotations_both_land() {
+        let mut config = crate::config::Config::default();
+        config.issuer.insert(
+            "es".into(),
+            crate::config::IssuerConfig {
+                issuer_url: "http://localhost:9000/es".into(),
+                signing_alg: SigningAlg::ES256,
+                ..Default::default()
+            },
+        );
+        let ring = Arc::new(Keyring::start(&config, KeyHandle::ready(test_key())).unwrap());
+        let first = ring.key_set("es").await.unwrap().active.kid.clone();
+        let (r1, r2) = tokio::join!(
+            ring.rotate("es", SigningAlg::ES256, false),
+            ring.rotate("es", SigningAlg::ES256, false)
+        );
+        let (r1, r2) = (r1.unwrap(), r2.unwrap());
+        let set = ring.key_set("es").await.unwrap();
+        assert_eq!(set.iter().count(), 3);
+        assert!(set.find(Some(&first)).is_some());
+        assert!(set.find(Some(&r1.kid)).is_some() && set.find(Some(&r2.kid)).is_some());
+        assert!(matches!(
+            ring.rotate("nope", SigningAlg::ES256, false).await,
+            Err(KeyError::Unavailable)
+        ));
     }
 
     #[test]

@@ -108,6 +108,10 @@ pub fn build_router(state: Arc<AppState>) -> Router {
             post(test_api::issue).with_state(state.clone()),
         )
         .route(
+            "/_mock/{issuer_id}/rotate-key",
+            post(test_api::rotate_key).with_state(state.clone()),
+        )
+        .route(
             "/_mock/requests",
             get(request_log::list)
                 .delete(request_log::clear)

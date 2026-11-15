@@ -103,6 +103,11 @@ Every source rejects unknown keys. Invalid config stops the server with exit cod
 
 The full reference is in [docs/spec.md](docs/spec.md), section 5.
 
+Each Issuer signs with `issuer.<id>.signing_alg`: `RS256` (default), `ES256` or `PS256`.
+An RS256 Issuer without `issuer.<id>.key_file` shares the server key (`FAUXIDC_KEY_PEM`, else `server.key_file`, else generated).
+Any other Issuer has its own key: from its `key_file` if the file exists, else generated and saved to `key_file` when it is set.
+See [ADR 0003](docs/adr/0003-per-issuer-key-sets.md).
+
 ## Templates
 
 You can replace the login page, the error page and the signed-out page. See [docs/templates.md](docs/templates.md).
@@ -131,6 +136,19 @@ curl -s http://localhost:9000/_mock/auth0/token \
 ```
 
 The endpoint has no authentication. Never run fauxidc in production.
+
+`POST /_mock/{issuer-id}/rotate-key` gives the Issuer a new active signing key with its `signing_alg`.
+JWKS lists the new key first and keeps the older keys, so tokens signed before the rotation still verify.
+Add `?retire=true` to remove every older key in the same call; their tokens then fail.
+The response is `{"kid": <new kid>, "keys": [<kids in JWKS order>], "retired": [<removed kids>]}`.
+An unknown Issuer id gives 404.
+Rotated keys live in memory only: after a restart the Issuer returns to its configured key.
+Rotating an RS256 Issuer that shares the server key does not change the key of the other Issuers.
+
+```sh
+curl -s -X POST http://localhost:9000/_mock/auth0/rotate-key
+curl -s -X POST 'http://localhost:9000/_mock/auth0/rotate-key?retire=true'
+```
 
 ## Request log
 

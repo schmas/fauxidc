@@ -1,4 +1,5 @@
-//! The Test API: `POST /_mock/{issuer_id}/token` issues tokens without a browser.
+//! The Test API: `POST /_mock/{issuer_id}/token` issues tokens without a browser, and
+//! `POST /_mock/{issuer_id}/rotate-key` rotates an Issuer's signing key.
 //!
 //! The endpoint has no authentication. fauxidc must never run in production.
 
@@ -6,7 +7,10 @@ use std::sync::Arc;
 
 use axum::{
     Json,
-    extract::{Path, State, rejection::JsonRejection},
+    extract::{
+        Path, Query, State,
+        rejection::{JsonRejection, QueryRejection},
+    },
     http::{HeaderValue, StatusCode, header},
     response::{IntoResponse, Response},
 };
@@ -43,6 +47,66 @@ pub struct TestTokenRequest {
 const DEFAULT_CLIENT_ID: &str = "test-api";
 const DEFAULT_SCOPE: &str = "openid profile email";
 
+fn unknown_issuer(issuer_id: &str) -> Response {
+    (
+        StatusCode::NOT_FOUND,
+        Json(json!({
+            "error": "not_found",
+            "error_description": format!("unknown issuer: {issuer_id}"),
+        })),
+    )
+        .into_response()
+}
+
+/// The query of a key rotation request.
+#[derive(Debug, Deserialize)]
+pub struct RotateQuery {
+    /// Remove every older key of the Issuer.
+    #[serde(default)]
+    pub retire: bool,
+}
+
+/// `POST /_mock/{issuer_id}/rotate-key[?retire=true]`: a new active key with the Issuer's
+/// `signing_alg`; older keys stay in JWKS unless `retire=true`. 200 with the [`Rotation`]
+/// JSON; 404 `not_found` for an unknown Issuer id.
+///
+/// [`Rotation`]: crate::keys::Rotation
+pub async fn rotate_key(
+    State(state): State<Arc<AppState>>,
+    Path(issuer_id): Path<String>,
+    query: Result<Query<RotateQuery>, QueryRejection>,
+) -> Response {
+    let Some(issuer) = state.config.issuer.get(&issuer_id) else {
+        return unknown_issuer(&issuer_id);
+    };
+    let Query(q) = match query {
+        Ok(q) => q,
+        Err(rejection) => {
+            return OAuthError::json("invalid_request", format!("invalid query: {rejection}"))
+                .into_response();
+        }
+    };
+    match state
+        .keys
+        .rotate(&issuer_id, issuer.signing_alg, q.retire)
+        .await
+    {
+        Ok(rotation) => {
+            tracing::info!(
+                issuer = %issuer_id,
+                kid = %rotation.kid,
+                retired = rotation.retired.len(),
+                "signing key rotated"
+            );
+            Json(rotation).into_response()
+        }
+        Err(e) => {
+            tracing::error!(issuer = %issuer_id, "key rotation failed: {e}");
+            OAuthError::Unavailable.into_response()
+        }
+    }
+}
+
 /// `POST /_mock/{issuer_id}/token`.
 pub async fn issue(
     State(state): State<Arc<AppState>>,
@@ -50,14 +114,7 @@ pub async fn issue(
     body: Result<Json<TestTokenRequest>, JsonRejection>,
 ) -> Response {
     if !state.config.issuer.contains_key(&issuer_id) {
-        return (
-            StatusCode::NOT_FOUND,
-            Json(json!({
-                "error": "not_found",
-                "error_description": format!("unknown issuer: {issuer_id}"),
-            })),
-        )
-            .into_response();
+        return unknown_issuer(&issuer_id);
     }
     let req = match body {
         Ok(Json(req)) => req,
