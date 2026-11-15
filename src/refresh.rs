@@ -120,7 +120,7 @@ pub async fn refresh_grant(
             .map_err(|rule| OAuthError::json("invalid_scope", rule))?;
             requested
         }
-        None => original,
+        None => original.clone(),
     };
     if let Subject::User { id, .. } = &claims.subject
         && !ctx.app.config.user.contains_key(id)
@@ -152,6 +152,7 @@ pub async fn refresh_grant(
             auth_time: claims.auth_time,
             nonce: None,
             refresh,
+            refresh_scope: Some(&original),
         },
     )
 }

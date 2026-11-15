@@ -236,9 +236,19 @@ async fn scope_can_narrow_but_not_widen() {
     let (s, r) = refresh(&app, &rt, &[("scope", "openid")]).await;
     assert_eq!(s, 200, "{r}");
     assert_eq!(r["scope"], "openid");
-    let rt2 = r["refresh_token"].as_str().unwrap();
-    assert_eq!(claims_of(rt2)["scope"], "openid");
-    let (s, r) = refresh(&app, rt2, &[("scope", "openid admin")]).await;
+    assert_eq!(
+        claims_of(r["access_token"].as_str().unwrap())["scope"],
+        "openid"
+    );
+    // RFC 6749 section 6: the new refresh token keeps the original scope.
+    let rt2 = r["refresh_token"].as_str().unwrap().to_owned();
+    let full = "openid profile email offline_access";
+    assert_eq!(claims_of(&rt2)["scope"], full);
+    let (s, r) = refresh(&app, &rt2, &[]).await;
+    assert_eq!(s, 200, "{r}");
+    assert_eq!(r["scope"], full);
+    let rt3 = r["refresh_token"].as_str().unwrap();
+    let (s, r) = refresh(&app, rt3, &[("scope", "openid admin")]).await;
     assert_eq!(
         (s.as_u16(), r["error"].as_str()),
         (400, Some("invalid_scope"))

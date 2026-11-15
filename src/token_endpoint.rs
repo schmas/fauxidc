@@ -190,6 +190,7 @@ async fn exchange_code(
             auth_time: grant.auth_time,
             nonce: grant.nonce.as_deref(),
             refresh: RefreshMode::ByPolicy,
+            refresh_scope: None,
         },
     )
 }
@@ -214,6 +215,9 @@ pub(crate) struct UserGrant<'a> {
     pub auth_time: u64,
     pub nonce: Option<&'a str>,
     pub refresh: RefreshMode,
+    /// Scope of a new refresh token; `None` uses `scope`. A narrowed refresh keeps the
+    /// original scope here (RFC 6749 section 6).
+    pub refresh_scope: Option<&'a [String]>,
 }
 
 /// Strict: `offline_access` in scope AND the Client allows `refresh_token`. Lenient: always.
@@ -321,7 +325,7 @@ pub(crate) fn issue_user_tokens(
                 jti: uuid::Uuid::new_v4().to_string(),
                 iat: now,
                 exp: now.saturating_add(lifetimes.refresh_token),
-                scope: g.scope.join(" "),
+                scope: g.refresh_scope.unwrap_or(g.scope).join(" "),
                 auth_time: g.auth_time,
                 token_aud: g.audience.map(str::to_owned),
                 subject: g.subject.clone(),

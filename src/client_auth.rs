@@ -146,7 +146,7 @@ pub fn authenticate_client(
                 },
                 lenient_registered: false,
             },
-            method: AuthMethod::None,
+            method,
         });
     };
     let Some(expected) = client.config.client_secret.as_deref() else {

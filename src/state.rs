@@ -88,8 +88,8 @@ impl Store {
     }
 
     /// Records the first use of `jti`. Returns true on the first use, or on a reuse when
-    /// `leeway > 0` and `now <= used_at + leeway`. Drops entries whose `exp` has passed.
-    /// One lock for the check and the insert.
+    /// `leeway > 0` and `now <= used_at + leeway`, so the window includes both ends, in whole
+    /// seconds. Drops entries whose `exp` has passed. One lock for the check and the insert.
     pub fn use_refresh_jti(&self, jti: &str, exp: u64, now: u64, leeway: u64) -> bool {
         let mut used = self
             .used_refresh
@@ -230,6 +230,22 @@ mod tests {
         assert_eq!(store.refresh_used_at("j"), Some(10));
         assert!(!store.use_refresh_jti("j", 1000, 10, 0));
         assert!(!store.use_refresh_jti("j", 1000, 11, 0));
+    }
+
+    #[test]
+    fn refresh_jti_parallel_threads_get_one_success() {
+        let store = Store::default();
+        let wins = std::thread::scope(|s| {
+            let handles: Vec<_> = (0..8)
+                .map(|_| s.spawn(|| store.use_refresh_jti("j", 1000, 10, 0)))
+                .collect();
+            handles
+                .into_iter()
+                .map(|h| h.join().unwrap())
+                .filter(|won| *won)
+                .count()
+        });
+        assert_eq!(wins, 1);
     }
 
     #[test]
