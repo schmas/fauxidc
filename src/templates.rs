@@ -316,10 +316,10 @@ mod tests {
         assert!(html.contains("<option value=\"alice\">Alice Admin</option>"));
         assert!(html.contains("value=\"__custom__\""));
         assert!(html.contains(
-            "<span class=\"text-base-content/60\">Client</span><span class=\"truncate font-mono\">example-app</span>"
+            "<span class=\"text-base-content/70\">Client</span><span class=\"truncate font-mono\">example-app</span>"
         ));
         assert!(html.contains(
-            "<span class=\"text-base-content/60\">Issuer</span><span class=\"truncate font-mono\">auth0</span>"
+            "<span class=\"text-base-content/70\">Issuer</span><span class=\"truncate font-mono\">auth0</span>"
         ));
         assert!(html.contains("bad &lt;input&gt;"));
         assert!(html.contains("name=\"remember\""));

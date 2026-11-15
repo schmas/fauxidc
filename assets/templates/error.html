@@ -8,7 +8,7 @@
 <link rel="stylesheet" href="{{ static_base|href }}/fauxidc.css">
 </head>
 <body class="bg-base-200 text-base-content antialiased">
-<div class="mx-auto flex h-dvh w-full max-w-xl flex-col justify-center gap-4 px-4 py-6">
+<div class="mx-auto flex min-h-dvh w-full max-w-xl flex-col justify-center gap-4 px-4 py-6 sm:h-dvh">
 <header class="flex shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-2">
 <span class="flex items-center gap-2 text-base font-semibold tracking-tight">
 <span aria-hidden="true" class="grid size-7 place-items-center rounded-lg bg-primary font-mono text-xs font-bold text-primary-content shadow-sm">fx</span>
@@ -26,17 +26,17 @@ fauxidc
 <h1 class="text-xl font-semibold tracking-tight">Error</h1>
 </div>
 <div class="flex min-w-0 flex-wrap gap-1.5 text-xs">
-<span class="badge badge-ghost max-w-full gap-1.5"><span class="text-base-content/60">Issuer</span><span class="truncate font-mono">{{ issuer_id }}</span></span>
+<span class="badge badge-ghost max-w-full gap-1.5"><span class="text-base-content/70">Issuer</span><span class="truncate font-mono">{{ issuer_id }}</span></span>
 </div>
 </div>
 <div class="alert alert-error alert-soft items-start py-3 text-sm" role="alert">
 <svg aria-hidden="true" class="size-5 shrink-0" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0Zm-8-5a.75.75 0 0 1 .75.75v4.5a.75.75 0 0 1-1.5 0v-4.5A.75.75 0 0 1 10 5Zm0 10a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z" clip-rule="evenodd"/></svg>
-<span class="break-words">{{ message }}</span>
+<span class="min-w-0 wrap-anywhere">{{ message }}</span>
 </div>
 <p class="text-sm text-base-content/70">fauxidc cannot continue with this request. Fix the request and try again.</p>
 </div>
 </main>
-<footer class="shrink-0 text-center text-xs text-base-content/50">A mock OpenID Provider for development and tests. Never enter real credentials.</footer>
+<footer class="shrink-0 text-center text-xs text-base-content/70">A mock OpenID Provider for development and tests. Never enter real credentials.</footer>
 </div>
 </body>
 </html>

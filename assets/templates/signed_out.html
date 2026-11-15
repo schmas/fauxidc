@@ -8,7 +8,7 @@
 <link rel="stylesheet" href="{{ static_base|href }}/fauxidc.css">
 </head>
 <body class="bg-base-200 text-base-content antialiased">
-<div class="mx-auto flex h-dvh w-full max-w-xl flex-col justify-center gap-4 px-4 py-6">
+<div class="mx-auto flex min-h-dvh w-full max-w-xl flex-col justify-center gap-4 px-4 py-6 sm:h-dvh">
 <header class="flex shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-2">
 <span class="flex items-center gap-2 text-base font-semibold tracking-tight">
 <span aria-hidden="true" class="grid size-7 place-items-center rounded-lg bg-primary font-mono text-xs font-bold text-primary-content shadow-sm">fx</span>
@@ -26,15 +26,15 @@ fauxidc
 <h1 class="text-xl font-semibold tracking-tight">Signed out</h1>
 </div>
 <div class="flex min-w-0 flex-wrap gap-1.5 text-xs">
-{% if client_id %}<span class="badge badge-ghost max-w-full gap-1.5"><span class="text-base-content/60">Client</span><span class="truncate font-mono">{{ client_id }}</span></span>
-{% endif %}<span class="badge badge-ghost max-w-full gap-1.5"><span class="text-base-content/60">Issuer</span><span class="truncate font-mono">{{ issuer_id }}</span></span>
+{% if client_id %}<span class="badge badge-ghost max-w-full gap-1.5"><span class="text-base-content/70">Client</span><span class="truncate font-mono">{{ client_id }}</span></span>
+{% endif %}<span class="badge badge-ghost max-w-full gap-1.5"><span class="text-base-content/70">Issuer</span><span class="truncate font-mono">{{ issuer_id }}</span></span>
 </div>
 </div>
 <p class="text-sm text-base-content/70">You are signed out. You can close this page.</p>
 {% if signed_in_as %}<p class="border-t border-base-300 pt-4 text-sm text-base-content/70">Signed in as {{ signed_in_as }} · <a class="font-medium text-primary underline-offset-4 hover:underline" href="{{ change_href|href }}">change</a></p>
 {% endif %}</div>
 </main>
-<footer class="shrink-0 text-center text-xs text-base-content/50">A mock OpenID Provider for development and tests. Never enter real credentials.</footer>
+<footer class="shrink-0 text-center text-xs text-base-content/70">A mock OpenID Provider for development and tests. Never enter real credentials.</footer>
 </div>
 </body>
 </html>

@@ -279,3 +279,47 @@ fn templates_doc_names_the_stylesheet() {
         std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/docs/templates.md")).unwrap();
     assert!(doc.contains("/_mock/static/fauxidc.css"));
 }
+
+#[tokio::test]
+async fn error_page_wraps_a_long_message() {
+    let long = format!("http://x/{}", "a".repeat(600));
+    let (s, _, b) = send(
+        &app(STRICT),
+        get(&format!(
+            "/auth0/authorize?client_id=example-app&redirect_uri={long}&response_type=code"
+        )),
+    )
+    .await;
+    assert_eq!(s, 400);
+    assert!(
+        b.contains("<span class=\"min-w-0 wrap-anywhere\">redirect_uri not registered"),
+        "{b}"
+    );
+    let css = std::fs::read_to_string(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/assets/static/fauxidc.css"
+    ))
+    .unwrap();
+    assert!(css.contains(".min-w-0{min-width:0"));
+}
+
+#[tokio::test]
+async fn login_error_marks_no_field() {
+    let (s, _, b) = send(
+        &app(STRICT),
+        post_form(
+            "/auth0/authorize",
+            &login_fields(&[("user", "__custom__")]),
+            &[],
+        ),
+    )
+    .await;
+    assert_eq!(s, 400);
+    assert!(
+        b.contains("<span class=\"min-w-0 wrap-anywhere\">Custom user needs a sub"),
+        "{b}"
+    );
+    for bad in ["input-error", "textarea-error", "aria-invalid"] {
+        assert!(!b.contains(bad), "{bad}");
+    }
+}

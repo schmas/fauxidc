@@ -51,3 +51,18 @@ test.describe("without JavaScript", () => {
     expect(new URL(page.url()).searchParams.get("state")).toBe("login-page-test");
   });
 });
+
+for (const width of [375, 1280]) {
+  test(`a long error message does not widen the page at ${width} px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 720 });
+    const long = `http://x/${"a".repeat(600)}`;
+    const q = new URLSearchParams({ client_id: "example-spa", redirect_uri: long, response_type: "code" });
+    await page.goto(`${MOCK}/auth0/authorize?${q}`);
+    await expect(page.locator("[role=alert]")).toContainText("redirect_uri");
+    const { scrollWidth, clientWidth } = await page.evaluate(() => ({
+      scrollWidth: document.scrollingElement!.scrollWidth,
+      clientWidth: document.scrollingElement!.clientWidth,
+    }));
+    expect(scrollWidth).toBe(clientWidth);
+  });
+}

@@ -452,3 +452,41 @@ async fn debugger_shows_badges_and_code_blocks() {
     let (_, _, b) = send(&app, post_form("/auth0/debugger", &[("token", &t)], &[])).await;
     assert!(b.contains("badge-error"), "{b}");
 }
+
+#[tokio::test]
+async fn debugger_badges_for_iss_mismatch_and_expired() {
+    let cfg = format!("{STRICT}\n[issuer.okta]\nissuer_url = \"http://localhost:9000/okta\"\n");
+    let app = app(&cfg);
+    let okta = test_token(&app, "okta", json!({"user":"alice"})).await["access_token"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let (_, _, b) = send(&app, post_form("/auth0/debugger", &[("token", &okta)], &[])).await;
+    assert!(b.contains(">iss mismatch</span>"), "{b}");
+    assert!(!b.contains(">iss ok</span>"), "{b}");
+    assert!(!b.contains(">expired</span>"), "{b}");
+    let own = test_token(&app, "auth0", json!({"user":"alice"})).await["access_token"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let (_, _, b) = send(&app, post_form("/auth0/debugger", &[("token", &own)], &[])).await;
+    assert!(b.contains(">iss ok</span>"), "{b}");
+    let stranger = SigningKey::generate_for(SigningAlg::ES256).unwrap();
+    let t = sign_with(&stranger, &json!({"sub":"x","exp":1}));
+    let (_, _, b) = send(&app, post_form("/auth0/debugger", &[("token", &t)], &[])).await;
+    assert!(b.contains(">expired</span>"), "{b}");
+}
+
+#[tokio::test]
+async fn debugger_error_alert_wraps() {
+    let long = "x".repeat(600);
+    let (_, _, b) = send(
+        &app(STRICT),
+        post_form("/auth0/debugger", &[("token", &long)], &[]),
+    )
+    .await;
+    assert!(
+        b.contains("<span class=\"min-w-0 wrap-anywhere\">not a JWT"),
+        "{b}"
+    );
+}

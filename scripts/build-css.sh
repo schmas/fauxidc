@@ -70,10 +70,12 @@ cp "$du_dir/daisyui.mjs" "$du_dir/daisyui-theme.mjs" "$tools/"
 "$tw_bin" -i assets/css/fauxidc.css -o assets/static/fauxidc.css --minify
 
 # The pages load no external URL, and a test checks that the CSS has no "http://" or
-# "https://" text at all. Two strings would fail it, so rewrite them:
+# "https://" text at all. Rewrite the strings that would fail it:
 # - the Tailwind license banner URL (keep the banner, drop the scheme);
-# - the SVG namespace inside daisyUI data: URIs. A data: URI body is percent-decoded
-#   before the SVG is parsed, so the encoded form is the same namespace.
+# - the SVG namespace inside a daisyUI data: URI. The current include: list emits no
+#   data: URI, so this rule matches nothing today; it guards a future component that
+#   brings one back. A data: URI body is percent-decoded before the SVG is parsed, so
+#   the encoded form is the same namespace.
 sed -i.bak \
   -e 's#https://tailwindcss\.com#tailwindcss.com#g' \
   -e 's#http://www\.w3\.org/2000/svg#http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg#g' \

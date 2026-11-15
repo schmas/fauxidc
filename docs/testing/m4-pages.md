@@ -38,17 +38,21 @@ cargo run -- --config examples/auth0.toml
 1. Login, no page scroll: at 1280x720 and at 1440x900, in light and dark, the page has no vertical scroll bar in these states:
    a config User selected, "Custom…" selected, and "Custom…" selected with "Override claims" open.
    The "Sign in" button is visible in each state.
-2. Login with an error: the red alert shows the message, and the Subject and Claims fields have a red border.
-   If the card content is taller than the window, the card body scrolls and the "Sign in" button stays visible.
+2. Login with an error: the red alert shows the message. No field gets a red border (the context does not say which field failed).
+   On a desktop, if the card content is taller than the window, the card body scrolls and the "Sign in" button stays visible.
 3. Login, Custom user: the Custom User fields show only when "Custom…" is selected.
-4. Login with JavaScript off: the Custom User fields are always visible, with the note "used only when User is Custom…".
+4. Login with JavaScript off: the Custom User fields are always visible, with the note "only for Custom…" inside the legend line.
    Select "Custom…", type `carol` as Subject and click "Sign in". The browser goes to `http://localhost:5173/?code=…`.
 5. Focus: press Tab through the login form. Each control shows a visible focus ring.
 6. Error and signed-out pages: no page scroll at 1280x720 and 1440x900, light and dark.
 7. Debugger: the page can scroll. The form card at the top is compact. Each token card shows the badges (signature, iss, expired) and the Header and Payload code blocks.
 8. Debugger at 375 px: a long JWT or token response wraps inside its code block. The page has no horizontal scroll.
 9. Every page at 375 px: no horizontal scroll, and the wordmark and the "Mock server · not for production" badge are visible.
+   Below the `sm` breakpoint (640 px) the login page may scroll as a whole page; every field and the "Sign in" button can be reached.
+   Open the error page with a long `redirect_uri` (for example 600 characters with no break point): the message wraps inside the alert, at 375 px and at 1280 px.
 10. Network: in the developer tools Network tab, each page loads only `localhost:9000` URLs.
+11. Contrast: in light and dark, every text and badge has a contrast ratio of at least 4.5:1 against its background (WCAG AA for small text).
+    Check with the DevTools color picker (it shows the ratio) or the Lighthouse accessibility audit. Check the help texts, the footer, the "Mock server" badge, the Client and Issuer chips, the alerts and the debugger badges.
 
 ## Screenshots
 
@@ -68,8 +72,12 @@ Desktop is 1280x720. Mobile is 375 px wide.
 | 6 | Error and signed-out pages, no page scroll | pass, 2026-11-15 |
 | 7 | Debugger layout and badges | pass, 2026-11-15 |
 | 8 | Debugger at 375 px, code blocks wrap | pass, 2026-11-15 |
-| 9 | Every page at 375 px | pass, 2026-11-15 |
+| 9 | Every page at 375 px, long error message wraps | pass, 2026-11-15 |
 | 10 | Only `localhost:9000` URLs | pass, 2026-11-15 |
+| 11 | Contrast at least 4.5:1, light and dark (lowest: 4.97 light "signature valid", 5.27 dark alert text) | pass, 2026-11-15 |
 
 The 2026-11-15 run used Chromium through a Playwright script outside the repo (light and dark, 1280x720, 1440x900 and 375x740, JavaScript on and off).
 The script measured the page scroll, the horizontal overflow and the "Sign in" button position for each page and state.
+Screenshots use `reducedMotion: "reduce"`, so the "Override claims" open state is captured after it opens.
+For check 11, the script composited each text color over its effective background and computed the WCAG ratio for every text element.
+The automated Playwright spec `e2e/spa/tests/login-page.spec.ts` also checks the long error message at 375 px and 1280 px.
