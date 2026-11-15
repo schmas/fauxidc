@@ -132,39 +132,70 @@ fn healthcheck_against_running_server() {
     child.wait().unwrap();
 }
 
+/// Starts the binary with a config file made by `config(port)` on a free port and waits for
+/// `/_mock/health`. Tries a new port when the child cannot bind (another socket may take the
+/// port between `free_port` and the bind).
+#[cfg(unix)]
+async fn start_with_config(
+    client: &reqwest::Client,
+    config: impl Fn(u16) -> String,
+) -> (Child, u16, PathBuf, String) {
+    for _ in 0..5 {
+        let port = free_port();
+        let text = config(port);
+        let file = write_tmp(&text);
+        let mut child = fauxidc_cmd(&[
+            "--config",
+            file.to_str().unwrap(),
+            "--port",
+            &port.to_string(),
+        ])
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+        let start = Instant::now();
+        loop {
+            let health = client
+                .get(format!("http://127.0.0.1:{port}/_mock/health"))
+                .send()
+                .await;
+            if health.is_ok() {
+                // Drain the logs so a full pipe never blocks the server.
+                let mut logs = child.stderr.take().unwrap();
+                std::thread::spawn(move || std::io::copy(&mut logs, &mut std::io::sink()));
+                return (child, port, file, text);
+            }
+            if let Some(status) = child.try_wait().unwrap() {
+                let mut err = String::new();
+                std::io::Read::read_to_string(child.stderr.as_mut().unwrap(), &mut err).unwrap();
+                assert!(
+                    err.contains("cannot bind"),
+                    "server exited with {status}: {err}"
+                );
+                break;
+            }
+            assert!(
+                start.elapsed() < Duration::from_secs(5),
+                "server did not start"
+            );
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+    }
+    panic!("no free port after 5 tries");
+}
+
 #[cfg(unix)]
 #[tokio::test]
 async fn sighup_reloads_config() {
-    let port = free_port();
-    let text = format!(
-        "[server]\nport = {port}\n\n[issuer.auth0]\nissuer_url = \"http://localhost:{port}/auth0/\"\n\n[user.alice]\nlabel = \"Alice\"\n\n[user.bob]\nlabel = \"Bob\"\n"
-    );
-    let file = write_tmp(&text);
-    let mut child = fauxidc_cmd(&[
-        "--config",
-        file.to_str().unwrap(),
-        "--port",
-        &port.to_string(),
-    ])
-    .stdout(Stdio::null())
-    .stderr(Stdio::null())
-    .spawn()
-    .unwrap();
-    let client = reqwest::Client::new();
+    let client = reqwest::Client::builder().no_proxy().build().unwrap();
+    let (mut child, port, file, text) = start_with_config(&client, |port| {
+        format!(
+            "[server]\nport = {port}\n\n[issuer.auth0]\nissuer_url = \"http://localhost:{port}/auth0/\"\n\n[user.alice]\nlabel = \"Alice\"\n\n[user.bob]\nlabel = \"Bob\"\n"
+        )
+    })
+    .await;
     let base = format!("http://127.0.0.1:{port}");
-    let start = Instant::now();
-    while client
-        .get(format!("{base}/_mock/health"))
-        .send()
-        .await
-        .is_err()
-    {
-        assert!(
-            start.elapsed() < Duration::from_secs(5),
-            "server did not start"
-        );
-        tokio::time::sleep(Duration::from_millis(20)).await;
-    }
     let old_mtime = std::fs::metadata(&file).unwrap().modified().unwrap();
     std::fs::write(&file, text.replace("[user.bob]", "[user.cob]")).unwrap();
     std::fs::File::options()
