@@ -68,6 +68,15 @@ The form fields the server reads: `user` (a user `id` or `__custom__`), `custom_
 With `user=__custom__`, the server reads only `username` and `override_claims` when the Issuer has `custom_user`, and only `custom_sub`, `custom_claims` and `override_claims` when it does not.
 An empty `username` (after trim) gives the page again with status 400, the error `Enter a username` and `error_field` = `username`.
 
+How `override_claims` applies to a Custom user:
+
+- Subject mode (no `custom_user`): `override_claims` is checked (it must be a JSON object) but not applied. Put the claims in `custom_claims`.
+- Username mode (the Issuer has `custom_user`): `override_claims` is merged on top of the template claims (top-level keys, the override wins).
+  A `sub` key in `override_claims` changes `sub` too, as a `sub` key in `custom_claims` does in subject mode.
+
+If the Issuer has `custom_user`, a custom `login.html` must render the `username` field when `custom_username` is `true`.
+Else the Custom user cannot sign in: the server reads only `username`, and an empty `username` gives the page again with `Enter a username`.
+
 Use `error_field` to mark the failed input, for example with `aria-invalid="true"` and the `input-error`, `textarea-error` or `select-error` class.
 The built-in page marks only that input.
 

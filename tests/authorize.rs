@@ -507,6 +507,47 @@ async fn custom_user_template_builds_the_user() {
     assert!(id.get("extra").is_none(), "{id}");
 }
 
+/// Docs (`docs/templates.md`): in username mode a Claim override can still change `sub`,
+/// as `custom_claims` can in subject mode.
+#[tokio::test]
+async fn username_mode_override_can_change_sub() {
+    let app = app(&format!("{STRICT}{TEMPLATE}"));
+    let code = login_code(
+        &app,
+        &[
+            ("user", "__custom__"),
+            ("username", "carol"),
+            ("override_claims", r#"{"sub":"other-sub"}"#),
+        ],
+    )
+    .await;
+    let tokens = exchange_code_for(&app, &code).await;
+    let id = claims_of(tokens["id_token"].as_str().unwrap());
+    assert_eq!(id["sub"], "other-sub", "{id}");
+    assert_eq!(id["email"], "carol@example.test", "{id}");
+}
+
+/// Docs (`docs/templates.md`): in subject mode the Claim overrides of a Custom user are
+/// checked but not applied.
+#[tokio::test]
+async fn subject_mode_override_is_checked_but_not_applied() {
+    let app = app(STRICT);
+    let code = login_code(
+        &app,
+        &[
+            ("user", "__custom__"),
+            ("custom_sub", "dave"),
+            ("custom_claims", r#"{"name":"D"}"#),
+            ("override_claims", r#"{"name":"ignored","extra":1}"#),
+        ],
+    )
+    .await;
+    let tokens = exchange_code_for(&app, &code).await;
+    let id = claims_of(tokens["id_token"].as_str().unwrap());
+    assert_eq!(id["name"], "D", "{id}");
+    assert!(id.get("extra").is_none(), "{id}");
+}
+
 #[tokio::test]
 async fn empty_username_shows_the_page_with_an_error() {
     let app = app(&format!("{STRICT}{TEMPLATE}"));

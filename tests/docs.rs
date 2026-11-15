@@ -10,8 +10,8 @@ pub fn read(path: &str) -> String {
 
 #[test]
 fn readme_documents_sessions() {
-    let r = read("README.md");
-    assert!(r.contains("## Sessions"));
+    let r = format!("{}\n{}", read("README.md"), read("docs/features.md"));
+    assert!(read("docs/features.md").contains("\n## Sessions\n"));
     for needle in [
         "fauxidc_session_",
         "prompt=none",
@@ -43,4 +43,66 @@ fn no_crates_io_publish() {
     for f in ["README.md", "CONTRIBUTING.md", "docs/spec.md"] {
         assert!(!read(f).contains("cargo install fauxidc"), "{f}");
     }
+}
+
+const DISCLAIMER: &str = "fauxidc was designed and built with AI coding agents (Claude Code), under human direction and review. Every change passes the test suite, clippy, and the OpenID conformance suite in CI. Report problems in GitHub issues.";
+
+#[test]
+fn readme_has_the_disclaimer_near_the_top() {
+    let r = read("README.md");
+    let at = r.find(DISCLAIMER).expect("disclaimer");
+    assert!(at < r.find("## Start in 60 seconds").expect("start section"));
+}
+
+#[test]
+fn readme_is_short_and_ordered() {
+    let r = read("README.md");
+    assert!(r.lines().count() < 350, "{} lines", r.lines().count());
+    let order = [
+        "## Start in 60 seconds",
+        "## Recipes",
+        "## Configuration",
+        "## Test API",
+        "## Templates",
+        "## Debugger",
+        "## TLS",
+        "## Hot reload",
+        "## Conformance",
+        "## Not supported",
+    ];
+    let pos: Vec<usize> = order
+        .iter()
+        .map(|h| r.find(h).unwrap_or_else(|| panic!("{h}")))
+        .collect();
+    assert!(pos.windows(2).all(|w| w[0] < w[1]));
+    for recipe in [
+        "SPA with PKCE",
+        "Backend with a client secret",
+        "Machine-to-machine",
+        "Mint a token in a test",
+        "Simulate a provider outage",
+        "Use with an agent",
+    ] {
+        assert!(r.contains(&format!("### {recipe}")), "{recipe}");
+    }
+    assert!(r.contains("ghcr.io/schmas/fauxidc") && r.contains("img.shields.io/github/v/release"));
+    for example in [
+        "auth0.toml",
+        "okta.toml",
+        "generic.toml",
+        "keycloak.toml",
+        "entra.toml",
+        "cognito.toml",
+    ] {
+        assert!(r.contains(example), "{example}");
+    }
+}
+
+#[test]
+fn templates_doc_states_the_custom_user_override_rules() {
+    let t = read("docs/templates.md");
+    assert!(t.contains("checked (it must be a JSON object) but not applied"));
+    assert!(t.contains("merged on top of the template claims"));
+    assert!(t.contains("changes `sub` too"));
+    assert!(t.contains("must render the `username` field when `custom_username` is `true`"));
 }
