@@ -254,7 +254,8 @@ async fn discovery_lists_end_session_endpoint() {
 }
 
 #[tokio::test]
-async fn signed_out_page_shows_signed_in_as() {
+async fn signed_out_page_has_no_signed_in_line() {
+    // The same response clears the Auto-select cookie (plan Ruling 6).
     let (s, _, b) = send(
         &app(STRICT),
         get_with(
@@ -264,6 +265,5 @@ async fn signed_out_page_shows_signed_in_as() {
     )
     .await;
     assert_eq!(s, 200);
-    assert!(b.contains("Signed in as Alice Admin"), "{b}");
-    assert!(b.contains("/auth0/debugger?forget=1"));
+    assert!(!b.contains("Signed in as"), "{b}");
 }

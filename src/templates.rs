@@ -98,6 +98,9 @@ pub struct DecodedJwt {
     pub signature_note: String,
     /// `exp 1700000000: expires in 3599 s`, `exp …: expired 12 s ago`, or `no exp`.
     pub expiry_note: String,
+    /// `iss matches this Issuer`, `iss <value> is not this Issuer (<issuer_url>)`, or `no iss`.
+    /// The comparison is the exact string.
+    pub issuer_note: String,
 }
 
 /// The context of `debugger.html`. Version 1.
@@ -345,6 +348,7 @@ mod tests {
                 signature_valid: true,
                 signature_note: "valid (kid k1, RS256)".into(),
                 expiry_note: "no exp".into(),
+                issuer_note: "no iss".into(),
             }),
             flow: Vec::new(),
             flow_raw: None,

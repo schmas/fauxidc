@@ -215,12 +215,16 @@ Each Issuer serves a debugger page at `{issuer}/debugger` (the `paths.debugger` 
 
 - Paste a JWT and submit the form. The page shows the header and the payload,
   checks the signature against the Issuer keys (by `kid`), and shows `exp` as "expires in N s" or "expired N s ago".
+  It also compares `iss` with the Issuer URL, because Issuers that share the server key verify each other's tokens.
 - "Run login flow" (`{issuer}/debugger/start?scope=...`, default scope `openid profile email`) runs the
   authorization code flow with PKCE (S256). The page then shows the decoded tokens.
 
 The flow uses the built-in public Client `debugger`. It needs no config. Its only allowed redirect URI is the
-debugger callback of the same Issuer (`{issuer}/debugger/callback`), on any host. A configured Client with
+exact debugger callback URL that `/start` builds for the request (`{issuer}/debugger/callback` on the request
+host, or on `public_base_url` when it is set). It needs PKCE with S256, also in Lenient mode. A configured Client with
 `client_id = "debugger"` replaces it. The PKCE verifier stays on the server for 600 s.
+`/start` sets the cookie `fauxidc_debugger_<issuer id>` with the flow `state`; the callback needs it, so the flow
+must finish in the browser that started it.
 
 The page also shows "Signed in as <label> · change" when the Auto-select cookie names a configured User.
 The "change" link (`{issuer}/debugger?forget=1`) clears the cookie.

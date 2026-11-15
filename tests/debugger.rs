@@ -100,10 +100,19 @@ async fn debugger_follows_paths_override() {
     assert_eq!(send(&app(&cfg), get("/auth0/tools/debug")).await.0, 200);
 }
 
-/// Runs the debugger flow up to the callback and returns the callback path.
-async fn run_to_callback(app: &Router) -> String {
+/// The `name=value` pair of the debugger state cookie in a `/start` response.
+fn state_cookie(h: &HeaderMap) -> String {
+    let cookie = set_cookie(h, "fauxidc_debugger_auth0").expect("state cookie");
+    assert!(cookie.len() > "fauxidc_debugger_auth0=".len(), "{cookie}");
+    cookie
+}
+
+/// Runs the debugger flow up to the callback and returns the callback path and the state
+/// cookie (`name=value`).
+async fn run_to_callback(app: &Router) -> (String, String) {
     let (s, h, _) = send(app, get("/auth0/debugger/start")).await;
     assert_eq!(s, 302);
+    let cookie = state_cookie(&h);
     let auth = location(&h);
     let mut form: Vec<(String, String)> =
         serde_urlencoded::from_str(auth.split_once('?').unwrap().1).unwrap();
@@ -111,9 +120,10 @@ async fn run_to_callback(app: &Router) -> String {
     let form: Vec<(&str, &str)> = form.iter().map(|(a, b)| (a.as_str(), b.as_str())).collect();
     let (s, h, b) = send(app, post_form("/auth0/authorize", &form, &[])).await;
     assert_eq!(s, 302, "{b}");
-    location(&h)
+    let path = location(&h)
         .trim_start_matches("http://localhost:9000")
-        .to_owned()
+        .to_owned();
+    (path, cookie)
 }
 
 #[tokio::test]
@@ -121,6 +131,7 @@ async fn debugger_flow_shows_decoded_tokens() {
     let app = app(STRICT);
     let (s, h, _) = send(&app, get("/auth0/debugger/start")).await;
     assert_eq!(s, 302);
+    let cookie = state_cookie(&h);
     let auth = location(&h);
     assert_eq!(query_param(&auth, "client_id").as_deref(), Some("debugger"));
     assert_eq!(
@@ -141,7 +152,14 @@ async fn debugger_flow_shows_decoded_tokens() {
     let (s, h, _) = send(&app, post_form("/auth0/authorize", &form, &[])).await;
     assert_eq!(s, 302);
     let cb = location(&h);
-    let (s, _, b) = send(&app, get(cb.trim_start_matches("http://localhost:9000"))).await;
+    let (s, _, b) = send(
+        &app,
+        get_with(
+            cb.trim_start_matches("http://localhost:9000"),
+            &[("cookie", &cookie)],
+        ),
+    )
+    .await;
     assert_eq!(s, 200, "{b}");
     assert!(b.contains("id_token") && b.contains("access_token") && b.contains("valid (kid"));
 }
@@ -174,10 +192,10 @@ async fn callback_with_unknown_state_is_an_error_page() {
 #[tokio::test]
 async fn state_is_single_use() {
     let app = app(STRICT);
-    let cb = run_to_callback(&app).await;
-    let (s, _, b) = send(&app, get(&cb)).await;
+    let (cb, cookie) = run_to_callback(&app).await;
+    let (s, _, b) = send(&app, get_with(&cb, &[("cookie", &cookie)])).await;
     assert_eq!(s, 200, "{b}");
-    let (s, _, b) = send(&app, get(&cb)).await;
+    let (s, _, b) = send(&app, get_with(&cb, &[("cookie", &cookie)])).await;
     assert_eq!(s, 400);
     assert!(b.contains("unknown or expired state"));
 }
@@ -186,9 +204,10 @@ async fn state_is_single_use() {
 async fn state_of_another_issuer_is_rejected() {
     let cfg = format!("{STRICT}\n[issuer.okta]\nissuer_url = \"http://localhost:9000/okta\"\n");
     let app = app(&cfg);
-    let cb = run_to_callback(&app).await;
+    let (cb, cookie) = run_to_callback(&app).await;
     let other = cb.replace("/auth0/", "/okta/");
-    let (s, _, b) = send(&app, get(&other)).await;
+    let cookie = cookie.replace("fauxidc_debugger_auth0", "fauxidc_debugger_okta");
+    let (s, _, b) = send(&app, get_with(&other, &[("cookie", &cookie)])).await;
     assert_eq!(s, 400);
     assert!(b.contains("unknown or expired state"));
 }
@@ -203,6 +222,116 @@ async fn debugger_client_rejects_other_redirect_paths() {
     let (s, h, _) = send(&app(&lenient), get(url)).await;
     assert_eq!(s, 400);
     assert!(h.get("location").is_none());
+}
+
+#[tokio::test]
+async fn debugger_client_rejects_another_host() {
+    let app = app(STRICT);
+    let url = "/auth0/authorize?client_id=debugger&response_type=code&prompt=none&code_challenge=E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM&code_challenge_method=S256&redirect_uri=http%3A%2F%2Fevil.example.com%2Fauth0%2Fdebugger%2Fcallback";
+    let (s, h, _) = send(&app, get(url)).await;
+    assert_eq!(s, 400);
+    assert!(h.get("location").is_none());
+}
+
+#[tokio::test]
+async fn debugger_flow_needs_the_state_cookie() {
+    let app = app(STRICT);
+    let (cb, _cookie) = run_to_callback(&app).await;
+    let (s, _, b) = send(&app, get(&cb)).await;
+    assert_eq!(s, 400);
+    assert!(b.contains("unknown or expired state"), "{b}");
+    let (cb, cookie) = run_to_callback(&app).await;
+    let (s, _, b) = send(
+        &app,
+        get_with(&cb, &[("cookie", "fauxidc_debugger_auth0=wrong")]),
+    )
+    .await;
+    assert_eq!(s, 400, "a wrong cookie value: {b}");
+    let (s, h, b) = send(&app, get_with(&cb, &[("cookie", &cookie)])).await;
+    assert_eq!(s, 200, "{b}");
+    assert!(b.contains("valid (kid"), "{b}");
+    let cleared = h
+        .get_all("set-cookie")
+        .iter()
+        .map(|v| v.to_str().unwrap().to_owned())
+        .find(|v| v.starts_with("fauxidc_debugger_auth0="))
+        .expect("the callback clears the cookie");
+    assert!(cleared.contains("Max-Age=0"), "{cleared}");
+}
+
+#[tokio::test]
+async fn start_sets_the_state_cookie() {
+    let (_, h, _) = send(&app(STRICT), get("/auth0/debugger/start")).await;
+    let state = query_param(&location(&h), "state").unwrap();
+    let raw = h
+        .get_all("set-cookie")
+        .iter()
+        .map(|v| v.to_str().unwrap().to_owned())
+        .find(|v| v.starts_with("fauxidc_debugger_auth0="))
+        .unwrap();
+    assert_eq!(
+        raw,
+        format!(
+            "fauxidc_debugger_auth0={state}; Path=/auth0/debugger; HttpOnly; SameSite=Lax; Max-Age=600"
+        )
+    );
+}
+
+#[tokio::test]
+async fn builtin_client_needs_s256_in_lenient_mode() {
+    let lenient = STRICT.replace("[issuer.auth0]\n", "[issuer.auth0]\nlenient = true\n");
+    let app = app(&lenient);
+    let base = "/auth0/authorize?response_type=code&client_id=debugger&redirect_uri=http%3A%2F%2Flocalhost%3A9000%2Fauth0%2Fdebugger%2Fcallback";
+    let plain = format!(
+        "{base}&code_challenge=E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM&code_challenge_method=plain"
+    );
+    for url in [base.to_owned(), plain] {
+        let (s, h, b) = send(&app, get(&url)).await;
+        assert_eq!(s, 302, "{url}: {b}");
+        let loc = location(&h);
+        assert_eq!(
+            query_param(&loc, "error").as_deref(),
+            Some("invalid_request"),
+            "{url}"
+        );
+        assert_eq!(
+            query_param(&loc, "error_description").as_deref(),
+            Some("the debugger Client needs PKCE with S256"),
+            "{url}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn missing_token_field_is_an_error_page() {
+    let (s, _, b) = send(&app(STRICT), post_form("/auth0/debugger", &[], &[])).await;
+    assert_eq!(s, 400);
+    assert!(b.contains("paste a JWT"), "{b}");
+}
+
+#[tokio::test]
+async fn other_issuer_token_shows_the_iss_note() {
+    let cfg = format!("{STRICT}\n[issuer.okta]\nissuer_url = \"http://localhost:9000/okta\"\n");
+    let app = app(&cfg);
+    let okta = test_token(&app, "okta", json!({"user":"alice"})).await["access_token"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let (_, _, b) = send(&app, post_form("/auth0/debugger", &[("token", &okta)], &[])).await;
+    let b = b.replace("&#x2f;", "/"); // minijinja escapes `/` in HTML
+    assert!(b.contains("valid (kid"), "{b}");
+    assert!(
+        b.contains(
+            "iss http://localhost:9000/okta is not this Issuer (http://localhost:9000/auth0/)"
+        ),
+        "{b}"
+    );
+    let own = test_token(&app, "auth0", json!({"user":"alice"})).await["access_token"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let (_, _, b) = send(&app, post_form("/auth0/debugger", &[("token", &own)], &[])).await;
+    assert!(b.contains("iss matches this Issuer"), "{b}");
 }
 
 #[tokio::test]

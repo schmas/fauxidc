@@ -235,7 +235,7 @@ Later wins:
 - A dropdown of Users (by `label`), and a "Custom…" option for a Custom user (`sub` + claims JSON).
 - A collapsed "Override claims" JSON field for Claim overrides.
 - Shows the `client_id` and the Issuer id.
-- Checkbox "Remember me and skip this page" (Auto-select). It sets a cookie per Issuer with the User id. The next `/authorize` signs in that User with no page. `prompt=login` still shows the page. Logout clears the cookie. The debugger and signed-out pages have a "Signed in as … · change" link that clears it.
+- Checkbox "Remember me and skip this page" (Auto-select). It sets a cookie per Issuer with the User id. The next `/authorize` signs in that User with no page. `prompt=login` still shows the page. Logout clears the cookie. The debugger page has a "Signed in as … · change" link that clears it.
 - `login_hint=<user id>` with `auto_login = true` signs in that User at once. This is for E2E tests.
 
 ## 9. Tokens

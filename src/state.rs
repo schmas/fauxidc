@@ -83,6 +83,9 @@ pub struct Store {
     pub debugger_flows: Mutex<HashMap<String, DebuggerFlow>>,
 }
 
+/// The most debugger flows the [`Store`] keeps.
+pub const MAX_FLOWS: usize = 10_000;
+
 /// A debugger login flow that waits for its callback.
 #[derive(Debug, Clone)]
 pub struct DebuggerFlow {
@@ -228,7 +231,8 @@ impl Store {
             .retain(|(id, _), _| id != issuer_id);
     }
 
-    /// Stores a debugger flow under `state`. Drops expired flows.
+    /// Stores a debugger flow under `state`. Drops expired flows. Above [`MAX_FLOWS`], the flow
+    /// with the smallest `expires_at` is dropped (plan Ruling 4).
     pub fn insert_flow(&self, state: String, f: DebuggerFlow) {
         let mut flows = self
             .debugger_flows
@@ -237,6 +241,16 @@ impl Store {
         let now = now_secs();
         flows.retain(|_, f| f.expires_at > now);
         flows.insert(state, f);
+        while flows.len() > MAX_FLOWS {
+            let Some(oldest) = flows
+                .iter()
+                .min_by_key(|(_, f)| f.expires_at)
+                .map(|(state, _)| state.clone())
+            else {
+                break;
+            };
+            flows.remove(&oldest);
+        }
     }
 
     /// Removes and returns the flow of `state`. A state works once; an expired flow gives `None`.
@@ -550,6 +564,28 @@ mod tests {
         store.inject("okta", "token", Some(f));
         store.inject("okta", "token", None);
         assert!(store.take_failure("okta", "token").is_none());
+    }
+
+    #[test]
+    fn flow_store_is_capped() {
+        let store = Store::default();
+        let base = now_secs() + 1000;
+        for i in 0..=MAX_FLOWS as u64 {
+            // The flow "s0" has the smallest expires_at.
+            store.insert_flow(
+                format!("s{i}"),
+                DebuggerFlow {
+                    issuer_id: "a".into(),
+                    verifier: "v".into(),
+                    redirect_uri: "r".into(),
+                    expires_at: base + i,
+                },
+            );
+        }
+        assert_eq!(store.debugger_flows.lock().unwrap().len(), MAX_FLOWS);
+        assert!(store.take_flow("s0").is_none());
+        assert!(store.take_flow("s1").is_some());
+        assert!(store.take_flow(&format!("s{MAX_FLOWS}")).is_some());
     }
 
     #[test]

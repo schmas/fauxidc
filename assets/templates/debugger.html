@@ -19,6 +19,7 @@
 </form>
 <p><a href="{{ start_href|href }}">Run login flow</a></p>
 {% macro jwt(d) %}<p class="{% if d.signature_valid %}ok{% else %}bad{% endif %}">Signature: {{ d.signature_note }}</p>
+{% if d.issuer_note %}<p>Issuer: {{ d.issuer_note }}</p>{% endif %}
 <p>Expiry: {{ d.expiry_note }}</p>
 <h3>Header</h3>
 <pre>{{ d.header }}</pre>

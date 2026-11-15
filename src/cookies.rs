@@ -1,4 +1,5 @@
-//! The Auto-select cookie (it remembers which configured User signed in) and the Session cookie.
+//! The Auto-select cookie (it remembers which configured User signed in), the Session cookie
+//! and the debugger state cookie.
 
 use axum::http::{HeaderMap, HeaderValue, header};
 
@@ -73,6 +74,36 @@ pub fn session_clear(issuer_id: &str, issuer_path: &str) -> Option<HeaderValue> 
     .ok()
 }
 
+/// The name of the debugger state cookie of one Issuer.
+pub fn debugger_name(issuer_id: &str) -> String {
+    format!("fauxidc_debugger_{issuer_id}")
+}
+
+/// The `Set-Cookie` value that binds a debugger flow `state` to this browser for 600 s.
+/// `path` is the debugger path of the Issuer, so the cookie reaches `{debugger}/callback`.
+///
+/// Returns `None` if the value is not a valid header value.
+pub fn debugger_set(issuer_id: &str, path: &str, state: &str) -> Option<HeaderValue> {
+    let path = cookie_path(path);
+    let name = debugger_name(issuer_id);
+    HeaderValue::try_from(format!(
+        "{name}={state}; Path={path}; HttpOnly; SameSite=Lax; Max-Age=600"
+    ))
+    .ok()
+}
+
+/// The `Set-Cookie` value that removes the debugger state cookie (same path as `debugger_set`).
+///
+/// Returns `None` if the value is not a valid header value.
+pub fn debugger_clear(issuer_id: &str, path: &str) -> Option<HeaderValue> {
+    let path = cookie_path(path);
+    let name = debugger_name(issuer_id);
+    HeaderValue::try_from(format!(
+        "{name}=; Path={path}; HttpOnly; SameSite=Lax; Max-Age=0"
+    ))
+    .ok()
+}
+
 /// The cookie `Path`: the Issuer path without a trailing slash, or `/`.
 fn cookie_path(issuer_path: &str) -> &str {
     match issuer_path.trim_end_matches('/') {
@@ -97,6 +128,18 @@ mod tests {
                 .to_str()
                 .unwrap()
                 .contains("Path=/;")
+        );
+    }
+
+    #[test]
+    fn debugger_cookie_uses_the_debugger_path() {
+        assert_eq!(
+            debugger_set("auth0", "/auth0/debugger", "st").unwrap(),
+            "fauxidc_debugger_auth0=st; Path=/auth0/debugger; HttpOnly; SameSite=Lax; Max-Age=600"
+        );
+        assert_eq!(
+            debugger_clear("auth0", "/auth0/v1/debug/").unwrap(),
+            "fauxidc_debugger_auth0=; Path=/auth0/v1/debug; HttpOnly; SameSite=Lax; Max-Age=0"
         );
     }
 

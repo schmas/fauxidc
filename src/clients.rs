@@ -1,6 +1,6 @@
 //! Client lookup, redirect URI matching and the Strict and Lenient checks.
 
-use axum::http::Uri;
+use axum::http::{HeaderMap, Uri};
 
 use crate::config::ClientConfig;
 use crate::state::IssuerCtx;
@@ -89,25 +89,16 @@ pub fn builtin_debugger(ctx: &IssuerCtx) -> ResolvedClient {
     }
 }
 
-/// `true` for an absolute http(s) URL whose path is the debugger path of this Issuer plus
-/// `/callback`, with no query, fragment or user info. The host follows the request.
-pub fn debugger_redirect_ok(ctx: &IssuerCtx, redirect_uri: &str) -> bool {
-    if redirect_uri.contains(['?', '#']) {
-        return false;
-    }
-    let Ok(uri) = redirect_uri.parse::<Uri>() else {
-        return false;
-    };
-    let scheme_ok = matches!(uri.scheme_str(), Some("http" | "https"));
-    let authority_ok = uri
-        .authority()
-        .is_some_and(|a| !a.as_str().is_empty() && !a.as_str().contains('@'));
+/// `true` only for exactly `endpoint_url(headers, Debugger)` without a trailing `/`, plus
+/// `/callback`: the URL that `{debugger}/start` builds for this request (plan Ruling 5). It
+/// uses `public_base_url` when that is set, else the request host.
+pub fn debugger_redirect_ok(ctx: &IssuerCtx, headers: &HeaderMap, redirect_uri: &str) -> bool {
     let wanted = format!(
         "{}/callback",
-        ctx.endpoint_href(crate::config::Endpoint::Debugger)
+        ctx.endpoint_url(headers, crate::config::Endpoint::Debugger)
             .trim_end_matches('/')
     );
-    scheme_ok && authority_ok && uri.path() == wanted
+    redirect_uri == wanted
 }
 
 /// Registers an unknown client as a public client (Lenient mode).
@@ -252,15 +243,20 @@ mod tests {
             "[issuer.auth0]\nissuer_url=\"http://localhost:9000/auth0/\"\n[issuer.okta]\nissuer_url=\"http://localhost:9000/okta\"\n",
             "auth0",
         );
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            axum::http::header::HOST,
+            axum::http::HeaderValue::from_static("localhost:9000"),
+        );
         assert!(debugger_redirect_ok(
             &ctx,
+            &headers,
             "http://localhost:9000/auth0/debugger/callback"
         ));
-        assert!(debugger_redirect_ok(
-            &ctx,
-            "https://fauxidc/auth0/debugger/callback"
-        ));
         for bad in [
+            "https://fauxidc/auth0/debugger/callback",
+            "http://evil.example.com/auth0/debugger/callback",
+            "https://localhost:9000/auth0/debugger/callback",
             "http://localhost:9000/auth0/debugger/callback?x=1",
             "http://localhost:9000/auth0/debugger/callback#x",
             "http://localhost:9000/auth0/debugger/callbackx",
@@ -269,7 +265,7 @@ mod tests {
             "http://u@localhost:9000/auth0/debugger/callback",
             "/auth0/debugger/callback",
         ] {
-            assert!(!debugger_redirect_ok(&ctx, bad), "{bad}");
+            assert!(!debugger_redirect_ok(&ctx, &headers, bad), "{bad}");
         }
     }
 

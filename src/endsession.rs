@@ -14,7 +14,7 @@ use crate::authorize::error_page;
 use crate::clients::{find_client, redirect_uri_matches};
 use crate::config::Claims;
 use crate::cookies::{auto_select_clear, read_cookie, session_clear, session_name};
-use crate::debugger::{change_href, signed_in_as};
+use crate::debugger::change_href;
 use crate::error::{OAuthError, append_query};
 use crate::logging::{record_client, record_endpoint};
 use crate::state::IssuerCtx;
@@ -197,7 +197,8 @@ async fn endsession(ctx: &IssuerCtx, request: &HeaderMap, raw: Vec<(String, Stri
             context_version: CONTEXT_VERSION,
             issuer_id: ctx.id.clone(),
             client_id,
-            signed_in_as: signed_in_as(ctx, request),
+            // The same response clears the Auto-select cookie (plan Ruling 6).
+            signed_in_as: None,
             change_href: Some(change_href(ctx)),
             static_base: STATIC_BASE.to_owned(),
         };

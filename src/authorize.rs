@@ -98,15 +98,17 @@ fn page(message: String) -> Rejection {
     Rejection::Page(StatusCode::BAD_REQUEST, message)
 }
 
-/// The redirect URI rule: the built-in debugger Client accepts only the debugger callback, in
-/// both modes; any other Client needs a registered match (through `enforce`).
+/// The redirect URI rule: the built-in debugger Client accepts only the exact debugger
+/// callback URL of this request, in both modes; any other Client needs a registered match
+/// (through `enforce`).
 fn check_redirect_uri(
     ctx: &IssuerCtx,
+    headers: &HeaderMap,
     client: &ResolvedClient,
     redirect_uri: &str,
 ) -> Result<(), String> {
     if client.builtin {
-        if debugger_redirect_ok(ctx, redirect_uri) {
+        if debugger_redirect_ok(ctx, headers, redirect_uri) {
             return Ok(());
         }
         let rule = format!("redirect_uri is not the debugger callback: {redirect_uri}");
@@ -123,7 +125,11 @@ fn check_redirect_uri(
     })
 }
 
-fn validate(ctx: &IssuerCtx, p: &AuthorizeParams) -> Result<ValidRequest, Rejection> {
+fn validate(
+    ctx: &IssuerCtx,
+    headers: &HeaderMap,
+    p: &AuthorizeParams,
+) -> Result<ValidRequest, Rejection> {
     let Some(client_id) = p.client_id.as_deref().filter(|v| !v.is_empty()) else {
         return Err(page("missing client_id".into()));
     };
@@ -139,7 +145,7 @@ fn validate(ctx: &IssuerCtx, p: &AuthorizeParams) -> Result<ValidRequest, Reject
         register_lenient(ctx, client_id, redirect_uri)
     };
 
-    check_redirect_uri(ctx, &client, redirect_uri).map_err(page)?;
+    check_redirect_uri(ctx, headers, &client, redirect_uri).map_err(page)?;
 
     let fail = |error: &'static str, description: &str| {
         Rejection::Redirect(OAuthError::Redirect {
@@ -191,18 +197,17 @@ fn validate(ctx: &IssuerCtx, p: &AuthorizeParams) -> Result<ValidRequest, Reject
         fail("invalid_request", &rule)
     })?;
 
+    // The built-in debugger Client: PKCE with S256 in both modes (plan Ruling 34).
+    if client.builtin && !matches!(pkce, Some((_, PkceMethod::S256))) {
+        let rule = "the debugger Client needs PKCE with S256";
+        tracing::info!(issuer = %ctx.id, "{rule}");
+        return Err(fail("invalid_request", rule));
+    }
     ctx.enforce(
         pkce.is_some() || !(client.is_public() || client.config.require_pkce),
         || "code_challenge required".to_owned(),
     )
     .map_err(|rule| fail("invalid_request", &rule))?;
-    if client.builtin {
-        ctx.enforce(
-            pkce.as_ref().is_none_or(|(_, m)| *m == PkceMethod::S256),
-            || "the debugger Client needs code_challenge_method S256".to_owned(),
-        )
-        .map_err(|rule| fail("invalid_request", &rule))?;
-    }
 
     let has_nonce = p.nonce.as_deref().is_some_and(|v| !v.is_empty());
     ctx.enforce(!ctx.issuer().require_nonce || has_nonce, || {
@@ -275,7 +280,7 @@ async fn authorize_request(ctx: &IssuerCtx, headers: &HeaderMap, p: &AuthorizePa
     if let Some(client_id) = p.client_id.as_deref() {
         record_client(client_id);
     }
-    let request = match validate(ctx, p) {
+    let request = match validate(ctx, headers, p) {
         Ok(request) => request,
         Err(rejection) => return reject(ctx, rejection),
     };
@@ -575,7 +580,7 @@ pub async fn authorize_post(
     if let Some(client_id) = f.params.client_id.as_deref() {
         record_client(client_id);
     }
-    let request = match validate(&ctx, &f.params) {
+    let request = match validate(&ctx, &headers, &f.params) {
         Ok(request) => request,
         Err(rejection) => return reject(&ctx, rejection),
     };
@@ -767,7 +772,7 @@ claims = { email = "alice@example.com" }
             prompt: Some("none".into()),
             ..Default::default()
         };
-        let req = validate(&ctx, &params).unwrap();
+        let req = validate(&ctx, &HeaderMap::new(), &params).unwrap();
         let value = ctx
             .app
             .store
