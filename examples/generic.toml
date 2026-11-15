@@ -8,7 +8,7 @@
 [issuer.generic]
 issuer_url = "http://localhost:9000/generic"
 
-# Custom user template (M4). Remove the `#` to add a "Custom..." option to the login page.
+# Custom user template. Remove the `#` to add a "Custom..." option to the login page.
 # The visitor types one username and the claims below apply with {username} filled in.
 # [issuer.generic.custom_user]
 # label = "Other..."

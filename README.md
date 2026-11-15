@@ -99,6 +99,10 @@ The `examples/` directory has:
   `cognito:username`, `cognito:groups` and `token_use` claims.
 - `docker-compose.yml`: runs the published image with `auth0.toml`.
 
+Merge only example files of one provider style. Users `alice` and `bob` are shared across files, so
+their claims combine. The `iss` of every example uses `localhost`, so an app that checks a real
+provider host fails.
+
 `auth0.toml` and `okta.toml` define the confidential Client `example-app`, the public SPA Client `example-spa`
 (redirect URIs `http://localhost:5173/` and `http://localhost:5174/`) and the Users `alice` and `bob`.
 

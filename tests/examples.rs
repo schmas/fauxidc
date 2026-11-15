@@ -214,6 +214,7 @@ async fn keycloak_example_logs_in() {
     assert_eq!(at["iss"], "http://localhost:9000/realms/example");
     assert_eq!(at["typ"], "Bearer");
     assert_eq!(at["realm_access"]["roles"][0], "admin");
+    assert_eq!(at["aud"], "account");
     assert_eq!(
         claims_of(t["id_token"].as_str().unwrap())["preferred_username"],
         "alice"
@@ -237,8 +238,14 @@ async fn entra_example_logs_in() {
     assert_eq!(id["tid"], "00000000-0000-0000-0000-000000000000");
     assert!(id["oid"].as_str().unwrap().starts_with("00000000-"));
     assert_eq!(id["preferred_username"], "alice@example.test");
+    assert_eq!(id["ver"], "2.0");
+    assert_eq!(id["roles"][0], "Admin");
     let at = claims_of(t["access_token"].as_str().unwrap());
     assert_eq!(at["aud"], "api://example-app");
+    assert_eq!(at["tid"], "00000000-0000-0000-0000-000000000000");
+    assert_eq!(at["ver"], "2.0");
+    assert_eq!(at["scp"], "openid profile email");
+    assert_eq!(at["roles"][0], "Admin");
 }
 
 #[tokio::test]
@@ -261,4 +268,13 @@ async fn cognito_example_logs_in() {
     assert_eq!(at["token_use"], "access");
     assert_eq!(at["client_id"], "example-app");
     assert_eq!(at["cognito:groups"][0], "admin");
+    assert_eq!(at["username"], "alice");
+    // Cognito signs out with `logout_uri`.
+    let (s, h, b) = send(
+        &app,
+        get("/us-east-1_example/logout?client_id=example-app&logout_uri=http%3A%2F%2Flocalhost%3A3000%2F"),
+    )
+    .await;
+    assert_eq!(s, 302, "{b}");
+    assert_eq!(location(&h), "http://localhost:3000/");
 }
