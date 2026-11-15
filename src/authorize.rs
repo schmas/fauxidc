@@ -242,8 +242,8 @@ pub async fn authorize_get(
 
 /// An authorization request, sent by `GET` or as a `POST` form without a `user` field
 /// (OIDC Core 3.1.2.1): validate; `prompt=none` uses the Session only; `login`,
-/// `select_account` and `max_age=0` show the page; else sign in without the page
-/// (Auto-select, `auto_login`) or show the login page.
+/// `select_account` and `max_age=0` show the page; a Session not older than `max_age` is
+/// reused; else sign in without the page (Auto-select, `auto_login`) or show the login page.
 async fn authorize_request(ctx: &IssuerCtx, headers: &HeaderMap, p: &AuthorizeParams) -> Response {
     record_endpoint(&ctx.id, "authorize");
     if let Some(client_id) = p.client_id.as_deref() {
@@ -265,6 +265,13 @@ async fn authorize_request(ctx: &IssuerCtx, headers: &HeaderMap, p: &AuthorizePa
     }
     if prompt.force_login {
         return login_page(ctx, &request, StatusCode::OK, None, &KeptInput::default());
+    }
+    // `max_age` is checked against the Session `auth_time` (spec 11): a Session that is not
+    // older than `max_age` is reused, so `auth_time` stays (OIDF oidcc-max-age-10000).
+    if prompt.max_age.is_some()
+        && let Ok(session) = current_session(ctx, headers, prompt.max_age)
+    {
+        return resume(ctx, &request, &session);
     }
     match skip_login(ctx, &request, headers) {
         Some(id) => sign_in(
@@ -361,31 +368,43 @@ async fn silent_session(
             }
         }
     };
-    let value = read_cookie(headers, &session_name(&ctx.id))
-        .ok_or_else(|| login_required("prompt=none: no session exists"))?;
-    let session = ctx
-        .app
-        .store
-        .sessions
-        .get(&ctx.id, &value)
-        .ok_or_else(|| login_required("prompt=none: no session exists"))?;
-    if let Subject::User { id, .. } = &session.subject
-        && !ctx.app.config.user.contains_key(id)
-    {
-        ctx.app.store.sessions.remove(&value);
-        return Err(login_required("prompt=none: session user no longer exists"));
-    }
-    if let Some(max_age) = prompt.max_age
-        && now_secs() > session.auth_time.saturating_add(max_age)
-    {
-        return Err(login_required("prompt=none: session is older than max_age"));
-    }
+    let session = current_session(ctx, headers, prompt.max_age).map_err(login_required)?;
     if let Some(sub) = hint_sub
         && sub != session.sub
     {
         return Err(login_required(
             "prompt=none: id_token_hint does not match the session",
         ));
+    }
+    Ok(session)
+}
+
+/// The Session named by this Issuer's Session cookie if it exists for this Issuer, belongs
+/// to a User that still exists (else it is removed), and is not older than `max_age`.
+/// Else the `login_required` rule text.
+fn current_session(
+    ctx: &IssuerCtx,
+    headers: &HeaderMap,
+    max_age: Option<u64>,
+) -> Result<Session, &'static str> {
+    let no_session = "prompt=none: no session exists";
+    let value = read_cookie(headers, &session_name(&ctx.id)).ok_or(no_session)?;
+    let session = ctx
+        .app
+        .store
+        .sessions
+        .get(&ctx.id, &value)
+        .ok_or(no_session)?;
+    if let Subject::User { id, .. } = &session.subject
+        && !ctx.app.config.user.contains_key(id)
+    {
+        ctx.app.store.sessions.remove(&value);
+        return Err("prompt=none: session user no longer exists");
+    }
+    if let Some(max_age) = max_age
+        && now_secs() > session.auth_time.saturating_add(max_age)
+    {
+        return Err("prompt=none: session is older than max_age");
     }
     Ok(session)
 }

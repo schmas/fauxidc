@@ -439,3 +439,56 @@ async fn custom_user_session_works_with_prompt_none() {
     .await;
     assert!(query_param(&location(&h), "code").is_some());
 }
+
+#[tokio::test]
+async fn max_age_with_a_fresh_session_keeps_auth_time() {
+    // OIDF oidcc-max-age-10000: a Session younger than max_age is reused, without the page.
+    let app = app(STRICT);
+    let (code, cookie) = login_with_session(&app).await;
+    let t1 = claims_of(
+        exchange_code_for(&app, &code).await["id_token"]
+            .as_str()
+            .unwrap(),
+    );
+    tokio::time::sleep(Duration::from_millis(1100)).await;
+    let (s, h, b) = send(
+        &app,
+        get_with(
+            &authorize_url(&[("max_age", "10000")]),
+            &[("cookie", &cookie)],
+        ),
+    )
+    .await;
+    assert_eq!(s, 302, "{b}");
+    let code = query_param(&location(&h), "code").unwrap();
+    let t2 = claims_of(
+        exchange_code_for(&app, &code).await["id_token"]
+            .as_str()
+            .unwrap(),
+    );
+    assert_eq!(t1["auth_time"], t2["auth_time"]);
+    assert_eq!(t1["sid"], t2["sid"]);
+}
+
+#[tokio::test]
+async fn max_age_with_an_old_session_shows_the_page() {
+    // OIDF oidcc-max-age-1: a Session older than max_age means a new sign-in.
+    let app = app(STRICT);
+    let (_, cookie) = login_with_session(&app).await;
+    tokio::time::sleep(Duration::from_millis(2100)).await;
+    let (s, _, b) = send(
+        &app,
+        get_with(&authorize_url(&[("max_age", "1")]), &[("cookie", &cookie)]),
+    )
+    .await;
+    assert_eq!(s, 200);
+    assert!(b.contains("<form"));
+}
+
+#[tokio::test]
+async fn request_without_max_age_ignores_the_session() {
+    let app = app(STRICT);
+    let (_, cookie) = login_with_session(&app).await;
+    let (s, _, _) = send(&app, get_with(&authorize_url(&[]), &[("cookie", &cookie)])).await;
+    assert_eq!(s, 200, "only prompt=none and max_age use the Session");
+}
