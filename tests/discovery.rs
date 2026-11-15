@@ -137,3 +137,22 @@ async fn root_issuer_override_has_single_slash() {
     let d = json(&send(&app, get("/.well-known/openid-configuration")).await.2);
     assert_eq!(d["token_endpoint"], "http://localhost:9000/oauth/token");
 }
+
+#[tokio::test]
+async fn m2_grants_and_offline_access_are_published() {
+    let d = json(
+        &send(&app(AUTH0), get("/auth0/.well-known/openid-configuration"))
+            .await
+            .2,
+    );
+    assert_eq!(
+        d["grant_types_supported"],
+        json!(["authorization_code", "refresh_token", "client_credentials"])
+    );
+    assert!(
+        d["scopes_supported"]
+            .as_array()
+            .unwrap()
+            .contains(&json!("offline_access"))
+    );
+}

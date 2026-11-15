@@ -222,7 +222,7 @@ mod tests {
                 audience: "example-app",
                 claims: Claims::new(),
                 scope: &[],
-                auth_time: 1,
+                auth_time: Some(1),
                 lifetime: 60,
             },
         )

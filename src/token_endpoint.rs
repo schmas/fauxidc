@@ -124,6 +124,7 @@ async fn dispatch(
     match f.grant_type.as_deref() {
         Some("authorization_code") => exchange_code(ctx, headers, f).await,
         Some("refresh_token") => crate::refresh::refresh_grant(ctx, headers, f).await,
+        Some("client_credentials") => crate::client_credentials::grant(ctx, headers, f).await,
         Some(other) => Err(OAuthError::json(
             "unsupported_grant_type",
             format!("unsupported grant_type: {other}"),
@@ -267,7 +268,7 @@ pub(crate) fn issue_user_tokens(
             audience: &audience,
             claims: access_claims,
             scope: g.scope,
-            auth_time: g.auth_time,
+            auth_time: Some(g.auth_time),
             lifetime: lifetimes.access_token,
         },
     )?;

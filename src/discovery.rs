@@ -19,12 +19,12 @@ pub async fn document(State(ctx): State<IssuerCtx>, headers: HeaderMap) -> Json<
         "jwks_uri": url(Endpoint::Jwks),
         "response_types_supported": ["code"],
         "response_modes_supported": ["query"],
-        "grant_types_supported": ["authorization_code"],
+        "grant_types_supported": ["authorization_code", "refresh_token", "client_credentials"],
         "subject_types_supported": ["public"],
         "id_token_signing_alg_values_supported": ["RS256"],
         "token_endpoint_auth_methods_supported": ["client_secret_basic", "client_secret_post", "none"],
         "code_challenge_methods_supported": ["S256", "plain"],
-        "scopes_supported": ["openid", "profile", "email", "address", "phone"],
+        "scopes_supported": ["openid", "profile", "email", "address", "phone", "offline_access"],
         "claims_supported": ["sub", "iss", "aud", "exp", "iat", "auth_time", "nonce", "name", "given_name", "family_name", "nickname", "preferred_username", "picture", "email", "email_verified"],
     }))
 }

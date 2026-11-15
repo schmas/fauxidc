@@ -25,7 +25,8 @@ pub struct AccessTokenInput<'a> {
     pub audience: &'a str,
     pub claims: Claims,
     pub scope: &'a [String],
-    pub auth_time: u64,
+    /// The `auth_time` claim; `None` (for `client_credentials`) omits it.
+    pub auth_time: Option<u64>,
     pub lifetime: u64,
 }
 
@@ -66,26 +67,28 @@ pub fn sign_id_token(key: &SigningKey, input: IdTokenInput<'_>) -> Result<String
     sign(key, "JWT", &claims)
 }
 
-/// Sign an access token (`typ: at+jwt`, RFC 9068).
+/// Sign an access token (`typ: at+jwt`, RFC 9068). An empty scope omits the `scope` claim.
 pub fn sign_access_token(
     key: &SigningKey,
     input: AccessTokenInput<'_>,
 ) -> Result<String, OAuthError> {
     let now = now_secs();
     let mut claims = input.claims;
-    set_protocol(
-        &mut claims,
-        vec![
-            ("iss", json!(input.issuer_url)),
-            ("aud", json!(input.audience)),
-            ("client_id", json!(input.client_id)),
-            ("scope", json!(input.scope.join(" "))),
-            ("iat", json!(now)),
-            ("exp", json!(now.saturating_add(input.lifetime))),
-            ("auth_time", json!(input.auth_time)),
-            ("jti", json!(uuid::Uuid::new_v4().to_string())),
-        ],
-    );
+    let mut protocol = vec![
+        ("iss", json!(input.issuer_url)),
+        ("aud", json!(input.audience)),
+        ("client_id", json!(input.client_id)),
+        ("iat", json!(now)),
+        ("exp", json!(now.saturating_add(input.lifetime))),
+        ("jti", json!(uuid::Uuid::new_v4().to_string())),
+    ];
+    if !input.scope.is_empty() {
+        protocol.push(("scope", json!(input.scope.join(" "))));
+    }
+    if let Some(auth_time) = input.auth_time {
+        protocol.push(("auth_time", json!(auth_time)));
+    }
+    set_protocol(&mut claims, protocol);
     sign(key, ACCESS_TOKEN_TYP, &claims)
 }
 
@@ -157,7 +160,7 @@ mod tests {
             audience: "https://api.example.com",
             claims: obj(json!({"sub": "alice"})),
             scope: &[],
-            auth_time: 1,
+            auth_time: Some(1),
             lifetime: 60,
         }
     }
@@ -200,7 +203,7 @@ mod tests {
                 audience: "https://api.example.com",
                 claims: obj(json!({"sub": "alice", "email": "alice@example.com"})),
                 scope: &["openid".into(), "email".into()],
-                auth_time: 1,
+                auth_time: Some(1),
                 lifetime: 60,
             },
         )
