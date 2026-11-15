@@ -221,3 +221,21 @@ async fn discovery_lists_introspection_endpoint() {
         json!(["client_secret_basic", "client_secret_post"])
     );
 }
+
+#[tokio::test]
+async fn lenient_ignores_bearer_authorization_header() {
+    let cfg = STRICT.replace("[issuer.auth0]\n", "[issuer.auth0]\nlenient = true\n");
+    let app = app(&cfg);
+    let at = access_token_for(&app, &[]).await;
+    let (s, _, b) = send(
+        &app,
+        post_form(
+            "/auth0/introspect",
+            &[("token", &at)],
+            &[("authorization", &format!("Bearer {at}"))],
+        ),
+    )
+    .await;
+    assert_eq!(s, 200, "{b}");
+    assert_eq!(json(&b)["active"], true);
+}

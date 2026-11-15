@@ -24,14 +24,20 @@ pub struct RevokeForm {
     pub client_secret: Option<String>,
 }
 
-/// `true` if the request carries client credentials: an `Authorization` header or a form
-/// `client_id` or `client_secret`.
+/// `true` if the request carries client credentials: a Basic `Authorization` header or a form
+/// `client_id` or `client_secret`. Other schemes (for example a Bearer token that a resource
+/// server sends, RFC 7662 2.1) are not client credentials.
 pub(crate) fn has_credentials(
     headers: &HeaderMap,
     client_id: Option<&str>,
     client_secret: Option<&str>,
 ) -> bool {
-    headers.contains_key(header::AUTHORIZATION)
+    let basic = headers
+        .get(header::AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.split_once(' '))
+        .is_some_and(|(scheme, _)| scheme.eq_ignore_ascii_case("basic"));
+    basic
         || client_id.is_some_and(|v| !v.is_empty())
         || client_secret.is_some_and(|v| !v.is_empty())
 }

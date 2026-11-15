@@ -230,3 +230,20 @@ async fn discovery_lists_revocation_endpoint() {
         json!(["client_secret_basic", "client_secret_post", "none"])
     );
 }
+
+#[tokio::test]
+async fn lenient_ignores_bearer_authorization_header() {
+    let cfg = STRICT.replace("[issuer.auth0]\n", "[issuer.auth0]\nlenient = true\n");
+    let app = app(&cfg);
+    let rt = refresh_token(&app).await;
+    let (s, _, _) = send(
+        &app,
+        post_form(
+            "/auth0/revoke",
+            &[("token", &rt)],
+            &[("authorization", "Bearer some-token")],
+        ),
+    )
+    .await;
+    assert_eq!(s, 200);
+}
