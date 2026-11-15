@@ -21,7 +21,7 @@ use crate::clients::{ResolvedClient, find_client};
 use crate::config::{Claims, ClientConfig};
 use crate::error::OAuthError;
 use crate::issuer::issuer_path;
-use crate::state::{AppState, IssuerCtx, Subject, now_secs};
+use crate::state::{AppState, IssuerCtx, Subject};
 use crate::token_endpoint::{RefreshMode, UserGrant, issue_user_tokens};
 
 /// The JSON body of a Test API token request.
@@ -231,7 +231,7 @@ async fn respond(
             subject: &subject,
             scope: &scope,
             audience: req.audience.as_deref(),
-            auth_time: now_secs(),
+            auth_time: ctx.app.now(),
             sid: None,
             nonce: None,
             refresh: RefreshMode::ByPolicy,

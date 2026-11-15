@@ -9,6 +9,7 @@ pub mod cli;
 pub mod client_auth;
 pub mod client_credentials;
 pub mod clients;
+pub mod clock;
 pub mod config;
 pub mod cookies;
 pub mod cors;

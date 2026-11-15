@@ -16,7 +16,7 @@ use crate::error::OAuthError;
 use crate::logging::record_endpoint;
 use crate::refresh::RefreshClaims;
 use crate::revoke::has_credentials;
-use crate::state::{IssuerCtx, now_secs};
+use crate::state::IssuerCtx;
 use crate::token_check::{OwnToken, decode_own_token};
 use crate::token_endpoint::form_rejection;
 
@@ -85,10 +85,11 @@ async fn respond(
         .ok_or_else(|| OAuthError::json("invalid_request", "token is missing"))?;
     let keys = ctx.keys().await?;
     let inactive = json!({ "active": false });
-    let Some(own) = decode_own_token(&keys, &ctx.issuer_url(headers), token) else {
+    let now = ctx.app.now();
+    let Some(own) = decode_own_token(&keys, &ctx.issuer_url(headers), token, now) else {
         return Ok(inactive);
     };
-    if ctx.app.store.is_revoked(own.jti()) {
+    if ctx.app.store.is_revoked(own.jti(), now) {
         return Ok(inactive);
     }
     match own {
@@ -98,7 +99,7 @@ async fn respond(
             Ok(Value::Object(claims))
         }
         OwnToken::Refresh(claims) => {
-            if rotated_out(ctx, &claims) {
+            if rotated_out(ctx, &claims, now) {
                 return Ok(inactive);
             }
             Ok(json!({
@@ -119,12 +120,12 @@ async fn respond(
 
 /// `true` if a rotating Client already used this refresh token and the refresh grant would
 /// reject it again: leeway 0, or the reuse window has passed.
-fn rotated_out(ctx: &IssuerCtx, claims: &RefreshClaims) -> bool {
+fn rotated_out(ctx: &IssuerCtx, claims: &RefreshClaims, now: u64) -> bool {
     let Some(used_at) = ctx.app.store.refresh_used_at(&claims.jti) else {
         return false;
     };
     let config =
         find_client(ctx, &claims.client_id).map_or_else(ClientConfig::default, |c| c.config);
     let leeway = config.refresh_reuse_leeway_secs;
-    config.rotate_refresh_tokens && (leeway == 0 || now_secs() > used_at.saturating_add(leeway))
+    config.rotate_refresh_tokens && (leeway == 0 || now > used_at.saturating_add(leeway))
 }

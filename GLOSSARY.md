@@ -26,6 +26,8 @@
 
 **Zero config**: The setup used when no config source is given: one lenient Issuer, one Client and two Users.
 
+**Server clock**: The time fauxidc uses for token times and for every token time check. It is the system clock, or the fixed time of `server.fixed_time` (ADR 0007).
+
 **Request log**: The last requests the mock received, kept for tests to read through the Test API.
 
 **Injected failure**: An error that a test tells the mock to return on the next requests to one endpoint.

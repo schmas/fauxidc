@@ -32,6 +32,7 @@
       "$ref": "#/$defs/ServerConfig",
       "default": {
         "bind": "127.0.0.1",
+        "fixed_time": "",
         "key_file": "",
         "log_format": "text",
         "port": 9000,
@@ -465,6 +466,11 @@
           "description": "The listening address. Default 127.0.0.1.",
           "type": "string",
           "default": "127.0.0.1"
+        },
+        "fixed_time": {
+          "description": "A fixed server time, an RFC 3339 date-time such as `2020-01-21T00:00:00Z`. Issued token\ntimes and every token time check use it (ADR 0007). Empty: the system clock.",
+          "type": "string",
+          "default": ""
         },
         "key_file": {
           "description": "PEM file of the server signing key. Empty: generated, not saved.",

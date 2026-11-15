@@ -13,6 +13,7 @@ use serde_json::Value;
 use sha2::{Digest, Sha256};
 
 use crate::clients::{BUILTIN_DEBUGGER, builtin_debugger, find_client};
+use crate::clock::system_now;
 use crate::config::Endpoint;
 use crate::cookies::{
     auto_select_clear, auto_select_name, debugger_clear, debugger_name, debugger_set, read_cookie,
@@ -20,7 +21,7 @@ use crate::cookies::{
 use crate::error::OAuthError;
 use crate::keys::KeySet;
 use crate::logging::record_endpoint;
-use crate::state::{DebuggerFlow, IssuerCtx, now_secs};
+use crate::state::{DebuggerFlow, IssuerCtx};
 use crate::templates::{CONTEXT_VERSION, DebuggerContext, DecodedJwt, STATIC_BASE};
 use crate::token_endpoint::redeem_code;
 
@@ -80,7 +81,7 @@ pub fn decode_jwt(
     };
     let header = segment(h, "header")?;
     let payload = segment(p, "payload")?;
-    let verified = keys.verify(token, |v| {
+    let verified = keys.verify(token, now, |v| {
         v.validate_exp = false;
         v.validate_aud = false;
         v.required_spec_claims.clear();
@@ -202,7 +203,7 @@ pub async fn decode(
         page.error = Some("paste a JWT".to_owned());
         return render(&ctx, StatusCode::BAD_REQUEST, &page);
     };
-    match decode_jwt(&keys, &ctx.issuer_url(&headers), &token, now_secs()) {
+    match decode_jwt(&keys, &ctx.issuer_url(&headers), &token, ctx.app.now()) {
         Ok(d) => page.decoded = Some(d),
         Err(e) => page.error = Some(e),
     }
@@ -283,14 +284,17 @@ pub async fn start(
     let Some(cookie) = debugger_set(&ctx.id, &debugger_cookie_path(&ctx), &state) else {
         return OAuthError::ServerError("invalid debugger cookie".into()).into_response();
     };
+    // The flow lifetime is not token time: it stays on the system clock (ADR 0007).
+    let now = system_now();
     ctx.app.store.insert_flow(
         state,
         DebuggerFlow {
             issuer_id: ctx.id.clone(),
             verifier,
             redirect_uri,
-            expires_at: now_secs() + FLOW_TTL_SECS,
+            expires_at: now + FLOW_TTL_SECS,
         },
+        now,
     );
     (
         StatusCode::FOUND,
@@ -344,7 +348,7 @@ async fn callback_page(ctx: &IssuerCtx, headers: &HeaderMap, q: &CallbackQuery) 
     let flow = q
         .state
         .as_deref()
-        .and_then(|s| ctx.app.store.take_flow(s))
+        .and_then(|s| ctx.app.store.take_flow(s, system_now()))
         .filter(|f| f.issuer_id == ctx.id);
     if let Some(error) = q.error.as_deref() {
         page.error = Some(match q.error_description.as_deref() {
@@ -383,7 +387,7 @@ async fn callback_page(ctx: &IssuerCtx, headers: &HeaderMap, q: &CallbackQuery) 
         Ok(keys) => keys,
         Err(e) => return e.into_response(),
     };
-    let now = now_secs();
+    let now = ctx.app.now();
     for name in ["id_token", "access_token", "refresh_token"] {
         if let Some(token) = body.get(name).and_then(Value::as_str)
             && let Ok(d) = decode_jwt(&keys, &ctx.issuer_url(headers), token, now)

@@ -6,7 +6,6 @@ use serde_json::{Value, json};
 use crate::config::Claims;
 use crate::error::OAuthError;
 use crate::keys::{KeySet, SigningKey};
-use crate::state::now_secs;
 
 /// Inputs for an ID token. `claims` holds the already merged and filtered user claims.
 pub struct IdTokenInput<'a> {
@@ -15,6 +14,8 @@ pub struct IdTokenInput<'a> {
     pub claims: Claims,
     pub auth_time: u64,
     pub nonce: Option<&'a str>,
+    /// The `iat` claim: the server clock (ADR 0007). `exp` is `now + lifetime`.
+    pub now: u64,
     pub lifetime: i64,
     /// The Session `sid` claim; `None` omits it.
     pub sid: Option<&'a str>,
@@ -29,6 +30,8 @@ pub struct AccessTokenInput<'a> {
     pub scope: &'a [String],
     /// The `auth_time` claim; `None` (for `client_credentials`) omits it.
     pub auth_time: Option<u64>,
+    /// The `iat` claim: the server clock (ADR 0007). `exp` is `now + lifetime`.
+    pub now: u64,
     pub lifetime: i64,
 }
 
@@ -86,7 +89,7 @@ pub async fn sign_id_token(
     key: &SigningKey,
     input: IdTokenInput<'_>,
 ) -> Result<String, OAuthError> {
-    let now = now_secs();
+    let now = input.now;
     let mut claims = input.claims;
     let mut protocol = vec![
         ("iss", json!(input.issuer_url)),
@@ -112,7 +115,7 @@ pub async fn sign_access_token(
     key: &SigningKey,
     input: AccessTokenInput<'_>,
 ) -> Result<String, OAuthError> {
-    let now = now_secs();
+    let now = input.now;
     let mut claims = input.claims;
     let mut protocol = vec![
         ("iss", json!(input.issuer_url)),
@@ -133,11 +136,12 @@ pub async fn sign_access_token(
 }
 
 /// Verify an access token: a key of `keys` (by `kid`, `alg` must match), `typ: at+jwt`, `iss`
-/// and `exp`. The audience is not checked.
+/// and `exp` against `now`. The audience is not checked.
 pub fn verify_access_token(
     keys: &KeySet,
     issuer_url: &str,
     token: &str,
+    now: u64,
 ) -> Result<Claims, OAuthError> {
     let bearer = |description: &str| OAuthError::Bearer {
         description: description.to_owned(),
@@ -146,7 +150,7 @@ pub fn verify_access_token(
     if header.typ.as_deref() != Some(ACCESS_TOKEN_TYP) {
         return Err(bearer("not an access token"));
     }
-    keys.verify(token, |v| {
+    keys.verify(token, now, |v| {
         v.leeway = 0;
         v.validate_aud = false;
         v.set_issuer(&[issuer_url]);
@@ -169,7 +173,8 @@ pub fn verify_id_token_hint(
     if header.typ.as_deref() != Some("JWT") {
         return Err(invalid("not an id_token"));
     }
-    keys.verify(token, |v| {
+    // `exp` is not checked, so the time does not matter.
+    keys.verify(token, 0, |v| {
         v.leeway = 0;
         v.validate_exp = false;
         v.validate_aud = false;
@@ -218,6 +223,7 @@ mod tests {
             claims: obj(json!({"sub": "alice"})),
             auth_time: 1,
             nonce: None,
+            now: 1000,
             lifetime: 60,
             sid: None,
         }
@@ -240,6 +246,7 @@ mod tests {
             claims: obj(json!({"sub": "alice"})),
             scope: &[],
             auth_time: Some(1),
+            now: 1000,
             lifetime: 60,
         }
     }
@@ -254,6 +261,7 @@ mod tests {
                 claims: obj(json!({"sub": "auth0|alice", "sid": "user-value"})),
                 auth_time: 100,
                 nonce: Some("n1"),
+                now: 1000,
                 lifetime: 3600,
                 sid: Some("s-1"),
             },
@@ -269,10 +277,8 @@ mod tests {
         assert_eq!(c["nonce"], "n1");
         assert_eq!(c["auth_time"], 100);
         assert_eq!(c["sid"], "s-1");
-        assert_eq!(
-            c["exp"].as_u64().unwrap() - c["iat"].as_u64().unwrap(),
-            3600
-        );
+        assert_eq!(c["iat"], 1000);
+        assert_eq!(c["exp"], 4600);
     }
 
     #[tokio::test]
@@ -295,6 +301,7 @@ mod tests {
                 claims: obj(json!({"sub": "alice", "email": "alice@example.com"})),
                 scope: &["openid".into(), "email".into()],
                 auth_time: Some(1),
+                now: 1000,
                 lifetime: 60,
             },
         )
@@ -302,7 +309,7 @@ mod tests {
         .unwrap();
         let (h, _) = decode_unverified(&t);
         assert_eq!(h["typ"], "at+jwt");
-        let c = verify_access_token(&set(), "http://h/a", &t).unwrap();
+        let c = verify_access_token(&set(), "http://h/a", &t, 1000).unwrap();
         assert_eq!(c["aud"], "https://api.example.com");
         assert_eq!(c["scope"], "openid email");
         assert_eq!(c["client_id"], "example-app");
@@ -313,9 +320,9 @@ mod tests {
         let at = sign_access_token(&key(), access_input("http://h/a"))
             .await
             .unwrap();
-        assert!(verify_access_token(&set(), "http://h/b", &at).is_err());
+        assert!(verify_access_token(&set(), "http://h/b", &at, 1000).is_err());
         let idt = sign_id_token(&key(), id_input("http://h/a")).await.unwrap();
-        assert!(verify_access_token(&set(), "http://h/a", &idt).is_err());
+        assert!(verify_access_token(&set(), "http://h/a", &idt, 1000).is_err());
     }
 
     #[tokio::test]
@@ -323,7 +330,6 @@ mod tests {
         let mut i = id_input("http://h/a");
         i.lifetime = 0;
         let t = sign_id_token(&key(), i).await.unwrap();
-        std::thread::sleep(std::time::Duration::from_millis(1100));
         let c = verify_id_token_hint(&set(), "http://h/a", &t).unwrap();
         assert_eq!(c["aud"], "example-app");
         assert!(verify_id_token_hint(&set(), "http://h/b", &t).is_err());
@@ -338,7 +344,7 @@ mod tests {
         let mut i = access_input("http://h/a");
         i.lifetime = 0;
         let t = sign_access_token(&key(), i).await.unwrap();
-        std::thread::sleep(std::time::Duration::from_millis(1100));
-        assert!(verify_access_token(&set(), "http://h/a", &t).is_err());
+        assert!(verify_access_token(&set(), "http://h/a", &t, 1000).is_ok());
+        assert!(verify_access_token(&set(), "http://h/a", &t, 1001).is_err());
     }
 }

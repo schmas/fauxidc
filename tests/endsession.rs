@@ -191,6 +191,7 @@ async fn bad_id_token_hint_is_error_page() {
             claims: serde_json::Map::new(),
             auth_time: 1,
             nonce: None,
+            now: now(),
             lifetime: 60,
             sid: None,
         },

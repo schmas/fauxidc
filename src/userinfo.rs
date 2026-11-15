@@ -82,7 +82,7 @@ async fn respond(
     token: &str,
 ) -> Result<Response, OAuthError> {
     let keys = ctx.keys().await?;
-    let mut claims = verify_access_token(&keys, &ctx.issuer_url(headers), token)?;
+    let mut claims = verify_access_token(&keys, &ctx.issuer_url(headers), token, ctx.app.now())?;
     // OIDC Core 5.3: UserInfo is for OpenID Connect access tokens.
     let has_openid = claims
         .get("scope")

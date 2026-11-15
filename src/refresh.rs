@@ -8,7 +8,7 @@ use crate::client_auth::{ClientAuth, authenticate_client};
 use crate::config::Endpoint;
 use crate::error::OAuthError;
 use crate::keys::{KeySet, SigningKey};
-use crate::state::{IssuerCtx, Subject, now_secs};
+use crate::state::{IssuerCtx, Subject};
 use crate::token_endpoint::{RefreshMode, TokenForm, UserGrant, issue_user_tokens, require_grant};
 
 /// The JWT header `typ` of a refresh token.
@@ -48,11 +48,13 @@ pub async fn sign_refresh_token(
 }
 
 /// A key of `keys` (by `kid`, `alg` must match), header `typ` must be `rt+jwt`, `iss` must equal
-/// `issuer_url`, `exp` checked with leeway 0. Every failure is `OAuthError::json("invalid_grant", ..)`.
+/// `issuer_url`, `exp` checked against `now` with leeway 0. Every failure is
+/// `OAuthError::json("invalid_grant", ..)`.
 pub fn verify_refresh_token(
     keys: &KeySet,
     issuer_url: &str,
     token: &str,
+    now: u64,
 ) -> Result<RefreshClaims, OAuthError> {
     let invalid =
         |d: &str| OAuthError::json("invalid_grant", format!("invalid refresh token: {d}"));
@@ -61,7 +63,7 @@ pub fn verify_refresh_token(
         return Err(invalid("not a refresh token"));
     }
     let (_, claims) = keys
-        .verify(token, |v| {
+        .verify(token, now, |v| {
             v.leeway = 0;
             v.validate_aud = false;
             v.set_issuer(&[issuer_url]);
@@ -91,14 +93,15 @@ pub async fn refresh_grant(
         OAuthError::json("invalid_grant", d)
     };
     let keys = ctx.keys().await?;
-    let claims = verify_refresh_token(&keys, &ctx.issuer_url(headers), presented)
+    let now = ctx.app.now();
+    let claims = verify_refresh_token(&keys, &ctx.issuer_url(headers), presented, now)
         .inspect_err(|e| tracing::info!(issuer = %ctx.id, "refresh token rejected: {e}"))?;
     if claims.client_id != client.client_id {
         return Err(invalid_grant(
             "refresh token was not issued to this client".to_owned(),
         ));
     }
-    if ctx.app.store.is_revoked(&claims.jti) {
+    if ctx.app.store.is_revoked(&claims.jti, now) {
         return Err(invalid_grant("refresh token was revoked".to_owned()));
     }
     let original: Vec<String> = claims.scope.split_whitespace().map(str::to_owned).collect();
@@ -127,7 +130,7 @@ pub async fn refresh_grant(
         let fresh = ctx.app.store.use_refresh_jti(
             &claims.jti,
             claims.exp,
-            now_secs(),
+            now,
             client.config.refresh_reuse_leeway_secs,
         );
         if !fresh {
@@ -161,7 +164,7 @@ pub async fn refresh_grant(
 mod tests {
     use super::*;
     use crate::config::Claims;
-    use crate::state::{Subject, now_secs};
+    use crate::state::Subject;
     use crate::tokens::{AccessTokenInput, sign_access_token};
 
     const ISS: &str = "http://localhost:9000/auth0/";
@@ -183,7 +186,7 @@ mod tests {
             client_id: "example-app".into(),
             sub: "auth0|alice".into(),
             jti: "j-1".into(),
-            iat: now_secs(),
+            iat: 1000,
             exp,
             scope: "openid offline_access".into(),
             auth_time: 100,
@@ -200,21 +203,20 @@ mod tests {
         let k = std::sync::Arc::new(
             SigningKey::generate_for(crate::config::SigningAlg::ES256).unwrap(),
         );
-        let t = sign_refresh_token(&k, &claims(now_secs() + 60))
-            .await
-            .unwrap();
+        let t = sign_refresh_token(&k, &claims(1060)).await.unwrap();
         let header = jsonwebtoken::decode_header(&t).unwrap();
         assert_eq!(header.alg, jsonwebtoken::Algorithm::ES256);
         let set = crate::keys::KeySet::single(k);
-        assert_eq!(verify_refresh_token(&set, ISS, &t).unwrap().jti, "j-1");
+        assert_eq!(
+            verify_refresh_token(&set, ISS, &t, 1000).unwrap().jti,
+            "j-1"
+        );
     }
 
     #[tokio::test]
     async fn sign_verify_round_trip() {
-        let t = sign_refresh_token(&key(), &claims(now_secs() + 60))
-            .await
-            .unwrap();
-        let c = verify_refresh_token(&set(), ISS, &t).unwrap();
+        let t = sign_refresh_token(&key(), &claims(1060)).await.unwrap();
+        let c = verify_refresh_token(&set(), ISS, &t, 1000).unwrap();
         assert_eq!(c.jti, "j-1");
         assert_eq!(c.token_aud.as_deref(), Some("https://api.example.com"));
         assert!(matches!(c.subject, Subject::User { ref id, .. } if id == "alice"));
@@ -222,10 +224,8 @@ mod tests {
 
     #[tokio::test]
     async fn verify_rejects_other_issuer() {
-        let t = sign_refresh_token(&key(), &claims(now_secs() + 60))
-            .await
-            .unwrap();
-        let e = verify_refresh_token(&set(), "http://localhost:9000/okta/", &t).unwrap_err();
+        let t = sign_refresh_token(&key(), &claims(1060)).await.unwrap();
+        let e = verify_refresh_token(&set(), "http://localhost:9000/okta/", &t, 1000).unwrap_err();
         assert!(matches!(
             e,
             OAuthError::Json {
@@ -246,12 +246,13 @@ mod tests {
                 claims: Claims::new(),
                 scope: &[],
                 auth_time: Some(1),
+                now: 1000,
                 lifetime: 60,
             },
         )
         .await
         .unwrap();
-        let e = verify_refresh_token(&set(), ISS, &at).unwrap_err();
+        let e = verify_refresh_token(&set(), ISS, &at, 1000).unwrap_err();
         assert!(matches!(
             e,
             OAuthError::Json {
@@ -263,10 +264,8 @@ mod tests {
 
     #[tokio::test]
     async fn verify_rejects_expired() {
-        let t = sign_refresh_token(&key(), &claims(now_secs() - 1))
-            .await
-            .unwrap();
-        let e = verify_refresh_token(&set(), ISS, &t).unwrap_err();
+        let t = sign_refresh_token(&key(), &claims(999)).await.unwrap();
+        let e = verify_refresh_token(&set(), ISS, &t, 1000).unwrap_err();
         assert!(matches!(
             e,
             OAuthError::Json {

@@ -67,6 +67,7 @@ pub async fn grant(
             claims,
             scope: &scope,
             auth_time: None,
+            now: ctx.app.now(),
             lifetime: lifetime_secs(lifetimes.access_token),
         },
     )

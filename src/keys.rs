@@ -340,10 +340,12 @@ impl KeySet {
 
     /// Decodes and verifies `token`: the key by header `kid` (none: the active key), the header
     /// `alg` must equal the key's `alg`. `configure` adds the caller's checks to the
-    /// [`jsonwebtoken::Validation`]; it cannot change the algorithm. Errors are short text.
+    /// [`jsonwebtoken::Validation`]; it cannot change the algorithm. `exp` and `nbf` are checked
+    /// against `now`, the server clock (ADR 0007). Errors are short text.
     pub fn verify(
         &self,
         token: &str,
+        now: u64,
         configure: impl FnOnce(&mut jsonwebtoken::Validation),
     ) -> Result<(jsonwebtoken::Header, crate::config::Claims), String> {
         let header =
@@ -361,7 +363,7 @@ impl KeySet {
         let mut validation = jsonwebtoken::Validation::new(key.alg.jwt());
         configure(&mut validation);
         validation.algorithms = vec![key.alg.jwt()];
-        jsonwebtoken::decode::<crate::config::Claims>(token, &key.decoding, &validation)
+        crate::clock::decode_at(token, &key.decoding, &validation, now)
             .map(|data| (header, data.claims))
             .map_err(|e| e.to_string())
     }
@@ -992,13 +994,13 @@ mod tests {
             &test_key().encoding,
         )
         .unwrap();
-        assert!(set.verify(&t, |_| {}).is_err());
+        assert!(set.verify(&t, 0, |_| {}).is_err());
         let none = format!(
             "{}.{}.",
             URL_SAFE_NO_PAD.encode(r#"{"alg":"none"}"#),
             URL_SAFE_NO_PAD.encode(r#"{"exp":4000000000}"#)
         );
-        assert!(set.verify(&none, |_| {}).is_err());
+        assert!(set.verify(&none, 0, |_| {}).is_err());
     }
 
     #[test]
@@ -1017,9 +1019,21 @@ mod tests {
             &old.encoding,
         )
         .unwrap();
-        let (header, claims) = set.verify(&t, |v| v.validate_aud = false).unwrap();
+        let (header, claims) = set
+            .verify(&t, 4_000_000_000, |v| v.validate_aud = false)
+            .unwrap();
         assert_eq!(header.kid.as_deref(), Some(old.kid.as_str()));
         assert_eq!(claims["sub"], "x");
+        // `exp` is checked against the given time, not the system clock, with the default
+        // leeway of 60 s.
+        assert!(
+            set.verify(&t, 4_000_000_060, |v| v.validate_aud = false)
+                .is_ok()
+        );
+        let e = set
+            .verify(&t, 4_000_000_061, |v| v.validate_aud = false)
+            .unwrap_err();
+        assert_eq!(e, "ExpiredSignature");
     }
 
     #[test]

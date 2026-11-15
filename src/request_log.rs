@@ -16,8 +16,9 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
+use crate::clock::system_now;
 use crate::issuer::{issuer_for_path, under};
-use crate::state::{AppState, now_secs};
+use crate::state::AppState;
 
 /// The largest request body the log buffers. A larger body gets 413 while the log is on.
 pub const MAX_LOGGED_BODY: usize = 1024 * 1024;
@@ -141,7 +142,8 @@ pub async fn record(State(state): State<Arc<AppState>>, req: Request, next: Next
     let path = parts.uri.path().to_owned();
     let entry = LoggedRequest {
         id: 0,
-        time: now_secs(),
+        // When the request arrived: the system clock, not token time (ADR 0007).
+        time: system_now(),
         method: parts.method.to_string(),
         issuer: issuer_for_path(&state.config, &path),
         path,
