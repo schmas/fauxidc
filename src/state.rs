@@ -5,6 +5,7 @@ use std::sync::{Arc, Mutex, PoisonError};
 
 use axum::http::HeaderMap;
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
+use serde::{Deserialize, Serialize};
 
 use crate::config::{Claims, ClientConfig, Config, Endpoint, IssuerConfig};
 use crate::error::{OAuthError, StartError};
@@ -19,8 +20,9 @@ pub enum PkceMethod {
     Plain,
 }
 
-/// Who signed in.
-#[derive(Debug, Clone)]
+/// Who signed in. Serialized into refresh tokens as `{"kind": "user" | "custom", ..}`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
 pub enum Subject {
     /// A configured user, with claim overrides from the login form.
     User { id: String, overrides: Claims },

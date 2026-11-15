@@ -174,6 +174,16 @@ pub fn claims_of(jwt: &str) -> Value {
     serde_json::from_slice(&bytes).unwrap()
 }
 
+/// Decodes the header of a JWT without verifying it.
+pub fn header_of(jwt: &str) -> Value {
+    use base64::Engine as _;
+    let header = jwt.split('.').next().unwrap();
+    let bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD
+        .decode(header)
+        .unwrap();
+    serde_json::from_slice(&bytes).unwrap()
+}
+
 /// Posts the login form for alice and returns the `code` from the `Location` header.
 /// `extra` adds or replaces form fields.
 pub async fn login_code(app: &Router, extra: &[(&str, &str)]) -> String {
@@ -197,9 +207,8 @@ pub async fn login_code(app: &Router, extra: &[(&str, &str)]) -> String {
     query_param(&location(&h), "code").unwrap()
 }
 
-/// Logs alice in, exchanges the code at `/auth0/token` as example-app and returns the access token.
-/// `extra` adds or replaces login form fields.
-pub async fn access_token_for(app: &Router, extra: &[(&str, &str)]) -> String {
+/// Logs alice in with `extra` login fields, exchanges the code as example-app, returns the JSON body.
+pub async fn token_response_for(app: &Router, extra: &[(&str, &str)]) -> Value {
     let code = login_code(app, extra).await;
     let (s, _, b) = send(
         app,
@@ -218,5 +227,14 @@ pub async fn access_token_for(app: &Router, extra: &[(&str, &str)]) -> String {
     )
     .await;
     assert_eq!(s, 200, "{b}");
-    json(&b)["access_token"].as_str().unwrap().to_owned()
+    json(&b)
+}
+
+/// Logs alice in, exchanges the code at `/auth0/token` as example-app and returns the access token.
+/// `extra` adds or replaces login form fields.
+pub async fn access_token_for(app: &Router, extra: &[(&str, &str)]) -> String {
+    token_response_for(app, extra).await["access_token"]
+        .as_str()
+        .unwrap()
+        .to_owned()
 }

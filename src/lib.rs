@@ -18,6 +18,7 @@ pub mod issuer;
 pub mod jwks;
 pub mod keys;
 pub mod logging;
+pub mod refresh;
 pub mod router;
 pub mod server;
 pub mod state;

@@ -16,8 +16,10 @@ use crate::claims::{ClaimTarget, build_claims, filter_by_scope};
 use crate::client_auth::{ClientAuth, authenticate_client, constant_time_eq};
 use crate::clients::ResolvedClient;
 use crate::error::OAuthError;
+use crate::keys::SigningKey;
 use crate::logging::record_endpoint;
-use crate::state::{IssuerCtx, PkceMethod, now_secs};
+use crate::refresh::{RefreshClaims, sign_refresh_token};
+use crate::state::{IssuerCtx, PkceMethod, Subject, now_secs};
 use crate::tokens::{AccessTokenInput, IdTokenInput, sign_access_token, sign_id_token};
 
 /// The form fields of a token request.
@@ -175,10 +177,72 @@ async fn exchange_code(
         .await
         .map_err(|_| OAuthError::Unavailable)?;
 
+    issue_user_tokens(
+        ctx,
+        &key,
+        &UserGrant {
+            client: &client,
+            subject: &grant.subject,
+            scope: &grant.scope,
+            audience: grant.audience.as_deref(),
+            auth_time: grant.auth_time,
+            nonce: grant.nonce.as_deref(),
+            refresh: RefreshMode::ByPolicy,
+        },
+    )
+}
+
+/// Whether and how a token response gets a refresh token.
+#[expect(
+    dead_code,
+    reason = "Issue and Echo are used by the refresh_token grant"
+)]
+pub(crate) enum RefreshMode {
+    /// Issue one when `refresh_allowed`.
+    ByPolicy,
+    /// Always issue a new one.
+    Issue,
+    /// Return this presented refresh token unchanged.
+    Echo(String),
+}
+
+/// What a user token response is built from.
+pub(crate) struct UserGrant<'a> {
+    pub client: &'a ResolvedClient,
+    pub subject: &'a Subject,
+    pub scope: &'a [String],
+    /// Request audience; `None` → Client audience → `client_id`.
+    pub audience: Option<&'a str>,
+    pub auth_time: u64,
+    pub nonce: Option<&'a str>,
+    pub refresh: RefreshMode,
+}
+
+/// Strict: `offline_access` in scope AND the Client allows `refresh_token`. Lenient: always.
+pub(crate) fn refresh_allowed(ctx: &IssuerCtx, client: &ResolvedClient, scope: &[String]) -> bool {
+    if ctx.issuer().lenient {
+        return true;
+    }
+    scope.iter().any(|s| s == "offline_access")
+        && client
+            .config
+            .grant_types
+            .iter()
+            .any(|g| g == "refresh_token")
+}
+
+/// Signs the access token, the `id_token` (if `openid` is in scope) and the refresh token
+/// (per `refresh`). Returns the token response JSON body.
+pub(crate) fn issue_user_tokens(
+    ctx: &IssuerCtx,
+    key: &SigningKey,
+    g: &UserGrant<'_>,
+) -> Result<Value, OAuthError> {
+    let client = g.client;
     let issuer = ctx.issuer();
     let lifetimes = issuer.lifetimes.with_override(&client.config.lifetimes);
-    let audience = match (&grant.audience, client.config.audience.as_str()) {
-        (Some(a), _) => a.clone(),
+    let audience = match (g.audience, client.config.audience.as_str()) {
+        (Some(a), _) => a.to_owned(),
         (None, a) if !a.is_empty() => a.to_owned(),
         (None, _) => client.client_id.clone(),
     };
@@ -188,20 +252,25 @@ async fn exchange_code(
             config,
             &ctx.id,
             &client.config,
-            &grant.subject,
+            g.subject,
             ClaimTarget::Access,
         ),
-        &grant.scope,
+        g.scope,
     );
+    let sub = access_claims
+        .get("sub")
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .to_owned();
     let access_token = sign_access_token(
-        &key,
+        key,
         AccessTokenInput {
             issuer_url: &issuer.issuer_url,
             client_id: &client.client_id,
             audience: &audience,
             claims: access_claims,
-            scope: &grant.scope,
-            auth_time: grant.auth_time,
+            scope: g.scope,
+            auth_time: g.auth_time,
             lifetime: lifetimes.access_token,
         },
     )?;
@@ -209,28 +278,55 @@ async fn exchange_code(
         "access_token": access_token,
         "token_type": "Bearer",
         "expires_in": lifetimes.access_token,
-        "scope": grant.scope.join(" "),
+        "scope": g.scope.join(" "),
     });
-    if grant.scope.iter().any(|s| s == "openid") {
+    if g.scope.iter().any(|s| s == "openid") {
         let id_claims = filter_by_scope(
             build_claims(
                 config,
                 &ctx.id,
                 &client.config,
-                &grant.subject,
+                g.subject,
                 ClaimTarget::IdToken,
             ),
-            &grant.scope,
+            g.scope,
         );
         body["id_token"] = json!(sign_id_token(
-            &key,
+            key,
             IdTokenInput {
                 issuer_url: &issuer.issuer_url,
                 client_id: &client.client_id,
                 claims: id_claims,
-                auth_time: grant.auth_time,
-                nonce: grant.nonce.as_deref(),
+                auth_time: g.auth_time,
+                nonce: g.nonce,
                 lifetime: lifetimes.id_token,
+            },
+        )?);
+    }
+    let issue = match &g.refresh {
+        RefreshMode::ByPolicy => refresh_allowed(ctx, client, g.scope),
+        RefreshMode::Issue => true,
+        RefreshMode::Echo(token) => {
+            body["refresh_token"] = json!(token);
+            false
+        }
+    };
+    if issue {
+        let now = now_secs();
+        body["refresh_token"] = json!(sign_refresh_token(
+            key,
+            &RefreshClaims {
+                iss: issuer.issuer_url.clone(),
+                aud: client.client_id.clone(),
+                client_id: client.client_id.clone(),
+                sub,
+                jti: uuid::Uuid::new_v4().to_string(),
+                iat: now,
+                exp: now.saturating_add(lifetimes.refresh_token),
+                scope: g.scope.join(" "),
+                auth_time: g.auth_time,
+                token_aud: g.audience.map(str::to_owned),
+                subject: g.subject.clone(),
             },
         )?);
     }
