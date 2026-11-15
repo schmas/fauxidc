@@ -129,6 +129,63 @@ curl --cacert cert.pem https://localhost:9000/_mock/health
 
 The release binaries and the container image are built without the `tls` feature.
 
+### Local certificate with mkcert
+
+[mkcert](https://github.com/FiloSottile/mkcert) makes a local CA and certificates that your machine trusts.
+Install it (`brew install mkcert` on macOS; see the mkcert README for other systems).
+Then add its CA to the system trust store once:
+
+```sh
+mkcert -install
+```
+
+Run the next commands in one directory, because relative paths resolve against the working directory.
+With `cargo run`, that directory is the clone.
+Make a certificate for the local host names:
+
+```sh
+mkcert -cert-file cert.pem -key-file key.pem localhost 127.0.0.1 ::1
+```
+
+Point the config at the files and use `https://` in the `issuer_url`:
+
+```toml
+[server.tls]
+cert_file = "cert.pem"
+key_file = "key.pem"
+
+[issuer.app]
+issuer_url = "https://localhost:9000/app"
+```
+
+Run fauxidc with the `tls` feature from a clone:
+
+```sh
+cargo run --features tls -- --config fauxidc.toml
+```
+
+Or install it from crates.io with the feature:
+
+```sh
+cargo install fauxidc --features tls --locked
+fauxidc --config fauxidc.toml
+```
+
+Check it:
+
+```sh
+curl https://localhost:9000/app/.well-known/openid-configuration
+```
+
+If your `curl` does not use the system trust store, add `--cacert "$(mkcert -CAROOT)/rootCA.pem"`.
+
+Some runtimes do not read the system trust store:
+
+- Node.js: set `NODE_EXTRA_CA_CERTS="$(mkcert -CAROOT)/rootCA.pem"`.
+- JVM: the CA must be in the JVM truststore. `mkcert -install` adds it there only when `JAVA_HOME` is set.
+
+The container image has no `tls` feature, so this recipe does not apply to it.
+
 ## Token exchange
 
 `/token` supports RFC 8693 token exchange (`grant_type=urn:ietf:params:oauth:grant-type:token-exchange`).

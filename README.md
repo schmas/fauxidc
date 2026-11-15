@@ -299,6 +299,7 @@ Current limits:
 
 - `jwks_uri` must be an `http://` URL.
 - The `tls` feature uses the PEM files you give. fauxidc does not generate certificates.
+  See [Local certificate with mkcert](docs/features.md#local-certificate-with-mkcert).
 
 ## License
 
