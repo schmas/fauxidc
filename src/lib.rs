@@ -15,6 +15,7 @@ pub mod cors;
 pub mod discovery;
 pub mod endsession;
 pub mod error;
+pub mod failures;
 pub mod health;
 pub mod healthcheck;
 pub mod introspect;

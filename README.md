@@ -207,6 +207,29 @@ curl -s -X POST http://localhost:9000/_mock/auth0/rotate-key
 curl -s -X POST 'http://localhost:9000/_mock/auth0/rotate-key?retire=true'
 ```
 
+### Injected failures
+
+`POST /_mock/{issuer-id}/fail-next` makes the next requests to one endpoint of the Issuer fail or slow down.
+The body is JSON `{endpoint, status, error, count, delay_ms}`; unknown fields give 400 `invalid_request`.
+
+| Field | Meaning |
+| --- | --- |
+| `endpoint` | `authorize`, `token`, `userinfo`, `jwks`, `endsession`, `introspect`, `revoke`, `debugger` or `discovery` (all discovery forms). |
+| `status` | 400 to 599. Default 500. |
+| `error` | The `error` value of the response. Default `server_error`. |
+| `count` | How many requests fail. Default 1. `0` removes the entry. |
+| `delay_ms` | Wait before the answer, at most 60000. Default 0. Without `status`, the request is only delayed and then handled normally. |
+
+A failed request gets the status and `{"error": <error>, "error_description": "injected failure"}`.
+A new POST for the same endpoint replaces the old entry. CORS preflights do not use up an entry.
+Entries live in memory and survive a hot reload. An unknown Issuer id gives 404.
+`DELETE /_mock/{issuer-id}/fail-next` removes all entries of the Issuer and returns 204.
+
+```sh
+curl -X POST localhost:9000/_mock/auth0/fail-next -H 'content-type: application/json' -d '{"endpoint":"token","status":503,"count":2}'
+curl -X DELETE localhost:9000/_mock/auth0/fail-next
+```
+
 ## Request log
 
 fauxidc keeps the raw requests it received in memory. It is a ring buffer of `server.request_log_size` entries

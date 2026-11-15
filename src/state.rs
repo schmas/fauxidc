@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::config::{Claims, ClientConfig, Config, Endpoint, IssuerConfig};
 use crate::error::{OAuthError, StartError};
+use crate::failures::Injected;
 use crate::issuer::endpoint_base;
 use crate::jwks_fetch::CACHE_TTL_SECS;
 use crate::keys::{KeyHandle, KeySet, Keyring};
@@ -76,6 +77,8 @@ pub struct Store {
     pub jwks_cache: Mutex<HashMap<String, (u64, Arc<JwkSet>)>>,
     /// Sessions by cookie value.
     pub sessions: SessionStore,
+    /// Injected failures by `(Issuer id, endpoint)`.
+    pub failures: Mutex<HashMap<(String, String), Injected>>,
 }
 
 /// When a refresh token was first used, and when it expires.
@@ -175,6 +178,42 @@ impl Store {
         let now = now_secs();
         revoked.retain(|_, e| *e >= now);
         revoked.contains_key(jti)
+    }
+
+    /// Stores the Injected failure of `endpoint`, replacing an older one. `None` removes it.
+    pub fn inject(&self, issuer_id: &str, endpoint: &str, f: Option<Injected>) {
+        let mut failures = self.failures.lock().unwrap_or_else(PoisonError::into_inner);
+        let key = (issuer_id.to_owned(), endpoint.to_owned());
+        match f {
+            Some(f) if f.remaining > 0 => {
+                failures.insert(key, f);
+            }
+            _ => {
+                failures.remove(&key);
+            }
+        }
+    }
+
+    /// One use of the Injected failure of `endpoint`: returns a copy and decrements
+    /// `remaining`; removes the entry at 0. One lock for the check and the update.
+    pub fn take_failure(&self, issuer_id: &str, endpoint: &str) -> Option<Injected> {
+        let mut failures = self.failures.lock().unwrap_or_else(PoisonError::into_inner);
+        let key = (issuer_id.to_owned(), endpoint.to_owned());
+        let entry = failures.get_mut(&key)?;
+        let taken = entry.clone();
+        entry.remaining = entry.remaining.saturating_sub(1);
+        if entry.remaining == 0 {
+            failures.remove(&key);
+        }
+        Some(taken)
+    }
+
+    /// Removes every Injected failure of the Issuer.
+    pub fn clear_failures(&self, issuer_id: &str) {
+        self.failures
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .retain(|(id, _), _| id != issuer_id);
     }
 
     /// Removes and returns the grant for `code`. A code works once.
@@ -432,6 +471,52 @@ mod tests {
         assert!(!store.is_revoked("old"));
         assert!(!store.revoked.lock().unwrap().contains_key("old"));
         assert!(store.is_revoked("j"));
+    }
+
+    #[test]
+    fn take_failure_is_exact_under_parallel_threads() {
+        let store = Store::default();
+        store.inject(
+            "auth0",
+            "jwks",
+            Some(Injected {
+                status: Some(500),
+                error: "server_error".into(),
+                remaining: 3,
+                delay_ms: 0,
+            }),
+        );
+        let taken = std::thread::scope(|s| {
+            let handles: Vec<_> = (0..8)
+                .map(|_| s.spawn(|| store.take_failure("auth0", "jwks")))
+                .collect();
+            handles
+                .into_iter()
+                .filter_map(|h| h.join().unwrap())
+                .count()
+        });
+        assert_eq!(taken, 3);
+        assert!(store.failures.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn failures_are_per_issuer_and_cleared_per_issuer() {
+        let store = Store::default();
+        let f = Injected {
+            status: Some(503),
+            error: "e".into(),
+            remaining: 1,
+            delay_ms: 0,
+        };
+        store.inject("auth0", "token", Some(f.clone()));
+        store.inject("okta", "token", Some(f.clone()));
+        assert!(store.take_failure("other", "token").is_none());
+        store.clear_failures("auth0");
+        assert!(store.take_failure("auth0", "token").is_none());
+        assert_eq!(store.take_failure("okta", "token"), Some(f.clone()));
+        store.inject("okta", "token", Some(f));
+        store.inject("okta", "token", None);
+        assert!(store.take_failure("okta", "token").is_none());
     }
 
     #[test]

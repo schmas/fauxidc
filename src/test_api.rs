@@ -47,7 +47,8 @@ pub struct TestTokenRequest {
 const DEFAULT_CLIENT_ID: &str = "test-api";
 const DEFAULT_SCOPE: &str = "openid profile email";
 
-fn unknown_issuer(issuer_id: &str) -> Response {
+/// 404 `not_found` for an unknown Issuer id.
+pub(crate) fn unknown_issuer(issuer_id: &str) -> Response {
     (
         StatusCode::NOT_FOUND,
         Json(json!({

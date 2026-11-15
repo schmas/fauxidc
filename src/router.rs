@@ -7,7 +7,7 @@ use axum::{
     extract::{Path, State},
     http::HeaderMap,
     response::{IntoResponse, Response},
-    routing::{get, post},
+    routing::{MethodRouter, get, post},
 };
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::trace::{DefaultOnResponse, TraceLayer};
@@ -17,6 +17,7 @@ use crate::config::Endpoint;
 use crate::cors::client_cors_layer;
 use crate::discovery;
 use crate::endsession;
+use crate::failures::{self, FailureTarget};
 use crate::health;
 use crate::introspect;
 use crate::issuer::issuer_path;
@@ -44,47 +45,7 @@ pub fn build_router(state: Arc<AppState>) -> Router {
             id: id.clone(),
             path: path.clone(),
         };
-        let client_cors = client_cors_layer(&state.config, id);
-        let sub: Router = Router::new()
-            .route(
-                "/.well-known/openid-configuration",
-                get(discovery::document).layer(cors.clone()),
-            )
-            .route(
-                "/.well-known/oauth-authorization-server",
-                get(discovery::document).layer(cors.clone()),
-            )
-            .route(
-                ctx.endpoint_path(Endpoint::Jwks),
-                get(jwks::jwks).layer(cors.clone()),
-            )
-            .route(
-                ctx.endpoint_path(Endpoint::Authorize),
-                get(authorize::authorize_get).post(authorize::authorize_post),
-            )
-            .route(
-                ctx.endpoint_path(Endpoint::Token),
-                post(token_endpoint::token).layer(client_cors.clone()),
-            )
-            .route(
-                ctx.endpoint_path(Endpoint::Userinfo),
-                get(userinfo::userinfo_get)
-                    .post(userinfo::userinfo_post)
-                    .layer(client_cors.clone()),
-            )
-            .route(
-                ctx.endpoint_path(Endpoint::Endsession),
-                get(endsession::endsession_get).post(endsession::endsession_post),
-            )
-            .route(
-                ctx.endpoint_path(Endpoint::Revoke),
-                post(revoke::revoke).layer(client_cors),
-            )
-            .route(
-                ctx.endpoint_path(Endpoint::Introspect),
-                post(introspect::introspect),
-            )
-            .with_state(ctx.clone());
+        let sub = issuer_router(&ctx, &cors);
         router = if path == "/" {
             router.merge(sub)
         } else {
@@ -112,6 +73,12 @@ pub fn build_router(state: Arc<AppState>) -> Router {
             post(test_api::rotate_key).with_state(state.clone()),
         )
         .route(
+            "/_mock/{issuer_id}/fail-next",
+            post(failures::fail_next)
+                .delete(failures::clear)
+                .with_state(state.clone()),
+        )
+        .route(
             "/_mock/requests",
             get(request_log::list)
                 .delete(request_log::clear)
@@ -126,6 +93,72 @@ pub fn build_router(state: Arc<AppState>) -> Router {
             request_log::record,
         ))
         .layer(trace)
+}
+
+/// The routes of one Issuer, relative to its path.
+fn issuer_router(ctx: &IssuerCtx, cors: &CorsLayer) -> Router {
+    let client_cors = client_cors_layer(&ctx.app.config, &ctx.id);
+    let fail = |endpoint: &'static str| FailureTarget {
+        store: ctx.app.store.clone(),
+        issuer_id: ctx.id.clone(),
+        endpoint,
+    };
+    Router::new()
+        .route(
+            "/.well-known/openid-configuration",
+            guarded(get(discovery::document), fail("discovery")).layer(cors.clone()),
+        )
+        .route(
+            "/.well-known/oauth-authorization-server",
+            guarded(get(discovery::document), fail("discovery")).layer(cors.clone()),
+        )
+        .route(
+            ctx.endpoint_path(Endpoint::Jwks),
+            guarded(get(jwks::jwks), fail("jwks")).layer(cors.clone()),
+        )
+        .route(
+            ctx.endpoint_path(Endpoint::Authorize),
+            guarded(
+                get(authorize::authorize_get).post(authorize::authorize_post),
+                fail("authorize"),
+            ),
+        )
+        .route(
+            ctx.endpoint_path(Endpoint::Token),
+            guarded(post(token_endpoint::token), fail("token")).layer(client_cors.clone()),
+        )
+        .route(
+            ctx.endpoint_path(Endpoint::Userinfo),
+            guarded(
+                get(userinfo::userinfo_get).post(userinfo::userinfo_post),
+                fail("userinfo"),
+            )
+            .layer(client_cors.clone()),
+        )
+        .route(
+            ctx.endpoint_path(Endpoint::Endsession),
+            guarded(
+                get(endsession::endsession_get).post(endsession::endsession_post),
+                fail("endsession"),
+            ),
+        )
+        .route(
+            ctx.endpoint_path(Endpoint::Revoke),
+            guarded(post(revoke::revoke), fail("revoke")).layer(client_cors),
+        )
+        .route(
+            ctx.endpoint_path(Endpoint::Introspect),
+            guarded(post(introspect::introspect), fail("introspect")),
+        )
+        .with_state(ctx.clone())
+}
+
+/// Adds the Injected failure middleware of `target` to a route. It sits inside the CORS layer.
+fn guarded(route: MethodRouter<IssuerCtx>, target: FailureTarget) -> MethodRouter<IssuerCtx> {
+    route.layer(axum::middleware::from_fn_with_state(
+        target,
+        failures::inject,
+    ))
 }
 
 /// RFC 8414 path insertion: the well-known segment comes before the issuer path.
@@ -146,6 +179,9 @@ async fn rfc8414_discovery(
     match found {
         Some(id) => {
             record_endpoint(id, "discovery");
+            if let Some(res) = failures::apply(&state.store, id, "discovery").await {
+                return res;
+            }
             let ctx = IssuerCtx {
                 app: state.clone(),
                 id: id.clone(),
