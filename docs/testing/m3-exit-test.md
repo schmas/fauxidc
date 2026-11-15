@@ -120,7 +120,7 @@ The fixture pair is a self-signed test certificate for `localhost` and `127.0.0.
 | 1. `tests/m3_exit.rs` | pass | 2026-11-15 | `1 passed` locally and in the CI jobs `test` (Linux, macOS) and `tls`. |
 | 2. Conformance | pass | 2026-11-15 | CI job `conformance` green with the Session modules removed from the expected failures. |
 | 3. Hot reload | pass | 2026-11-15 | The label change applied in about 0.2 s. The broken file logged `config reload failed; keeping the old config`. SIGHUP applied the fix. |
-| 4. `/debugger` | partial | 2026-11-15 | Run with `curl` and a cookie jar (the same requests a browser sends): decode, login flow with the built-in `debugger` Client, "Signed in as" and "change". A desktop browser run is still open: it checks the page layout. |
+| 4. `/debugger` | pass | 2026-11-15 | Chrome desktop: decode showed `Signature: valid (kid ..., RS256)` and the expiry. "Run login flow" with Alice Admin and "remember" showed both tokens with a valid signature. "change" returned to `/auth0/debugger` without the "Signed in as" line. The layout renders correctly. |
 | 5. `tls` build | pass | 2026-11-15 | Health 200 and `https://` discovery URLs with curl 8.7.1 (LibreSSL 3.3.6). |
 
 ## Clean up
