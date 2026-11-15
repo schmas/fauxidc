@@ -156,6 +156,54 @@ fn check_input_type(value: &str, name: &str) -> Result<(), OAuthError> {
     }
 }
 
+/// The JWT header `typ` of an access token (RFC 9068).
+const ACCESS_TOKEN_TYP: &str = "at+jwt";
+
+/// Ruling 20: access_token → header typ "at+jwt"; id_token → typ not "at+jwt"; jwt → any.
+fn type_matches(token_type: &str, header_typ: Option<&str>) -> bool {
+    let is_access_token = header_typ.is_some_and(|t| t.eq_ignore_ascii_case(ACCESS_TOKEN_TYP));
+    match token_type {
+        TYPE_ACCESS_TOKEN => is_access_token,
+        TYPE_ID_TOKEN => !is_access_token,
+        _ => true,
+    }
+}
+
+/// `{name}` must fit the token (through `enforce`: Strict `invalid_request`, Lenient a
+/// warning). `name` is `subject_token_type` or `actor_token_type`.
+fn check_token_type(
+    ctx: &IssuerCtx,
+    token: &str,
+    token_type: &str,
+    name: &str,
+) -> Result<(), OAuthError> {
+    let typ = jsonwebtoken::decode_header(token).ok().and_then(|h| h.typ);
+    ctx.enforce(type_matches(token_type, typ.as_deref()), || {
+        format!(
+            "{name} {token_type} does not match the token (typ {})",
+            typ.as_deref().unwrap_or("none")
+        )
+    })
+    .map_err(invalid_request)
+}
+
+/// Ruling 23 (RFC 8693 4.4): when the subject token has a `may_act` object with `sub`, the
+/// actor `sub` must equal it (through `enforce`).
+fn check_may_act(ctx: &IssuerCtx, subject: &Claims, actor: &Claims) -> Result<(), OAuthError> {
+    let Some(allowed) = subject
+        .get("may_act")
+        .and_then(|m| m.get("sub"))
+        .and_then(Value::as_str)
+    else {
+        return Ok(());
+    };
+    let actor_sub = actor.get("sub").and_then(Value::as_str);
+    ctx.enforce(actor_sub == Some(allowed), || {
+        "actor is not allowed by may_act".to_owned()
+    })
+    .map_err(invalid_request)
+}
+
 /// The space-separated values of a string, or `None` if there are none.
 fn split_scope(value: Option<&str>) -> Option<Vec<String>> {
     let scope: Vec<String> = value?.split_whitespace().map(str::to_owned).collect();
@@ -209,12 +257,15 @@ pub async fn grant(
     }
 
     let subject = token_claims(ctx, subject_token, "subject_token").await?;
+    check_token_type(ctx, subject_token, subject_type, "subject_token_type")?;
     let mut claims = subject.clone();
     for name in DROPPED_CLAIMS {
         claims.remove(name);
     }
-    if let Some(actor_token) = actor_token {
+    if let (Some(actor_token), Some(actor_type)) = (actor_token, actor_type) {
         let actor = token_claims(ctx, actor_token, "actor_token").await?;
+        check_token_type(ctx, actor_token, actor_type, "actor_token_type")?;
+        check_may_act(ctx, &subject, &actor)?;
         claims.insert("act".to_owned(), act_claim(&actor, &subject));
     }
 
@@ -295,6 +346,18 @@ mod tests {
         );
         let not_object = obj(json!({"sub": "alice", "act": "svc-a"}));
         assert_eq!(act_claim(&actor, &not_object), json!({"sub": "svc-b"}));
+    }
+
+    #[test]
+    fn type_matches_the_header_typ() {
+        assert!(type_matches(TYPE_ACCESS_TOKEN, Some("at+jwt")));
+        assert!(!type_matches(TYPE_ACCESS_TOKEN, Some("JWT")));
+        assert!(!type_matches(TYPE_ACCESS_TOKEN, None));
+        assert!(type_matches(TYPE_ID_TOKEN, Some("JWT")));
+        assert!(type_matches(TYPE_ID_TOKEN, None));
+        assert!(!type_matches(TYPE_ID_TOKEN, Some("at+jwt")));
+        assert!(type_matches(TYPE_JWT, Some("at+jwt")));
+        assert!(type_matches(TYPE_JWT, None));
     }
 
     #[test]

@@ -75,6 +75,8 @@ pub struct Store {
     pub used_assertions: Mutex<HashMap<(String, String), u64>>,
     /// Fetched Client JWK sets by `jwks_uri`: when they were fetched, and the set.
     pub jwks_cache: Mutex<HashMap<String, (u64, Arc<JwkSet>)>>,
+    /// The last unknown-`kid` refetch of each `jwks_uri`, in Unix seconds.
+    pub jwks_refetched: Mutex<HashMap<String, u64>>,
     /// Sessions by cookie value.
     pub sessions: SessionStore,
     /// Injected failures by `(Issuer id, endpoint)`.
@@ -160,6 +162,23 @@ impl Store {
             .get(url)
             .filter(|(fetched_at, _)| now < fetched_at.saturating_add(CACHE_TTL_SECS))
             .map(|(_, set)| set.clone())
+    }
+
+    /// `true` and records `now` when no refetch of `url` happened in the last `cooldown`
+    /// seconds.
+    pub fn may_refetch(&self, url: &str, now: u64, cooldown: u64) -> bool {
+        let mut refetched = self
+            .jwks_refetched
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner);
+        if refetched
+            .get(url)
+            .is_some_and(|last| now < last.saturating_add(cooldown))
+        {
+            return false;
+        }
+        refetched.insert(url.to_owned(), now);
+        true
     }
 
     /// Stores the JWK set fetched from `url` at `now`.
@@ -483,6 +502,15 @@ mod tests {
                 .count()
         });
         assert_eq!(wins, 1);
+    }
+
+    #[test]
+    fn may_refetch_once_per_cooldown() {
+        let store = Store::default();
+        assert!(store.may_refetch("u", 100, 10));
+        assert!(!store.may_refetch("u", 109, 10));
+        assert!(store.may_refetch("other", 109, 10));
+        assert!(store.may_refetch("u", 110, 10));
     }
 
     #[test]

@@ -2,8 +2,9 @@
 
 use axum::{
     Form, Json,
-    extract::{State, rejection::FormRejection},
-    http::{HeaderMap, HeaderValue, header},
+    body::{Body, Bytes},
+    extract::{FromRequest, Request, State, rejection::FormRejection},
+    http::{HeaderMap, HeaderValue, Method, header},
     response::{IntoResponse, Response},
 };
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
@@ -121,14 +122,35 @@ pub(crate) fn form_rejection(
     OAuthError::json("invalid_request", description)
 }
 
+/// Ruling 21: a raw form body with more than one `audience` or more than one `resource`
+/// parameter is `invalid_request`, for every grant type. A body that does not parse as a
+/// form is left to the [`TokenForm`] parser.
+fn check_single_audience(body: &[u8]) -> Result<(), OAuthError> {
+    let Ok(pairs) = serde_urlencoded::from_bytes::<Vec<(String, String)>>(body) else {
+        return Ok(());
+    };
+    let count = |name: &str| pairs.iter().filter(|(k, _)| k == name).count();
+    if count("audience") > 1 || count("resource") > 1 {
+        return Err(OAuthError::json(
+            "invalid_request",
+            "multiple audience values are not supported",
+        ));
+    }
+    Ok(())
+}
+
 /// `POST /token`.
-pub async fn token(
-    State(ctx): State<IssuerCtx>,
-    headers: HeaderMap,
-    form: Result<Form<TokenForm>, FormRejection>,
-) -> Response {
+pub async fn token(State(ctx): State<IssuerCtx>, headers: HeaderMap, body: Bytes) -> Response {
     record_endpoint(&ctx.id, "token");
-    let Form(f) = match form {
+    if let Err(e) = check_single_audience(&body) {
+        tracing::info!(issuer = %ctx.id, "token request rejected: repeated audience");
+        return e.into_response();
+    }
+    // Parse the body as a form with the same rules as the `Form` extractor.
+    let mut request = Request::new(Body::from(body));
+    *request.method_mut() = Method::POST;
+    *request.headers_mut() = headers.clone();
+    let Form(f) = match Form::<TokenForm>::from_request(request, &()).await {
         Ok(form) => form,
         Err(rejection) => return form_rejection(&ctx, "token", &rejection).into_response(),
     };

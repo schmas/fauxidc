@@ -246,6 +246,8 @@ Later wins:
 - Rotation (M2): on by default per Client. Using an old refresh token again returns `invalid_grant`, unless it is within `refresh_reuse_leeway_secs` (default 0). No family revocation.
 - `client_credentials` (M2): `sub = client_id`, claims from Client `access_claims`. No id_token and no refresh token.
 - Token exchange (M3): if the subject token is a JWT from any fauxidc Issuer, the mock verifies the signature and `exp`. In Strict mode, any other token is rejected. In Lenient mode it is accepted unverified. The result has `sub` and User claims from the subject token, and `aud` from `audience` / `resource`. An `act` claim is added only when an `actor_token` is sent.
+- Token exchange token types (M4): `subject_token_type` and `actor_token_type` must fit the token. `...:access_token` needs the header `typ` `at+jwt`, `...:id_token` needs another `typ`, `...:jwt` accepts any. Strict mode rejects a mismatch; Lenient mode logs a warning.
+- Token exchange `may_act` (M4): when the subject token has `may_act.sub` and an `actor_token` is sent, the actor `sub` must equal it (RFC 8693 4.4). Strict mode rejects a mismatch; Lenient mode logs a warning.
 - Default lifetimes: id_token and access token 1 h, refresh token 24 h, code 60 s. They can be set per Issuer and per Client.
 
 ## 10. Endpoints

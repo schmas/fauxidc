@@ -153,18 +153,15 @@ async fn protocol_claims_are_replaced() {
 }
 
 #[tokio::test]
-async fn expired_subject_token_is_rejected() {
+async fn expired_subject_token_is_invalid_request() {
     let app = app(&cfg());
     let at = test_at(&app, "auth0", json!({"user":"alice","expires_in":-10})).await;
     let (s, j) = exchange(&app, "auth0", &[("subject_token", &at)]).await;
-    assert_eq!(
-        (s.as_u16(), j["error"].as_str()),
-        (400, Some("invalid_request"))
-    );
+    assert_rejected(s, &j, "subject_token is invalid");
 }
 
 #[tokio::test]
-async fn subject_token_with_forged_iss_is_rejected() {
+async fn subject_token_with_forged_iss_is_invalid_request() {
     // Claims iss of `auth0`, signed by a key that is not in auth0's key set.
     let app = app(&cfg());
     let stranger = SigningKey::generate_for(SigningAlg::ES256).unwrap();
@@ -172,10 +169,8 @@ async fn subject_token_with_forged_iss_is_rejected() {
         &stranger,
         &json!({"iss":"http://localhost:9000/auth0/","sub":"x","exp":now()+60}),
     );
-    assert_eq!(
-        exchange(&app, "auth0", &[("subject_token", &t)]).await.0,
-        400
-    );
+    let (s, j) = exchange(&app, "auth0", &[("subject_token", &t)]).await;
+    assert_rejected(s, &j, "subject_token is invalid");
     // A real `es` token with its payload iss rewritten to auth0 keeps es's kid: no key in
     // auth0's set, so it is rejected.
     let es = test_at(&app, "es", json!({"user":"alice"})).await;
@@ -183,29 +178,23 @@ async fn subject_token_with_forged_iss_is_rejected() {
     let mut c = claims_of(&es);
     c["iss"] = json!("http://localhost:9000/auth0/");
     parts[1] = b64url(&serde_json::to_vec(&c).unwrap());
-    assert_eq!(
-        exchange(&app, "auth0", &[("subject_token", &parts.join("."))])
-            .await
-            .0,
-        400
-    );
+    let (s, j) = exchange(&app, "auth0", &[("subject_token", &parts.join("."))]).await;
+    assert_rejected(s, &j, "subject_token is invalid");
 }
 
 #[tokio::test]
-async fn refresh_token_is_not_a_subject_token() {
+async fn refresh_token_as_subject_token_is_invalid_request() {
     let app = app(&cfg());
     let rt = token_response_for(&app, &[("scope", "openid offline_access")]).await["refresh_token"]
         .as_str()
         .unwrap()
         .to_owned();
-    assert_eq!(
-        exchange(&app, "auth0", &[("subject_token", &rt)]).await.0,
-        400
-    );
+    let (s, j) = exchange(&app, "auth0", &[("subject_token", &rt)]).await;
+    assert_rejected(s, &j, "a refresh token cannot be exchanged");
 }
 
 #[tokio::test]
-async fn revoked_subject_token_is_rejected() {
+async fn revoked_subject_token_is_invalid_request() {
     let app = app(&cfg());
     let at = access_token_for(&app, &[]).await;
     assert_eq!(
@@ -221,14 +210,12 @@ async fn revoked_subject_token_is_rejected() {
         ),
     )
     .await;
-    assert_eq!(
-        exchange(&app, "auth0", &[("subject_token", &at)]).await.0,
-        400
-    );
+    let (s, j) = exchange(&app, "auth0", &[("subject_token", &at)]).await;
+    assert_rejected(s, &j, "revoked");
 }
 
 #[tokio::test]
-async fn lenient_accepts_an_unverified_jwt_but_not_garbage() {
+async fn lenient_accepts_an_unverified_jwt_but_rejects_a_non_jwt() {
     let cfg = cfg().replace("[issuer.auth0]\n", "[issuer.auth0]\nlenient = true\n");
     let app = app(&cfg);
     let t = unsigned_jwt(
@@ -239,25 +226,19 @@ async fn lenient_accepts_an_unverified_jwt_but_not_garbage() {
     assert_eq!(s, 200, "{j}");
     assert_eq!(at_of(&j)["sub"], "ext-1");
     assert_eq!(at_of(&j)["email"], "x@example.com");
-    assert_eq!(
-        exchange(&app, "auth0", &[("subject_token", "opaque-value")])
-            .await
-            .0,
-        400
-    );
+    let (s, j) = exchange(&app, "auth0", &[("subject_token", "opaque-value")]).await;
+    assert_rejected(s, &j, "subject_token is not a JWT");
 }
 
 #[tokio::test]
-async fn strict_rejects_a_foreign_jwt_and_a_client_without_the_grant() {
+async fn strict_rejects_a_foreign_jwt_and_a_client_without_the_grant_type() {
     let app = app(&cfg());
     let t = unsigned_jwt(
         &json!({"alg":"none"}),
         &json!({"iss":"https://idp.example.com/","sub":"ext-1"}),
     );
-    assert_eq!(
-        exchange(&app, "auth0", &[("subject_token", &t)]).await.0,
-        400
-    );
+    let (s, j) = exchange(&app, "auth0", &[("subject_token", &t)]).await;
+    assert_rejected(s, &j, "is not a fauxidc Issuer");
     let at = access_token_for(&app, &[]).await;
     let (s, _, b) = send(
         &app,
@@ -276,16 +257,20 @@ async fn strict_rejects_a_foreign_jwt_and_a_client_without_the_grant() {
         (s.as_u16(), json(&b)["error"].as_str()),
         (400, Some("unauthorized_client"))
     );
+    assert!(
+        json(&b)["error_description"]
+            .as_str()
+            .unwrap()
+            .contains("token-exchange"),
+        "{b}"
+    );
 }
 
 #[tokio::test]
-async fn missing_subject_token_is_invalid_request() {
+async fn missing_subject_token_or_type_is_invalid_request() {
     let app = app(&cfg());
     let (s, j) = exchange(&app, "auth0", &[]).await;
-    assert_eq!(
-        (s.as_u16(), j["error"].as_str()),
-        (400, Some("invalid_request"))
-    );
+    assert_rejected(s, &j, "subject_token is missing");
     let at = access_token_for(&app, &[]).await;
     let (s, _, b) = send(
         &app,
@@ -296,48 +281,39 @@ async fn missing_subject_token_is_invalid_request() {
         ),
     )
     .await;
-    assert_eq!(
-        (s.as_u16(), json(&b)["error"].as_str()),
-        (400, Some("invalid_request"))
-    );
+    assert_rejected(s, &json(&b), "subject_token_type is missing");
 }
 
 #[tokio::test]
-async fn bad_token_types_are_invalid_request() {
+async fn unsupported_token_types_are_invalid_request_and_jwt_is_accepted() {
     let app = app(&cfg());
     let at = access_token_for(&app, &[]).await;
-    assert_eq!(
-        exchange(
-            &app,
-            "auth0",
-            &[
-                ("subject_token", &at),
-                (
-                    "subject_token_type",
-                    "urn:ietf:params:oauth:token-type:refresh_token"
-                )
-            ]
-        )
-        .await
-        .0,
-        400
-    );
-    assert_eq!(
-        exchange(
-            &app,
-            "auth0",
-            &[
-                ("subject_token", &at),
-                (
-                    "requested_token_type",
-                    "urn:ietf:params:oauth:token-type:id_token"
-                )
-            ]
-        )
-        .await
-        .0,
-        400
-    );
+    let (s, j) = exchange(
+        &app,
+        "auth0",
+        &[
+            ("subject_token", &at),
+            (
+                "subject_token_type",
+                "urn:ietf:params:oauth:token-type:refresh_token",
+            ),
+        ],
+    )
+    .await;
+    assert_rejected(s, &j, "unsupported subject_token_type");
+    let (s, j) = exchange(
+        &app,
+        "auth0",
+        &[
+            ("subject_token", &at),
+            (
+                "requested_token_type",
+                "urn:ietf:params:oauth:token-type:id_token",
+            ),
+        ],
+    )
+    .await;
+    assert_rejected(s, &j, "unsupported requested_token_type");
     let (s, j) = exchange(
         &app,
         "auth0",
@@ -425,7 +401,7 @@ async fn subject_act_is_dropped_without_actor_token() {
 }
 
 #[tokio::test]
-async fn invalid_actor_token_is_rejected() {
+async fn unsigned_actor_token_is_invalid_request_in_strict_mode() {
     let app = app(&cfg());
     let subject = access_token_for(&app, &[]).await;
     let bad = unsigned_jwt(
@@ -433,54 +409,42 @@ async fn invalid_actor_token_is_rejected() {
         &json!({"iss":"http://localhost:9000/auth0/","sub":"svc"}),
     );
     let (s, j) = exchange_as(&app, &subject, &bad).await;
-    assert_eq!(
-        (s.as_u16(), j["error"].as_str()),
-        (400, Some("invalid_request"))
-    );
+    assert_rejected(s, &j, "actor_token is invalid");
 }
 
 #[tokio::test]
-async fn actor_token_needs_a_valid_actor_token_type() {
+async fn actor_token_and_actor_token_type_must_come_together_and_be_supported() {
     let app = app(&cfg());
     let subject = access_token_for(&app, &[]).await;
     let actor = test_at(&app, "auth0", json!({"sub":"svc"})).await;
-    assert_eq!(
-        exchange(
-            &app,
-            "auth0",
-            &[("subject_token", &subject), ("actor_token_type", AT_TYPE)]
-        )
-        .await
-        .0,
-        400
-    );
-    assert_eq!(
-        exchange(
-            &app,
-            "auth0",
-            &[("subject_token", &subject), ("actor_token", &actor)]
-        )
-        .await
-        .0,
-        400
-    );
-    assert_eq!(
-        exchange(
-            &app,
-            "auth0",
-            &[
-                ("subject_token", &subject),
-                ("actor_token", &actor),
-                (
-                    "actor_token_type",
-                    "urn:ietf:params:oauth:token-type:refresh_token"
-                )
-            ]
-        )
-        .await
-        .0,
-        400
-    );
+    let (s, j) = exchange(
+        &app,
+        "auth0",
+        &[("subject_token", &subject), ("actor_token_type", AT_TYPE)],
+    )
+    .await;
+    assert_rejected(s, &j, "actor_token_type was sent without actor_token");
+    let (s, j) = exchange(
+        &app,
+        "auth0",
+        &[("subject_token", &subject), ("actor_token", &actor)],
+    )
+    .await;
+    assert_rejected(s, &j, "actor_token_type is missing");
+    let (s, j) = exchange(
+        &app,
+        "auth0",
+        &[
+            ("subject_token", &subject),
+            ("actor_token", &actor),
+            (
+                "actor_token_type",
+                "urn:ietf:params:oauth:token-type:refresh_token",
+            ),
+        ],
+    )
+    .await;
+    assert_rejected(s, &j, "unsupported actor_token_type");
 }
 
 #[tokio::test]
@@ -538,4 +502,126 @@ async fn scope_is_not_checked_against_the_client_scopes() {
     .await;
     assert_eq!(s, 200, "{j}");
     assert_eq!(at_of(&j)["scope"], "orders:write");
+}
+
+#[tokio::test]
+async fn access_token_sent_as_id_token_type_is_rejected_in_strict_mode() {
+    let as_id_token = |at: &str| -> Vec<(&str, String)> {
+        vec![
+            ("subject_token", at.to_owned()),
+            (
+                "subject_token_type",
+                "urn:ietf:params:oauth:token-type:id_token".to_owned(),
+            ),
+        ]
+    };
+    let app = app(&cfg());
+    let at = test_at(&app, "auth0", json!({"user":"alice"})).await;
+    let form = as_id_token(&at);
+    let form: Vec<(&str, &str)> = form.iter().map(|(k, v)| (*k, v.as_str())).collect();
+    let (s, j) = exchange(&app, "auth0", &form).await;
+    assert_rejected(s, &j, "subject_token_type");
+    let lenient = app_lenient();
+    let at = test_at(&lenient, "auth0", json!({"user":"alice"})).await;
+    let form = as_id_token(&at);
+    let form: Vec<(&str, &str)> = form.iter().map(|(k, v)| (*k, v.as_str())).collect();
+    let (s, j) = exchange(&lenient, "auth0", &form).await;
+    assert_eq!(s, 200, "{j}");
+}
+
+#[tokio::test]
+async fn id_token_sent_as_access_token_type_is_rejected_in_strict_mode() {
+    let app = app(&cfg());
+    let idt = test_token(&app, "auth0", json!({"user":"alice"})).await["id_token"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let (s, j) = exchange(&app, "auth0", &[("subject_token", &idt)]).await;
+    assert_rejected(s, &j, "subject_token_type");
+}
+
+#[tokio::test]
+async fn repeated_audience_is_invalid_request() {
+    let app = app(&cfg());
+    let at = test_at(&app, "auth0", json!({"user":"alice"})).await;
+    for name in ["audience", "resource"] {
+        // Not `exchange`: it replaces a repeated field.
+        let (s, _, b) = send(
+            &app,
+            post_form(
+                "/auth0/token",
+                &[
+                    ("grant_type", GRANT),
+                    ("subject_token_type", AT_TYPE),
+                    ("subject_token", &at),
+                    (name, "a"),
+                    (name, "b"),
+                ],
+                &[("authorization", &basic("gateway", "gw"))],
+            ),
+        )
+        .await;
+        let j = json(&b);
+        assert_eq!(s, 400, "{j}");
+        assert_eq!(j["error"], "invalid_request");
+        assert_eq!(
+            j["error_description"], "multiple audience values are not supported",
+            "{name}"
+        );
+    }
+    // Every grant type: client_credentials too.
+    let (s, _, b) = send(
+        &app,
+        post_form(
+            "/auth0/token",
+            &[
+                ("grant_type", "client_credentials"),
+                ("audience", "a"),
+                ("audience", "b"),
+            ],
+            &[("authorization", &basic("example-app", "local"))],
+        ),
+    )
+    .await;
+    assert_eq!(s, 400);
+    assert_eq!(
+        json(&b)["error_description"],
+        "multiple audience values are not supported"
+    );
+}
+
+#[tokio::test]
+async fn actor_must_match_may_act() {
+    let app = app(&cfg());
+    let subject = test_at(
+        &app,
+        "auth0",
+        json!({"user":"alice","claims":{"may_act":{"sub":"bob"}}}),
+    )
+    .await;
+    let alice = test_at(&app, "auth0", json!({"sub":"alice"})).await;
+    let (s, j) = exchange_as(&app, &subject, &alice).await;
+    assert_rejected(s, &j, "may_act");
+    let bob = test_at(&app, "auth0", json!({"sub":"bob"})).await;
+    let (s, j) = exchange_as(&app, &subject, &bob).await;
+    assert_eq!(s, 200, "{j}");
+    assert_eq!(at_of(&j)["act"]["sub"], "bob");
+    assert!(at_of(&j).get("may_act").is_none());
+}
+
+/// `cfg()` with a Lenient `auth0` Issuer.
+fn app_lenient() -> Router {
+    app(&cfg().replace("[issuer.auth0]\n", "[issuer.auth0]\nlenient = true\n"))
+}
+
+/// 400 `invalid_request` with an `error_description` that contains `fragment`.
+#[track_caller]
+fn assert_rejected(s: StatusCode, j: &Value, fragment: &str) {
+    assert_eq!(
+        (s.as_u16(), j["error"].as_str()),
+        (400, Some("invalid_request")),
+        "{j}"
+    );
+    let d = j["error_description"].as_str().unwrap_or_default();
+    assert!(d.contains(fragment), "{fragment:?} not in {d:?}");
 }

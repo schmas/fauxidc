@@ -136,7 +136,8 @@ See [ADR 0004](docs/adr/0004-hot-reload-router-swap.md).
 
 A Client can authenticate with `private_key_jwt` (RFC 7523) at `/token`, `/introspect` and `/revoke`.
 Give it its public keys in `client.<key>.jwks` (an inline JWK set) or `client.<key>.jwks_uri`, not both.
-`jwks_uri` must be an `http://` URL; fauxidc caches the fetched set for 60 seconds and fetches it again for an unknown `kid`.
+`jwks_uri` must be an `http://` URL; fauxidc caches the fetched set for 60 seconds and fetches it again for an unknown `kid`,
+at most once every 10 seconds per URL. A key with a `use` other than `sig` is not used to verify an assertion.
 The assertion `alg` must be `RS256`, `PS256` or `ES256`. A Client may also have a `client_secret` and use either method.
 
 ```toml
@@ -184,6 +185,13 @@ The Client must authenticate and must list the grant in `grant_types`. It is not
   A refresh token is never accepted. Any other token gives `invalid_request`.
 - Lenient mode: fauxidc tries the same check. If it fails, fauxidc logs a warning and uses the claims unverified.
   A value that is not a JWT fails in both modes.
+
+Three more rules apply:
+
+- The token type must fit the token: `...:access_token` needs the JWT header `typ` `at+jwt`, `...:id_token` needs another `typ`, and `...:jwt` accepts any.
+  Strict mode gives `invalid_request`; Lenient mode logs a warning. The same rule applies to `actor_token_type`.
+- When the subject token has a `may_act` object with `sub` and an `actor_token` is sent, the actor `sub` must equal `may_act.sub` (RFC 8693 4.4), with the same Strict and Lenient behavior.
+- More than one `audience` or more than one `resource` parameter gives `invalid_request` "multiple audience values are not supported", in both modes and for every grant type.
 
 A public Client (auth method `none`) can use token exchange when it lists the grant.
 fauxidc does not check the requested `scope` against the subject token or the Client `scopes`.

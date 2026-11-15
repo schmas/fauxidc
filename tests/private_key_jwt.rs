@@ -569,3 +569,85 @@ async fn replayed_jti_in_a_new_assertion_is_rejected() {
         (401, Some("invalid_client"))
     );
 }
+
+#[tokio::test]
+async fn unknown_kid_refetch_has_a_cooldown() {
+    let (port, hits) = serve_jwks(Arc::new(Mutex::new(
+        json!({"keys": [CLIENT_KEY.jwk.clone()]}),
+    )))
+    .await;
+    let app = app(&cfg_uri(port));
+    let ok = assertion(claims(TOKEN_URL), SigningAlg::ES256, &CLIENT_KEY);
+    assert_eq!(cc(&app, &ok).await.0, 200);
+    assert_eq!(hits.load(Ordering::SeqCst), 1);
+    let stranger = SigningKey::generate_for(SigningAlg::ES256).unwrap();
+    for _ in 0..2 {
+        let bad = assertion(claims(TOKEN_URL), SigningAlg::ES256, &stranger);
+        assert_eq!(cc(&app, &bad).await.0, 401);
+    }
+    assert_eq!(
+        hits.load(Ordering::SeqCst),
+        2,
+        "one refetch in the cooldown"
+    );
+}
+
+#[tokio::test]
+async fn enc_keys_are_not_used_for_signatures() {
+    let mut jwk = CLIENT_KEY.jwk.clone();
+    jwk["use"] = json!("enc");
+    let (s, j) = cc(
+        &app(&cfg_with(&jwk)),
+        &assertion(claims(TOKEN_URL), SigningAlg::ES256, &CLIENT_KEY),
+    )
+    .await;
+    assert_eq!(
+        (s.as_u16(), j["error"].as_str()),
+        (401, Some("invalid_client")),
+        "{j}"
+    );
+    jwk["use"] = json!("sig");
+    let (s, j) = cc(
+        &app(&cfg_with(&jwk)),
+        &assertion(claims(TOKEN_URL), SigningAlg::ES256, &CLIENT_KEY),
+    )
+    .await;
+    assert_eq!(s, 200, "{j}");
+}
+
+/// `claims(TOKEN_URL)` with `name` set to `value` (`None` removes it) gives 401 `invalid_client`.
+async fn assert_claim_rejected(name: &str, value: Option<Value>) {
+    let mut c = claims(TOKEN_URL);
+    match value {
+        Some(v) => c[name] = v,
+        None => {
+            c.as_object_mut().unwrap().remove(name);
+        }
+    }
+    let (s, j) = cc(&app(&cfg()), &assertion(c, SigningAlg::ES256, &CLIENT_KEY)).await;
+    assert_eq!(
+        (s.as_u16(), j["error"].as_str()),
+        (401, Some("invalid_client")),
+        "{name}: {j}"
+    );
+}
+
+#[tokio::test]
+async fn wrong_iss_is_rejected() {
+    assert_claim_rejected("iss", Some(json!("example-app"))).await;
+}
+
+#[tokio::test]
+async fn wrong_aud_is_rejected() {
+    assert_claim_rejected("aud", Some(json!("http://localhost:9000/okta/token"))).await;
+}
+
+#[tokio::test]
+async fn missing_exp_is_rejected() {
+    assert_claim_rejected("exp", None).await;
+}
+
+#[tokio::test]
+async fn missing_jti_is_rejected() {
+    assert_claim_rejected("jti", None).await;
+}

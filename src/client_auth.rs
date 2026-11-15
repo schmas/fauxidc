@@ -1,10 +1,13 @@
 //! Client authentication for `/token`, `/introspect` and `/revoke`.
 
 use std::sync::Arc;
+use std::time::Duration;
 
 use axum::http::{HeaderMap, header};
 use base64::{Engine as _, engine::general_purpose::STANDARD};
-use jsonwebtoken::jwk::{AlgorithmParameters, EllipticCurve, Jwk, JwkSet, KeyAlgorithm};
+use jsonwebtoken::jwk::{
+    AlgorithmParameters, EllipticCurve, Jwk, JwkSet, KeyAlgorithm, PublicKeyUse,
+};
 use jsonwebtoken::{Algorithm, DecodingKey, Validation};
 use serde_json::Value;
 
@@ -20,6 +23,10 @@ pub const ASSERTION_TYPE: &str = "urn:ietf:params:oauth:client-assertion-type:jw
 
 /// The `alg` values accepted for a client assertion.
 pub const ASSERTION_ALGS: [&str; 3] = ["RS256", "PS256", "ES256"];
+
+/// The shortest time between two unknown-`kid` refetches of one fresh `jwks_uri` set (plan
+/// Ruling 17). A missing or expired entry is fetched as before.
+pub const REFETCH_COOLDOWN: Duration = Duration::from_secs(10);
 
 /// The client credentials of a request: form fields (the Basic header is read separately).
 #[derive(Debug, Clone, Copy, Default)]
@@ -325,8 +332,16 @@ fn assertion_alg(alg: Algorithm) -> Option<SigningAlg> {
 }
 
 /// `true` if `jwk` can verify `alg`: `kty` `RSA` for RS256 and PS256, `EC` P-256 for ES256,
-/// and the JWK `alg`, if set, equals `alg`.
+/// the JWK `alg`, if set, equals `alg`, and the JWK `use`, if set, is `sig` (plan Ruling 19).
 fn key_fits(jwk: &Jwk, alg: SigningAlg) -> bool {
+    if jwk
+        .common
+        .public_key_use
+        .as_ref()
+        .is_some_and(|u| *u != PublicKeyUse::Signature)
+    {
+        return false;
+    }
     let kty = match (&jwk.algorithm, alg) {
         (AlgorithmParameters::RSA(_), SigningAlg::RS256 | SigningAlg::PS256) => true,
         (AlgorithmParameters::EllipticCurve(p), SigningAlg::ES256) => {
@@ -376,12 +391,17 @@ async fn verify_assertion(
     })?;
     let kid = header.kid.as_deref();
     let uri = client.config.jwks_uri.as_str();
-    // A set fetched by this request is not fetched again for an unknown `kid`.
+    // A set fetched by this request is not fetched again for an unknown `kid`, and a cached
+    // set is refetched at most once per REFETCH_COOLDOWN.
     let was_cached = !uri.is_empty() && ctx.app.store.cached_jwks(uri, now_secs()).is_some();
     let mut set = client_keys(ctx, client, false).await?;
     if let Some(kid) = kid
         && set.find(kid).is_none()
         && was_cached
+        && ctx
+            .app
+            .store
+            .may_refetch(uri, now_secs(), REFETCH_COOLDOWN.as_secs())
     {
         set = client_keys(ctx, client, true).await?;
     }
