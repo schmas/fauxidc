@@ -1,0 +1,40 @@
+name: Conformance
+
+# Runs the OpenID Foundation conformance suite plans "Basic OP" and "Config OP".
+# See conformance/README.md.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  conformance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@v1
+        with:
+          # Must match rust-toolchain.toml.
+          toolchain: 1.100.0
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.x"
+      - name: Resolve the suite host name locally
+        # The suite uses the public DNS name localhost.emobix.co.uk for 127.0.0.1.
+        run: echo "127.0.0.1 localhost.emobix.co.uk" | sudo tee -a /etc/hosts
+      - run: cargo build
+      - run: scripts/conformance.sh
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: conformance-results
+          path: target/conformance-results
+          if-no-files-found: warn

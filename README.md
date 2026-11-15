@@ -123,6 +123,15 @@ Each entry has `id`, `time` (Unix seconds), `method`, `path`, `query`, `issuer`,
 The log stores headers and bodies raw. That includes `Authorization` headers and `client_secret` values.
 A request body over 1 MiB gets 413 while the log is on.
 
+## Conformance
+
+[![Conformance](https://github.com/schmas/fauxidc/actions/workflows/conformance.yml/badge.svg)](https://github.com/schmas/fauxidc/actions/workflows/conformance.yml)
+
+CI runs two plans of the OpenID Foundation conformance suite against fauxidc on each push to `main`:
+`oidcc-basic-certification-test-plan` (Basic OP, static Clients) and `oidcc-config-certification-test-plan` (Config OP).
+Each run uploads the suite's result export as the `conformance-results` artifact.
+See [conformance/README.md](conformance/README.md) for the known results and how to run the suite locally.
+
 ## Not yet supported
 
 M1 does not include these. They are planned for M2 and M3.
