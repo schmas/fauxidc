@@ -64,6 +64,12 @@ cargo clippy --all-targets -- -D warnings
 
 # Release build
 cargo build --release
+
+# SPA exit test (see docs/testing/m2-exit-test.md)
+cd e2e/spa && npm ci && npx playwright test
+
+# OpenID conformance suite (see conformance/README.md)
+scripts/conformance.sh
 ```
 
 ## Directory Structure
@@ -72,7 +78,12 @@ cargo build --release
 .
 ├── src/         # lib.rs (library API, unstable before 1.0) and main.rs (CLI)
 ├── tests/       # integration tests on the router (no network)
-├── docs/        # spec.md and adr/
+├── examples/    # example configs and docker-compose (read by tests/examples.rs)
+├── assets/      # embedded templates and static files
+├── e2e/spa/     # SPA exit test (Node and Playwright, outside Cargo)
+├── conformance/ # OpenID conformance suite plans and expected results
+├── scripts/     # image build, binary check, conformance runner
+├── docs/        # spec.md, adr/ and testing/ (exit-test runbooks)
 └── .agents/     # plans and work files, git-ignored
 ```
 

@@ -80,6 +80,10 @@ The `examples/` directory has:
 Both configs define the confidential Client `example-app`, the public SPA Client `example-spa`
 (redirect URIs `http://localhost:5173/` and `http://localhost:5174/`) and the Users `alice` and `bob`.
 
+With `auth0-spa-js` and `useRefreshTokens`, set `cacheLocation: "localstorage"` against `auth0.toml`.
+The default `"memory"` uses a web worker that accepts only `/oauth/token`. See
+[docs/testing/m2-exit-test.md](docs/testing/m2-exit-test.md).
+
 ## Configuration
 
 fauxidc reads five sources. A later source overrides an earlier one.
@@ -101,7 +105,7 @@ The full reference is in [docs/spec.md](docs/spec.md), section 5.
 
 ## Templates
 
-You can replace the login page and the error page. See [docs/templates.md](docs/templates.md).
+You can replace the login page, the error page and the signed-out page. See [docs/templates.md](docs/templates.md).
 
 ## Test API
 
@@ -155,7 +159,6 @@ See [conformance/README.md](conformance/README.md) for the known results and how
 ## Not yet supported
 
 M2 does not include these. They are planned for M3.
-
 
 - Token exchange, Sessions with `prompt` and `max_age`, hot reload, and a debugger page.
 - Per-Issuer keys, ES256 and PS256, key rotation, and `private_key_jwt`.
