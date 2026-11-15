@@ -5,11 +5,13 @@ use std::sync::{Arc, Mutex, PoisonError};
 
 use axum::http::HeaderMap;
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
+use jsonwebtoken::jwk::JwkSet;
 use serde::{Deserialize, Serialize};
 
 use crate::config::{Claims, ClientConfig, Config, Endpoint, IssuerConfig};
 use crate::error::{OAuthError, StartError};
 use crate::issuer::endpoint_base;
+use crate::jwks_fetch::CACHE_TTL_SECS;
 use crate::keys::{KeyHandle, KeySet, Keyring};
 use crate::request_log::RequestLog;
 use crate::templates::Templates;
@@ -66,6 +68,8 @@ pub struct Store {
     pub revoked: Mutex<HashMap<String, u64>>,
     /// Used client assertion `jti`s by `(client_id, jti)`, and their `exp`.
     pub used_assertions: Mutex<HashMap<(String, String), u64>>,
+    /// Fetched Client JWK sets by `jwks_uri`: when they were fetched, and the set.
+    pub jwks_cache: Mutex<HashMap<String, (u64, Arc<JwkSet>)>>,
 }
 
 /// When a refresh token was first used, and when it expires.
@@ -122,6 +126,24 @@ impl Store {
         }
         used.insert(key, exp);
         true
+    }
+
+    /// The cached JWK set of `url`. `None` when absent or older than `CACHE_TTL_SECS`.
+    pub fn cached_jwks(&self, url: &str, now: u64) -> Option<Arc<JwkSet>> {
+        self.jwks_cache
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .get(url)
+            .filter(|(fetched_at, _)| now < fetched_at.saturating_add(CACHE_TTL_SECS))
+            .map(|(_, set)| set.clone())
+    }
+
+    /// Stores the JWK set fetched from `url` at `now`.
+    pub fn cache_jwks(&self, url: &str, now: u64, set: Arc<JwkSet>) {
+        self.jwks_cache
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .insert(url.to_owned(), (now, set));
     }
 
     /// When `jti` was first used, if it was used and has not expired from the store.
@@ -314,6 +336,15 @@ mod tests {
                 .count()
         });
         assert_eq!(wins, 1);
+    }
+
+    #[test]
+    fn jwks_cache_expires_after_the_ttl() {
+        let store = Store::default();
+        assert!(store.cached_jwks("u", 100).is_none());
+        store.cache_jwks("u", 100, Arc::new(JwkSet { keys: Vec::new() }));
+        assert!(store.cached_jwks("u", 100 + CACHE_TTL_SECS - 1).is_some());
+        assert!(store.cached_jwks("u", 100 + CACHE_TTL_SECS).is_none());
     }
 
     #[test]

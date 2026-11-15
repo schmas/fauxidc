@@ -3,6 +3,9 @@
 mod common;
 use common::*;
 
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
+
 use fauxidc::config::SigningAlg;
 
 const ASSERTION_TYPE: &str = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer";
@@ -369,4 +372,131 @@ async fn rs256_and_ps256_client_keys_work() {
         .await;
         assert_eq!(s, 200, "{alg:?}: {j}");
     }
+}
+
+/// Serves the current `set` at `http://127.0.0.1:{port}/jwks` and counts the requests.
+async fn serve_jwks(set: Arc<Mutex<Value>>) -> (u16, Arc<AtomicUsize>) {
+    let hits = Arc::new(AtomicUsize::new(0));
+    let counter = hits.clone();
+    let router = Router::new().route(
+        "/jwks",
+        axum::routing::get(move || {
+            let set = set.clone();
+            let counter = counter.clone();
+            async move {
+                counter.fetch_add(1, Ordering::SeqCst);
+                axum::Json(set.lock().unwrap().clone())
+            }
+        }),
+    );
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+    tokio::spawn(async move { axum::serve(listener, router).await.unwrap() });
+    (port, hits)
+}
+
+/// `cfg()` with `jwks_uri = "http://127.0.0.1:{port}/jwks"` in place of the inline `jwks`.
+fn cfg_uri(port: u16) -> String {
+    format!(
+        "{STRICT}\n[client.backend]\nclient_id = \"backend\"\ngrant_types = [\"client_credentials\"]\n\
+         scopes = [\"api\"]\njwks_uri = \"http://127.0.0.1:{port}/jwks\"\n"
+    )
+}
+
+#[tokio::test]
+async fn jwks_uri_client_authenticates_and_is_cached() {
+    let (port, hits) = serve_jwks(Arc::new(Mutex::new(
+        json!({"keys": [CLIENT_KEY.jwk.clone()]}),
+    )))
+    .await;
+    let app = app(&cfg_uri(port));
+    assert_eq!(
+        cc(
+            &app,
+            &assertion(claims(TOKEN_URL), SigningAlg::ES256, &CLIENT_KEY)
+        )
+        .await
+        .0,
+        200
+    );
+    assert_eq!(
+        cc(
+            &app,
+            &assertion(claims(TOKEN_URL), SigningAlg::ES256, &CLIENT_KEY)
+        )
+        .await
+        .0,
+        200
+    );
+    assert_eq!(hits.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test]
+async fn new_kid_triggers_refetch() {
+    let set = Arc::new(Mutex::new(json!({"keys": [CLIENT_KEY.jwk.clone()]})));
+    let (port, hits) = serve_jwks(set.clone()).await;
+    let app = app(&cfg_uri(port));
+    assert_eq!(
+        cc(
+            &app,
+            &assertion(claims(TOKEN_URL), SigningAlg::ES256, &CLIENT_KEY)
+        )
+        .await
+        .0,
+        200
+    );
+    let next = SigningKey::generate_for(SigningAlg::ES256).unwrap();
+    *set.lock().unwrap() = json!({"keys": [next.jwk.clone()]});
+    assert_eq!(
+        cc(
+            &app,
+            &assertion(claims(TOKEN_URL), SigningAlg::ES256, &next)
+        )
+        .await
+        .0,
+        200
+    );
+    assert_eq!(hits.load(Ordering::SeqCst), 2);
+}
+
+#[tokio::test]
+async fn unreachable_jwks_uri_is_invalid_client() {
+    let port = {
+        let l = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        l.local_addr().unwrap().port()
+    }; // closed port
+    let (s, j) = cc(
+        &app(&cfg_uri(port)),
+        &assertion(claims(TOKEN_URL), SigningAlg::ES256, &CLIENT_KEY),
+    )
+    .await;
+    assert_eq!(
+        (s.as_u16(), j["error"].as_str()),
+        (401, Some("invalid_client"))
+    );
+}
+
+#[tokio::test]
+async fn failed_fetch_is_not_cached() {
+    let port = {
+        let l = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        l.local_addr().unwrap().port()
+    };
+    let app = app(&cfg_uri(port));
+    let a = || assertion(claims(TOKEN_URL), SigningAlg::ES256, &CLIENT_KEY);
+    assert_eq!(cc(&app, &a()).await.0, 401);
+    // The JWKS host comes up on the same port: the next request fetches again.
+    let set = Arc::new(Mutex::new(json!({"keys": [CLIENT_KEY.jwk.clone()]})));
+    let listener = tokio::net::TcpListener::bind(("127.0.0.1", port))
+        .await
+        .unwrap();
+    let router = Router::new().route(
+        "/jwks",
+        axum::routing::get(move || {
+            let set = set.clone();
+            async move { axum::Json(set.lock().unwrap().clone()) }
+        }),
+    );
+    tokio::spawn(async move { axum::serve(listener, router).await.unwrap() });
+    assert_eq!(cc(&app, &a()).await.0, 200);
 }

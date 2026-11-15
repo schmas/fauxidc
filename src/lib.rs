@@ -20,6 +20,7 @@ pub mod healthcheck;
 pub mod introspect;
 pub mod issuer;
 pub mod jwks;
+pub mod jwks_fetch;
 pub mod keys;
 pub mod logging;
 pub mod refresh;

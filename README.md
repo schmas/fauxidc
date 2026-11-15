@@ -108,6 +108,19 @@ An RS256 Issuer without `issuer.<id>.key_file` shares the server key (`FAUXIDC_K
 Any other Issuer has its own key: from its `key_file` if the file exists, else generated and saved to `key_file` when it is set.
 See [ADR 0003](docs/adr/0003-per-issuer-key-sets.md).
 
+A Client can authenticate with `private_key_jwt` (RFC 7523) at `/token`, `/introspect` and `/revoke`.
+Give it its public keys in `client.<key>.jwks` (an inline JWK set) or `client.<key>.jwks_uri`, not both.
+`jwks_uri` must be an `http://` URL; fauxidc caches the fetched set for 60 seconds and fetches it again for an unknown `kid`.
+The assertion `alg` must be `RS256`, `PS256` or `ES256`. A Client may also have a `client_secret` and use either method.
+
+```toml
+[client.backend]
+grant_types = ["client_credentials"]
+scopes = ["api"]
+jwks = { keys = [ { kty = "EC", crv = "P-256", kid = "backend-1", x = "...", y = "..." } ] }
+# or: jwks_uri = "http://localhost:8080/.well-known/jwks.json"
+```
+
 ## Templates
 
 You can replace the login page, the error page and the signed-out page. See [docs/templates.md](docs/templates.md).

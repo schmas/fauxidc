@@ -1,5 +1,7 @@
 //! Client authentication for `/token`, `/introspect` and `/revoke`.
 
+use std::sync::Arc;
+
 use axum::http::{HeaderMap, header};
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use jsonwebtoken::jwk::{AlgorithmParameters, EllipticCurve, Jwk, JwkSet, KeyAlgorithm};
@@ -9,6 +11,7 @@ use serde_json::Value;
 use crate::clients::{ResolvedClient, find_client};
 use crate::config::{ClientConfig, Endpoint, SigningAlg};
 use crate::error::OAuthError;
+use crate::jwks_fetch::{FETCH_TIMEOUT, fetch_jwks};
 use crate::logging::record_client;
 use crate::state::{IssuerCtx, now_secs};
 
@@ -366,10 +369,13 @@ async fn verify_assertion(
         )
     })?;
     let kid = header.kid.as_deref();
+    let uri = client.config.jwks_uri.as_str();
+    // A set fetched by this request is not fetched again for an unknown `kid`.
+    let was_cached = !uri.is_empty() && ctx.app.store.cached_jwks(uri, now_secs()).is_some();
     let mut set = client_keys(ctx, client, false).await?;
     if let Some(kid) = kid
         && set.find(kid).is_none()
-        && !client.config.jwks_uri.is_empty()
+        && was_cached
     {
         set = client_keys(ctx, client, true).await?;
     }
@@ -432,17 +438,29 @@ pub(crate) fn parse_jwks(jwks: &crate::config::Claims) -> Result<JwkSet, String>
     Ok(set)
 }
 
-/// The keys of a Client: inline `jwks` now; Task 5 adds `jwks_uri`. `refetch` is used by Task 5.
-#[allow(clippy::unused_async)] // the jwks_uri fetch awaits
+/// The keys of a Client: the inline `jwks`, else the `jwks_uri` set from the cache (60 s) or,
+/// when absent, expired or `refetch` is set, fetched again. A failed fetch is not cached.
 pub(crate) async fn client_keys(
-    _ctx: &IssuerCtx,
+    ctx: &IssuerCtx,
     client: &ResolvedClient,
-    _refetch: bool,
+    refetch: bool,
 ) -> Result<JwkSet, String> {
-    match &client.config.jwks {
-        Some(jwks) => parse_jwks(jwks),
-        None => Err("client has no jwks or jwks_uri".to_owned()),
+    if let Some(jwks) = &client.config.jwks {
+        return parse_jwks(jwks);
     }
+    let url = client.config.jwks_uri.as_str();
+    if url.is_empty() {
+        return Err("client has no jwks or jwks_uri".to_owned());
+    }
+    let store = &ctx.app.store;
+    if !refetch && let Some(set) = store.cached_jwks(url, now_secs()) {
+        return Ok((*set).clone());
+    }
+    let set = fetch_jwks(url, FETCH_TIMEOUT)
+        .await
+        .map_err(|e| format!("jwks_uri {url}: {e}"))?;
+    store.cache_jwks(url, now_secs(), Arc::new(set.clone()));
+    Ok(set)
 }
 
 #[cfg(test)]
