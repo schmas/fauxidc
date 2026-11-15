@@ -24,6 +24,7 @@ exclude = [
 
 [dependencies]
 anyhow = "1.0.104"
+arc-swap = "1"
 axum = "0.8.9"
 base64 = "0.23.1"
 clap = { version = "4.6.7", features = ["derive"] }
@@ -40,6 +41,7 @@ sha2 = "0.11.1"
 thiserror = "2.0.21"
 tokio = { version = "1.54.1", features = ["rt", "macros", "net", "sync", "time", "signal", "io-util"] }
 toml = "1.2.1"
+tower = { version = "0.5.3", features = ["util"] }
 tower-http = { version = "0.7.1", features = ["cors", "trace"] }
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["fmt", "json", "env-filter"] }
@@ -69,4 +71,3 @@ panic = "abort"
 openidconnect = { version = "4.1.0", default-features = false }
 reqwest = { version = "0.13.5", default-features = false, features = ["json"] }
 tokio = { version = "1.54.1", features = ["macros", "rt"] }
-tower = { version = "0.5.3", features = ["util"] }

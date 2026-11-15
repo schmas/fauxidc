@@ -13,6 +13,7 @@ use crate::error::{OAuthError, StartError};
 use crate::issuer::endpoint_base;
 use crate::jwks_fetch::CACHE_TTL_SECS;
 use crate::keys::{KeyHandle, KeySet, Keyring};
+use crate::reload::restart_only_changes;
 use crate::request_log::RequestLog;
 use crate::session::SessionStore;
 use crate::templates::Templates;
@@ -185,13 +186,14 @@ impl Store {
     }
 }
 
-/// State shared by all handlers.
+/// State shared by all handlers. One version per config: a reload builds the next version
+/// with [`AppState::next`], which shares the `Store`, the `Keyring` and the `RequestLog`.
 pub struct AppState {
     pub config: Arc<Config>,
     pub keys: Arc<Keyring>,
-    pub store: Store,
+    pub store: Arc<Store>,
     pub templates: Templates,
-    pub request_log: RequestLog,
+    pub request_log: Arc<RequestLog>,
 }
 
 impl AppState {
@@ -200,14 +202,61 @@ impl AppState {
     pub fn new(config: Config, keys: KeyHandle) -> Result<AppState, StartError> {
         let templates = Templates::load(&config).map_err(StartError::Templates)?;
         let keys = Arc::new(Keyring::start(&config, keys).map_err(StartError::Key)?);
-        let request_log = RequestLog::new(config.server.request_log_size);
+        let request_log = Arc::new(RequestLog::new(config.server.request_log_size));
         Ok(AppState {
             config: Arc::new(config),
             keys,
-            store: Store::default(),
+            store: Arc::new(Store::default()),
             templates,
             request_log,
         })
+    }
+
+    /// The next version: new config and templates; the same `Store`, `Keyring` and `RequestLog`.
+    /// Returns the restart warnings (from `restart_only_changes` and `Keyring::reconcile`).
+    ///
+    /// Keys that need a restart keep their running values in the stored config, so discovery
+    /// and key rotation match the keys and the listener that exist. Must run inside a tokio
+    /// runtime when a new Issuer needs its own key.
+    pub fn next(&self, mut config: Config) -> Result<(AppState, Vec<String>), StartError> {
+        let templates = Templates::load(&config).map_err(StartError::Templates)?;
+        let mut warnings = restart_only_changes(&self.config, &config);
+        for warning in self
+            .keys
+            .reconcile(&self.config, &config)
+            .map_err(StartError::Key)?
+        {
+            if !warnings.contains(&warning) {
+                warnings.push(warning);
+            }
+        }
+        keep_running_values(&self.config, &self.keys, &mut config);
+        Ok((
+            AppState {
+                config: Arc::new(config),
+                keys: self.keys.clone(),
+                store: self.store.clone(),
+                templates,
+                request_log: self.request_log.clone(),
+            },
+            warnings,
+        ))
+    }
+}
+
+/// Puts the running values of the restart-only keys into `next`.
+fn keep_running_values(running: &Config, keys: &Keyring, next: &mut Config) {
+    let (old, new) = (&running.server, &mut next.server);
+    new.port = old.port;
+    new.bind.clone_from(&old.bind);
+    new.log_format = old.log_format;
+    new.request_log_size = old.request_log_size;
+    new.key_file.clone_from(&old.key_file);
+    for (id, issuer) in &mut next.issuer {
+        if let Some((alg, key_file)) = keys.slot_settings(id) {
+            issuer.signing_alg = alg;
+            issuer.key_file = key_file;
+        }
     }
 }
 

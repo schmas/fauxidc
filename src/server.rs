@@ -12,7 +12,7 @@ use crate::config::{Config, SourceMap, validate};
 use crate::error::StartError;
 use crate::keys::{KeyHandle, KeySource};
 use crate::logging::is_loopback_bind;
-use crate::router::build_router;
+use crate::reload::{ReloadHandle, live_router};
 use crate::state::AppState;
 
 /// Options for [`Server::start_with`].
@@ -62,7 +62,7 @@ impl Server {
             );
         }
         let state = Arc::new(AppState::new(config, keys)?);
-        let router = build_router(state);
+        let (router, reload) = live_router(state);
         let (tx, rx) = oneshot::channel::<()>();
         let task = tokio::spawn(async move {
             axum::serve(listener, router)
@@ -76,6 +76,7 @@ impl Server {
             addr,
             shutdown: tx,
             task,
+            reload,
         })
     }
 }
@@ -85,9 +86,15 @@ pub struct RunningServer {
     addr: SocketAddr,
     shutdown: oneshot::Sender<()>,
     task: JoinHandle<std::io::Result<()>>,
+    reload: ReloadHandle,
 }
 
 impl RunningServer {
+    /// The handle that applies a new config to this server.
+    pub fn reload_handle(&self) -> ReloadHandle {
+        self.reload.clone()
+    }
+
     /// The bound address.
     pub fn local_addr(&self) -> SocketAddr {
         self.addr

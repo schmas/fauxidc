@@ -25,6 +25,7 @@ pub mod keys;
 pub mod logging;
 pub mod prompt;
 pub mod refresh;
+pub mod reload;
 pub mod request_log;
 pub mod revoke;
 pub mod router;

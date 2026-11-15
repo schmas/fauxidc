@@ -371,6 +371,9 @@ pub struct Rotation {
 struct Slot {
     handle: KeyHandle,
     set: Option<Arc<KeySet>>,
+    /// The `signing_alg` and `key_file` the slot was started with.
+    alg: SigningAlg,
+    key_file: String,
 }
 
 impl Slot {
@@ -388,6 +391,8 @@ impl Slot {
 pub struct Keyring {
     /// The server key, which RS256 Issuers without a `key_file` share.
     server: KeyHandle,
+    /// The `server.key_file` the server key was started with.
+    server_key_file: String,
     slots: Mutex<HashMap<String, Slot>>,
 }
 
@@ -398,19 +403,40 @@ impl Keyring {
     /// same `key_file` share one key; a `key_file` equal to `server.key_file` uses `server`.
     /// Must run inside a tokio runtime when an Issuer needs its own key.
     pub fn start(config: &Config, server: KeyHandle) -> Result<Keyring, KeyError> {
-        let mut by_file: HashMap<&str, KeyHandle> = HashMap::new();
-        if !config.server.key_file.is_empty() {
-            by_file.insert(config.server.key_file.as_str(), server.clone());
+        let keyring = Keyring {
+            server,
+            server_key_file: config.server.key_file.clone(),
+            slots: Mutex::new(HashMap::new()),
+        };
+        let added = keyring.new_slots(config)?;
+        keyring.lock().extend(added);
+        Ok(keyring)
+    }
+
+    /// Starts slots for the Issuers of `config` that have no slot yet. Nothing is stored.
+    fn new_slots(&self, config: &Config) -> Result<Vec<(String, Slot)>, KeyError> {
+        let mut by_file: HashMap<String, KeyHandle> = HashMap::new();
+        if !self.server_key_file.is_empty() {
+            by_file.insert(self.server_key_file.clone(), self.server.clone());
         }
-        let mut slots = HashMap::new();
-        for (id, issuer) in &config.issuer {
+        let known: Vec<String> = {
+            let slots = self.lock();
+            for slot in slots.values().filter(|s| !s.key_file.is_empty()) {
+                by_file
+                    .entry(slot.key_file.clone())
+                    .or_insert_with(|| slot.handle.clone());
+            }
+            slots.keys().cloned().collect()
+        };
+        let mut added = Vec::new();
+        for (id, issuer) in config.issuer.iter().filter(|(id, _)| !known.contains(id)) {
             let handle = if issuer.key_file.is_empty() {
                 if issuer.signing_alg == SigningAlg::RS256 {
-                    server.clone()
+                    self.server.clone()
                 } else {
                     KeyHandle::start_for(KeySource::default(), issuer.signing_alg)?
                 }
-            } else if let Some(handle) = by_file.get(issuer.key_file.as_str()) {
+            } else if let Some(handle) = by_file.get(&issuer.key_file) {
                 handle.clone()
             } else {
                 let handle = KeyHandle::start_for(
@@ -420,15 +446,52 @@ impl Keyring {
                     },
                     issuer.signing_alg,
                 )?;
-                by_file.insert(issuer.key_file.as_str(), handle.clone());
+                by_file.insert(issuer.key_file.clone(), handle.clone());
                 handle
             };
-            slots.insert(id.clone(), Slot { handle, set: None });
+            let slot = Slot {
+                handle,
+                set: None,
+                alg: issuer.signing_alg,
+                key_file: issuer.key_file.clone(),
+            };
+            added.push((id.clone(), slot));
         }
-        Ok(Keyring {
-            server,
-            slots: Mutex::new(slots),
-        })
+        Ok(added)
+    }
+
+    /// Starts slots for Issuers that are new in `new`. For an existing Issuer whose
+    /// `signing_alg` or `key_file` changed, or a changed `server.key_file`, keeps the old slot
+    /// and returns a warning text. The slot of a removed Issuer stays, so its keys come back
+    /// if it is added again. On error no slot is added. Must run in a runtime when a new
+    /// Issuer needs its own key.
+    pub fn reconcile(&self, old: &Config, new: &Config) -> Result<Vec<String>, KeyError> {
+        let mut warnings = Vec::new();
+        if old.server.key_file != new.server.key_file {
+            warnings.push(restart_warning("server.key_file"));
+        }
+        {
+            let slots = self.lock();
+            for (id, issuer) in &new.issuer {
+                let Some(slot) = slots.get(id) else { continue };
+                if slot.alg != issuer.signing_alg {
+                    warnings.push(restart_warning(&format!("issuer.{id}.signing_alg")));
+                }
+                if slot.key_file != issuer.key_file {
+                    warnings.push(restart_warning(&format!("issuer.{id}.key_file")));
+                }
+            }
+        }
+        let added = self.new_slots(new)?;
+        self.lock().extend(added);
+        Ok(warnings)
+    }
+
+    /// The `signing_alg` and `key_file` that the Issuer's slot was started with.
+    pub fn slot_settings(&self, issuer_id: &str) -> Option<(SigningAlg, String)> {
+        self.lock()
+            .get(issuer_id)
+            .map(|slot| (slot.alg, slot.key_file.clone()))
     }
 
     fn lock(&self) -> std::sync::MutexGuard<'_, HashMap<String, Slot>> {
@@ -498,6 +561,11 @@ impl Keyring {
     pub fn server(&self) -> &KeyHandle {
         &self.server
     }
+}
+
+/// The warning for a changed key that needs a restart: "<key> changed; it needs a restart".
+pub fn restart_warning(key: &str) -> String {
+    format!("{key} changed; it needs a restart")
 }
 
 /// Writes `pem` to `path` atomically: a temp file in the same directory (mode 0600 on unix),

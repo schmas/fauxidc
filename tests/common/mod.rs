@@ -321,3 +321,33 @@ pub fn sign_with(key: &SigningKey, claims: &Value) -> String {
     header.kid = Some(key.kid.clone());
     jsonwebtoken::encode(&header, claims, &key.encoding).unwrap()
 }
+
+/// The live router and its reload handle, from an inline TOML config and a ready shared key.
+pub fn live_app(toml: &str) -> (Router, fauxidc::reload::ReloadHandle) {
+    live_app_from(fauxidc::config::load_str(toml).unwrap().config)
+}
+
+/// The live router and its reload handle, from a loaded config and a ready shared key.
+pub fn live_app_from(config: fauxidc::config::Config) -> (Router, fauxidc::reload::ReloadHandle) {
+    let state = AppState::new(config, KeyHandle::ready(KEY.clone())).unwrap();
+    fauxidc::reload::live_router(Arc::new(state))
+}
+
+/// Polls `f` every 20 ms until it returns true. Panics after `limit`.
+pub async fn wait_until<F, Fut>(limit: Duration, mut f: F)
+where
+    F: FnMut() -> Fut,
+    Fut: std::future::Future<Output = bool>,
+{
+    let start = std::time::Instant::now();
+    loop {
+        if f().await {
+            return;
+        }
+        assert!(
+            start.elapsed() < limit,
+            "condition not met within {limit:?}"
+        );
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+}
