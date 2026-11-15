@@ -181,4 +181,5 @@ Each Issuer serves `{issuer}/debugger`, for example `http://localhost:9000/app/d
 ## More
 
 The fauxidc repo has the details: `README.md`, `docs/configuration.md`, `docs/test-api.md`,
-`docs/features.md` (Sessions, hot reload, debugger, TLS, token exchange, `private_key_jwt`) and `docs/templates.md`.
+`docs/features.md` (Sessions, hot reload, debugger, TLS, token exchange, `private_key_jwt`), `docs/templates.md`
+and `docs/testcontainers.md` (JVM tests with Testcontainers: wait strategy, random host port, Spring Boot).

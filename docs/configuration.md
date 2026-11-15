@@ -59,6 +59,7 @@ With `--config` (for example `--config /examples/generic.toml`), `FAUXIDC__SERVE
 So with `--config`, keep port 9000, or mount the file at `/config/fauxidc.toml`, or override the `HEALTHCHECK` with `fauxidc healthcheck --url`.
 
 [examples/docker-compose.yml](../examples/docker-compose.yml) runs the published image with `auth0.toml`.
+For tests on the JVM, [testcontainers.md](testcontainers.md) starts the image with Testcontainers.
 
 ## Examples
 

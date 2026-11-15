@@ -116,6 +116,7 @@ fn readme_is_short_and_ordered() {
         "Backend with a client secret",
         "Machine-to-machine",
         "Mint a token in a test",
+        "Random host port (Testcontainers)",
         "Simulate a provider outage",
         "Use with an agent",
     ] {
@@ -131,6 +132,39 @@ fn readme_is_short_and_ordered() {
         "cognito.toml",
     ] {
         assert!(r.contains(example), "{example}");
+    }
+}
+
+#[test]
+fn testcontainers_guide_covers_the_jvm_setup() {
+    let g = read("docs/testcontainers.md");
+    for needle in [
+        "GenericContainer",
+        "ghcr.io/schmas/fauxidc:",
+        "withExposedPorts(9000)",
+        "withCopyFileToContainer",
+        "/config/fauxidc.toml",
+        "FAUXIDC__",
+        "FAUXIDC_ISSUER_FROM_HOST",
+        "Wait.forHttp(\"/_mock/health\")",
+        r#"\"key\":\"ready\""#,
+        "setPortBindings",
+        "@DynamicPropertySource",
+        "spring.security.oauth2.resourceserver.jwt.issuer-uri",
+        "at+jwt",
+        "java.net.http.HttpClient",
+        "/_mock/default/token",
+        "no Java module",
+    ] {
+        assert!(g.contains(needle), "{needle}");
+    }
+    for f in [
+        "README.md",
+        "llms.txt",
+        "docs/configuration.md",
+        "skills/fauxidc/SKILL.md",
+    ] {
+        assert!(read(f).contains("testcontainers.md"), "{f}");
     }
 }
 
