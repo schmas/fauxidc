@@ -40,7 +40,7 @@ fn time_signing(alg: SigningAlg) {
 #[test]
 #[ignore = "timing only; run in release mode"]
 fn signing_speed() {
-    for alg in [SigningAlg::RS256, SigningAlg::PS256, SigningAlg::ES256] {
+    for alg in SigningAlg::ALL {
         time_signing(alg);
     }
 }

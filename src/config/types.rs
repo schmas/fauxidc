@@ -41,29 +41,69 @@ pub enum LogFormat {
 pub enum SigningAlg {
     #[default]
     RS256,
-    ES256,
+    RS384,
+    RS512,
     PS256,
+    PS384,
+    PS512,
+    ES256,
+    ES384,
 }
 
 impl SigningAlg {
+    /// Every algorithm: RSA PKCS#1 v1.5, then RSA-PSS, then ECDSA.
+    pub const ALL: [SigningAlg; 8] = [
+        SigningAlg::RS256,
+        SigningAlg::RS384,
+        SigningAlg::RS512,
+        SigningAlg::PS256,
+        SigningAlg::PS384,
+        SigningAlg::PS512,
+        SigningAlg::ES256,
+        SigningAlg::ES384,
+    ];
+
     /// The JOSE name, for example `"ES256"`.
     #[must_use]
     pub fn as_str(self) -> &'static str {
         match self {
             SigningAlg::RS256 => "RS256",
-            SigningAlg::ES256 => "ES256",
+            SigningAlg::RS384 => "RS384",
+            SigningAlg::RS512 => "RS512",
             SigningAlg::PS256 => "PS256",
+            SigningAlg::PS384 => "PS384",
+            SigningAlg::PS512 => "PS512",
+            SigningAlg::ES256 => "ES256",
+            SigningAlg::ES384 => "ES384",
         }
     }
 
     /// The `jsonwebtoken` algorithm.
     #[must_use]
     pub fn jwt(self) -> jsonwebtoken::Algorithm {
+        use jsonwebtoken::Algorithm;
         match self {
-            SigningAlg::RS256 => jsonwebtoken::Algorithm::RS256,
-            SigningAlg::ES256 => jsonwebtoken::Algorithm::ES256,
-            SigningAlg::PS256 => jsonwebtoken::Algorithm::PS256,
+            SigningAlg::RS256 => Algorithm::RS256,
+            SigningAlg::RS384 => Algorithm::RS384,
+            SigningAlg::RS512 => Algorithm::RS512,
+            SigningAlg::PS256 => Algorithm::PS256,
+            SigningAlg::PS384 => Algorithm::PS384,
+            SigningAlg::PS512 => Algorithm::PS512,
+            SigningAlg::ES256 => Algorithm::ES256,
+            SigningAlg::ES384 => Algorithm::ES384,
         }
+    }
+
+    /// The `SigningAlg` of a `jsonwebtoken` algorithm; `None` for HS256, `EdDSA` and the others.
+    #[must_use]
+    pub fn from_jwt(alg: jsonwebtoken::Algorithm) -> Option<SigningAlg> {
+        SigningAlg::ALL.into_iter().find(|a| a.jwt() == alg)
+    }
+
+    /// `true` for the RSA algorithms (RS* and PS*), which use an RSA key.
+    #[must_use]
+    pub fn is_rsa(self) -> bool {
+        !matches!(self, SigningAlg::ES256 | SigningAlg::ES384)
     }
 }
 

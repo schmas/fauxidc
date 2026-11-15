@@ -32,6 +32,7 @@ getrandom = { version = "0.4.3", features = ["sys_rng"] }
 jsonwebtoken = { version = "12.0.0", default-features = false, features = ["rust_crypto", "use_pem"] }
 minijinja = { version = "3.1.0", features = ["serde"] }
 p256 = { version = "0.14", features = ["ecdsa", "pkcs8", "pem"] }
+p384 = { version = "0.14", features = ["ecdsa", "pkcs8", "pem"] }
 rsa = "0.10.0"
 rust-embed = "8.14.0"
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"], optional = true }

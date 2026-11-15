@@ -22,8 +22,10 @@ use crate::state::IssuerCtx;
 /// The `client_assertion_type` of a JWT client assertion (RFC 7523 2.2).
 pub const ASSERTION_TYPE: &str = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer";
 
-/// The `alg` values accepted for a client assertion.
-pub const ASSERTION_ALGS: [&str; 3] = ["RS256", "PS256", "ES256"];
+/// The `alg` values accepted for a client assertion: every [`SigningAlg`], in its order.
+pub const ASSERTION_ALGS: [&str; 8] = [
+    "RS256", "RS384", "RS512", "PS256", "PS384", "PS512", "ES256", "ES384",
+];
 
 /// The shortest time between two unknown-`kid` refetches of one fresh `jwks_uri` set (plan
 /// Ruling 17). A missing or expired entry is fetched as before.
@@ -324,15 +326,11 @@ async fn authenticate_assertion(
 
 /// The `SigningAlg` of an allowed assertion `alg`.
 fn assertion_alg(alg: Algorithm) -> Option<SigningAlg> {
-    match alg {
-        Algorithm::RS256 => Some(SigningAlg::RS256),
-        Algorithm::PS256 => Some(SigningAlg::PS256),
-        Algorithm::ES256 => Some(SigningAlg::ES256),
-        _ => None,
-    }
+    SigningAlg::from_jwt(alg)
 }
 
-/// `true` if `jwk` can verify `alg`: `kty` `RSA` for RS256 and PS256, `EC` P-256 for ES256,
+/// `true` if `jwk` can verify `alg`: `kty` `RSA` for RS* and PS*, `EC` P-256 for ES256 and
+/// `EC` P-384 for ES384,
 /// the JWK `alg`, if set, equals `alg`, and the JWK `use`, if set, is `sig` (plan Ruling 19).
 fn key_fits(jwk: &Jwk, alg: SigningAlg) -> bool {
     if jwk
@@ -344,9 +342,12 @@ fn key_fits(jwk: &Jwk, alg: SigningAlg) -> bool {
         return false;
     }
     let kty = match (&jwk.algorithm, alg) {
-        (AlgorithmParameters::RSA(_), SigningAlg::RS256 | SigningAlg::PS256) => true,
+        (AlgorithmParameters::RSA(_), alg) => alg.is_rsa(),
         (AlgorithmParameters::EllipticCurve(p), SigningAlg::ES256) => {
             p.curve == EllipticCurve::P256
+        }
+        (AlgorithmParameters::EllipticCurve(p), SigningAlg::ES384) => {
+            p.curve == EllipticCurve::P384
         }
         _ => false,
     };
@@ -448,19 +449,22 @@ async fn verify_assertion(
     Err(format!("client assertion rejected: {last}"))
 }
 
-/// Parses an inline Client `jwks` and checks that every key is an RSA key or an EC P-256 key.
+/// Parses an inline Client `jwks` and checks that every key is an RSA key or an EC P-256 or
+/// P-384 key.
 pub(crate) fn parse_jwks(jwks: &crate::config::Claims) -> Result<JwkSet, String> {
     let set: JwkSet =
         serde_json::from_value(Value::Object(jwks.clone())).map_err(|e| e.to_string())?;
     for (i, jwk) in set.keys.iter().enumerate() {
         let supported = match &jwk.algorithm {
             AlgorithmParameters::RSA(_) => true,
-            AlgorithmParameters::EllipticCurve(p) => p.curve == EllipticCurve::P256,
+            AlgorithmParameters::EllipticCurve(p) => {
+                matches!(p.curve, EllipticCurve::P256 | EllipticCurve::P384)
+            }
             _ => false,
         };
         if !supported {
             return Err(format!(
-                "keys[{i}] must be an RSA key or an EC P-256 key with all its fields"
+                "keys[{i}] must be an RSA key or an EC P-256 or P-384 key with all its fields"
             ));
         }
         DecodingKey::from_jwk(jwk).map_err(|e| format!("keys[{i}]: {e}"))?;
@@ -667,6 +671,7 @@ claims = { email = "bob@example.com", name = "Bobby Viewer" }
             {"kty": "RSA", "alg": "RS256", "kid": "r", "n": "AQAB", "e": "AQAB"},
             {"kty": "RSA", "kid": "any", "n": "AQAB", "e": "AQAB"},
             {"kty": "EC", "crv": "P-256", "kid": "e", "x": "AQAB", "y": "AQAB"},
+            {"kty": "EC", "crv": "P-384", "kid": "e384", "x": "AQAB", "y": "AQAB"},
             {"kty": "oct", "kid": "h", "k": "c2VjcmV0"},
         ]}))
         .unwrap();
@@ -680,7 +685,19 @@ claims = { email = "bob@example.com", name = "Bobby Viewer" }
         assert_eq!(kids(Some("r"), SigningAlg::RS256), vec!["r"]);
         assert_eq!(kids(Some("e"), SigningAlg::RS256), vec!["r", "any"]);
         assert_eq!(kids(Some("h"), SigningAlg::ES256), vec!["e"]);
+        assert_eq!(kids(None, SigningAlg::ES384), vec!["e384"]);
+        assert_eq!(kids(Some("e"), SigningAlg::RS512), vec!["any"]);
         assert!(assertion_alg(Algorithm::HS256).is_none());
+        assert!(assertion_alg(Algorithm::EdDSA).is_none());
+    }
+
+    #[test]
+    fn assertion_algs_are_every_signing_alg() {
+        let names: Vec<&str> = SigningAlg::ALL.iter().map(|a| a.as_str()).collect();
+        assert_eq!(names, ASSERTION_ALGS);
+        for alg in SigningAlg::ALL {
+            assert_eq!(assertion_alg(alg.jwt()), Some(alg));
+        }
     }
 
     #[test]

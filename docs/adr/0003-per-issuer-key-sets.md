@@ -17,6 +17,7 @@ A change of the default must not make their saved tokens fail.
 - Each Issuer has a key set: one active key that signs, plus older keys that still verify. JWKS lists the active key first.
 - A token is verified with the key that its header `kid` names. Without a `kid`, the active key is used. The header `alg` must equal the key's `alg`.
 - `issuer.<id>.signing_alg` selects `RS256` (default), `ES256` or `PS256`. Discovery lists only this algorithm.
+  After M4 it also accepts `RS384`, `RS512`, `PS384`, `PS512` and `ES384` (spec 7). The rules below apply to every algorithm.
 - An RS256 Issuer without `issuer.<id>.key_file` uses the server key, with the M1 source order. Several such Issuers share it.
 - Any other Issuer has its own key: from its `key_file` if the file exists, else generated after the listener binds and saved to `key_file` when it is set. `FAUXIDC_KEY_PEM` applies only to the server key.
 - Issuers with the same `key_file` share one key. A shared file needs one `signing_alg` for all its users; the server key counts as RS256.

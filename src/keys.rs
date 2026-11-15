@@ -1,4 +1,4 @@
-//! Signing keys (RS256, PS256, ES256): generation, PEM round trip, JWK and RFC 7638 `kid`.
+//! Signing keys (RS256/384/512, PS256/384/512, ES256, ES384): generation, PEM round trip, JWK and RFC 7638 `kid`.
 
 use std::collections::HashMap;
 use std::path::{Component, Path, PathBuf};
@@ -49,18 +49,24 @@ impl SigningKey {
         Self::generate_for(SigningAlg::RS256)
     }
 
-    /// Generate a new key for `alg`: RSA 2048 for RS256 and PS256, P-256 for ES256.
+    /// Generate a new key for `alg`: RSA 2048 for RS* and PS*, P-256 for ES256, P-384 for ES384.
     pub fn generate_for(alg: SigningAlg) -> Result<SigningKey, KeyError> {
+        let generate = |e: &dyn std::fmt::Display| KeyError::Generate(e.to_string());
         match alg {
-            SigningAlg::RS256 | SigningAlg::PS256 => {
-                let key = PrivateKey::new(&mut getrandom::SysRng, RSA_BITS)
-                    .map_err(|e| KeyError::Generate(e.to_string()))?;
-                Self::from_rsa(&key, alg)
-            }
             SigningAlg::ES256 => {
                 let key = p256::SecretKey::try_generate_from_rng(&mut getrandom::SysRng)
-                    .map_err(|e| KeyError::Generate(e.to_string()))?;
-                Self::from_ec(&key)
+                    .map_err(|e| generate(&e))?;
+                Self::from_p256(&key)
+            }
+            SigningAlg::ES384 => {
+                let key = p384::SecretKey::try_generate_from_rng(&mut getrandom::SysRng)
+                    .map_err(|e| generate(&e))?;
+                Self::from_p384(&key)
+            }
+            _ => {
+                let key =
+                    PrivateKey::new(&mut getrandom::SysRng, RSA_BITS).map_err(|e| generate(&e))?;
+                Self::from_rsa(&key, alg)
             }
         }
     }
@@ -70,12 +76,26 @@ impl SigningKey {
         Self::from_pem_for(pem, SigningAlg::RS256)
     }
 
-    /// Load a key for `alg`. RS256 and PS256: a PKCS#8 or PKCS#1 RSA PEM. ES256: a PKCS#8
-    /// (`PRIVATE KEY`) or SEC1 (`EC PRIVATE KEY`) P-256 PEM. A PEM of the wrong key type is
-    /// [`KeyError::InvalidPem`] naming the expected type.
+    /// Load a key for `alg`. RS* and PS*: a PKCS#8 or PKCS#1 RSA PEM. ES256 and ES384: a PKCS#8
+    /// (`PRIVATE KEY`) or SEC1 (`EC PRIVATE KEY`) PEM of a P-256 or P-384 key. A PEM of the
+    /// wrong key type or curve is [`KeyError::InvalidPem`] naming the expected type.
     pub fn from_pem_for(pem: &str, alg: SigningAlg) -> Result<SigningKey, KeyError> {
         match alg {
-            SigningAlg::RS256 | SigningAlg::PS256 => {
+            SigningAlg::ES256 => {
+                let key = p256::SecretKey::from_pkcs8_pem(pem)
+                    .map_err(|e| e.to_string())
+                    .or_else(|_| p256::SecretKey::from_sec1_pem(pem).map_err(|e| e.to_string()))
+                    .map_err(|e| ec_pem_error(alg, &e))?;
+                Self::from_p256(&key)
+            }
+            SigningAlg::ES384 => {
+                let key = p384::SecretKey::from_pkcs8_pem(pem)
+                    .map_err(|e| e.to_string())
+                    .or_else(|_| p384::SecretKey::from_sec1_pem(pem).map_err(|e| e.to_string()))
+                    .map_err(|e| ec_pem_error(alg, &e))?;
+                Self::from_p384(&key)
+            }
+            _ => {
                 let key = PrivateKey::from_pkcs8_pem(pem)
                     .or_else(|_| PrivateKey::from_pkcs1_pem(pem))
                     .map_err(|e| {
@@ -85,17 +105,6 @@ impl SigningKey {
                         ))
                     })?;
                 Self::from_rsa(&key, alg)
-            }
-            SigningAlg::ES256 => {
-                let key = p256::SecretKey::from_pkcs8_pem(pem)
-                    .map_err(|e| e.to_string())
-                    .or_else(|_| p256::SecretKey::from_sec1_pem(pem).map_err(|e| e.to_string()))
-                    .map_err(|e| {
-                        KeyError::InvalidPem(format!(
-                            "expected a P-256 EC private key for ES256: {e}"
-                        ))
-                    })?;
-                Self::from_ec(&key)
             }
         }
     }
@@ -130,35 +139,65 @@ impl SigningKey {
         })
     }
 
-    fn from_ec(key: &p256::SecretKey) -> Result<SigningKey, KeyError> {
+    fn from_p256(key: &p256::SecretKey) -> Result<SigningKey, KeyError> {
         let pkcs8_pem = p256::pkcs8::EncodePrivateKey::to_pkcs8_pem(key, LineEnding::LF)
             .map_err(|e| KeyError::InvalidPem(e.to_string()))?
             .to_string();
         let point = key.public_key().to_sec1_point(false);
-        // Uncompressed SEC1 point: 0x04 || x (32 bytes) || y (32 bytes).
-        let bytes = point.as_bytes();
-        let (Some(xb), Some(yb)) = (bytes.get(1..33), bytes.get(33..65)) else {
+        Self::from_ec(SigningAlg::ES256, pkcs8_pem, point.as_bytes())
+    }
+
+    fn from_p384(key: &p384::SecretKey) -> Result<SigningKey, KeyError> {
+        let pkcs8_pem = p384::pkcs8::EncodePrivateKey::to_pkcs8_pem(key, LineEnding::LF)
+            .map_err(|e| KeyError::InvalidPem(e.to_string()))?
+            .to_string();
+        let point = key.public_key().to_sec1_point(false);
+        Self::from_ec(SigningAlg::ES384, pkcs8_pem, point.as_bytes())
+    }
+
+    /// An EC key of `alg` from its PKCS#8 PEM and its uncompressed SEC1 public point.
+    fn from_ec(alg: SigningAlg, pkcs8_pem: String, point: &[u8]) -> Result<SigningKey, KeyError> {
+        let (crv, size) = ec_curve(alg);
+        // Uncompressed SEC1 point: 0x04 || x (size bytes) || y (size bytes).
+        let (Some(xb), Some(yb)) = (point.get(1..=size), point.get(size + 1..=2 * size)) else {
             return Err(KeyError::InvalidPem("unexpected EC point encoding".into()));
         };
         let x = URL_SAFE_NO_PAD.encode(xb);
         let y = URL_SAFE_NO_PAD.encode(yb);
-        let kid = ec_thumbprint(&x, &y);
+        let kid = ec_thumbprint(crv, &x, &y);
         let encoding = EncodingKey::from_ec_pem(pkcs8_pem.as_bytes())
             .map_err(|e| KeyError::InvalidPem(e.to_string()))?;
         let decoding = DecodingKey::from_ec_components(&x, &y)
             .map_err(|e| KeyError::InvalidPem(e.to_string()))?;
         let jwk = serde_json::json!({
-            "kty": "EC", "use": "sig", "alg": "ES256", "crv": "P-256", "kid": kid, "x": x, "y": y,
+            "kty": "EC", "use": "sig", "alg": alg.as_str(), "crv": crv, "kid": kid, "x": x, "y": y,
         });
         Ok(SigningKey {
             kid,
-            alg: SigningAlg::ES256,
+            alg,
             encoding,
             decoding,
             jwk,
             pkcs8_pem,
         })
     }
+}
+
+/// The JWK `crv` and the coordinate size in bytes of an EC algorithm.
+fn ec_curve(alg: SigningAlg) -> (&'static str, usize) {
+    if alg == SigningAlg::ES384 {
+        ("P-384", 48)
+    } else {
+        ("P-256", 32)
+    }
+}
+
+fn ec_pem_error(alg: SigningAlg, e: &str) -> KeyError {
+    KeyError::InvalidPem(format!(
+        "expected a {} EC private key for {}: {e}",
+        ec_curve(alg).0,
+        alg.as_str()
+    ))
 }
 
 /// Where the signing key comes from, in priority order.
@@ -637,9 +676,9 @@ pub(crate) fn thumbprint(n_b64: &str, e_b64: &str) -> String {
     URL_SAFE_NO_PAD.encode(Sha256::digest(canonical.as_bytes()))
 }
 
-/// RFC 7638 JWK thumbprint (SHA-256, base64url without padding) of a P-256 public key.
-pub(crate) fn ec_thumbprint(x_b64: &str, y_b64: &str) -> String {
-    let canonical = format!(r#"{{"crv":"P-256","kty":"EC","x":"{x_b64}","y":"{y_b64}"}}"#);
+/// RFC 7638 JWK thumbprint (SHA-256, base64url without padding) of an EC public key on `crv`.
+pub(crate) fn ec_thumbprint(crv: &str, x_b64: &str, y_b64: &str) -> String {
+    let canonical = format!(r#"{{"crv":"{crv}","kty":"EC","x":"{x_b64}","y":"{y_b64}"}}"#);
     URL_SAFE_NO_PAD.encode(Sha256::digest(canonical.as_bytes()))
 }
 
@@ -905,6 +944,7 @@ mod tests {
         // RFC 7638 has no EC vector; RFC 8037 does not cover P-256. Use the JWK from RFC 7517 A.1.
         assert_eq!(
             ec_thumbprint(
+                "P-256",
                 "MKBCTNIcKUSDii11ySs3526iDZ8AiTo7Tu6KPAqv7D4",
                 "4Etl6SRW2YiLUrN5vfvVHuhp7x8PxltmWWlbbM4IFyM"
             ),
@@ -933,15 +973,25 @@ mod tests {
             SigningKey::from_pem_for(TEST_KEY.to_pem(), SigningAlg::ES256),
             Err(KeyError::InvalidPem(_))
         ));
+        // The curve must match: a P-256 key is not an ES384 key, and the other way round.
+        let p384 = SigningKey::generate_for(SigningAlg::ES384).unwrap();
+        assert!(matches!(
+            SigningKey::from_pem_for(ec.to_pem(), SigningAlg::ES384),
+            Err(KeyError::InvalidPem(m)) if m.contains("P-384")
+        ));
+        assert!(matches!(
+            SigningKey::from_pem_for(p384.to_pem(), SigningAlg::ES256),
+            Err(KeyError::InvalidPem(m)) if m.contains("P-256")
+        ));
     }
 
     #[test]
     fn every_alg_signs_and_verifies() {
-        for alg in [SigningAlg::RS256, SigningAlg::ES256, SigningAlg::PS256] {
-            let k = if alg == SigningAlg::ES256 {
-                SigningKey::generate_for(alg).unwrap()
-            } else {
+        for alg in SigningAlg::ALL {
+            let k = if alg.is_rsa() {
                 SigningKey::from_pem_for(TEST_KEY.to_pem(), alg).unwrap()
+            } else {
+                SigningKey::generate_for(alg).unwrap()
             };
             let mut h = jsonwebtoken::Header::new(alg.jwt());
             h.kid = Some(k.kid.clone());

@@ -534,8 +534,8 @@ fn check_clients(config: &Config, c: &mut Collector<'_>) {
     }
 }
 
-/// Checks the `private_key_jwt` keys of a Client: `jwks` is a JWK set of RSA or EC P-256
-/// keys, `jwks_uri` is an absolute `http://` URL, and not both.
+/// Checks the `private_key_jwt` keys of a Client: `jwks` is a JWK set of RSA or EC P-256 or
+/// P-384 keys, `jwks_uri` is an absolute `http://` URL, and not both.
 fn check_client_keys(key: &str, client: &ClientConfig, c: &mut Collector<'_>) {
     if let Some(jwks) = &client.jwks {
         if let Err(e) = crate::client_auth::parse_jwks(jwks) {
