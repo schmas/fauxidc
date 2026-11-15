@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.2](https://github.com/schmas/fauxidc/compare/v0.1.1...v0.1.2) - 2026-11-15
+
+### Other
+
+- *(release)* open release PRs with a GitHub App token ([#14](https://github.com/schmas/fauxidc/pull/14))
+- *(conformance)* run the suite on pull requests ([#13](https://github.com/schmas/fauxidc/pull/13))
+- *(tokens)* sign JWTs on the tokio blocking pool
+
 ## [0.1.1](https://github.com/schmas/fauxidc/compare/v0.1.0...v0.1.1) - 2026-11-15
 
 ### Other
