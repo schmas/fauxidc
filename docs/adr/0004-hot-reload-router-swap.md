@@ -17,9 +17,9 @@ Up to M2, the router and the CORS layers are built once at startup.
 - Each reload builds a new version of the app: a new `AppState` (config, templates) and a new `Router` from `build_router`.
 - `arc-swap` holds the current router and state. The served router has only a fallback. It loads the current router and calls it with `oneshot`.
 - A request runs entirely on the version that it started with. A reload never changes a request in progress.
-- The `Store`, the `Keyring` and the `RequestLog` are shared by all versions. So codes, Sessions, used refresh `jti`s, revocations and Lenient Clients survive a reload.
+- The `Store`, the `Keyring` and the `RequestLog` are shared by all versions. So codes, Sessions, used refresh `jti`s, revocations, Injected failures, debugger flows and Lenient registrations survive a reload. A Lenient registration is used only while its Issuer is Lenient. If a reload switches the Issuer to Strict, the registration stays in the Store but `find_client` ignores it.
 - A reload validates the new config and loads its templates before the swap. On any error nothing changes.
-- Keys that need a restart keep their running values in the new config, and the mock logs a warning: `server.port`, `server.bind`, `server.log_format`, `server.request_log_size`, `server.key_file`, `issuer.<id>.signing_alg`, `issuer.<id>.key_file`.
+- Keys that need a restart keep their running values in the new config, and the mock logs a warning: `server.port`, `server.bind`, `server.log_format`, `server.request_log_size`, `server.key_file`, `server.tls`, `issuer.<id>.signing_alg`, `issuer.<id>.key_file`.
 - An Issuer added by a reload gets a key as at startup. The key slot of a removed Issuer stays, so its keys come back if it is added again.
 
 ## Rejected option
