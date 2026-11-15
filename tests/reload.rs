@@ -3,6 +3,7 @@ use common::*;
 
 use fauxidc::config::load_str;
 use std::sync::{Arc, Mutex};
+use std::time::SystemTime;
 
 use fauxidc::config::LoadInputs;
 use fauxidc::reload::{ReloadError, watch_files};
@@ -233,6 +234,7 @@ async fn file_change_is_applied() {
         inputs,
         loaded.files.clone(),
         Duration::from_millis(50),
+        SystemTime::now(),
     );
     tokio::time::sleep(Duration::from_millis(120)).await;
     std::fs::write(
@@ -262,11 +264,12 @@ async fn invalid_file_keeps_old_config_and_logs() {
         inputs,
         loaded.files.clone(),
         Duration::from_millis(50),
+        SystemTime::now(),
     );
     tokio::time::sleep(Duration::from_millis(120)).await;
     std::fs::write(&file, "[server]\nprot = 1").unwrap();
     let text = || String::from_utf8_lossy(&logs.lock().unwrap()).into_owned();
-    wait_until(Duration::from_millis(500), || async {
+    wait_until(Duration::from_secs(3), || async {
         text().contains("config reload failed")
     })
     .await;
@@ -284,6 +287,7 @@ async fn same_mtime_different_length_reloads() {
         inputs,
         loaded.files.clone(),
         Duration::from_millis(50),
+        SystemTime::now(),
     );
     tokio::time::sleep(Duration::from_millis(120)).await;
     std::fs::write(
@@ -319,6 +323,7 @@ async fn touched_file_logs_no_error() {
         inputs,
         loaded.files.clone(),
         Duration::from_millis(50),
+        SystemTime::now(),
     );
     tokio::time::sleep(Duration::from_millis(120)).await;
     std::fs::File::options()
@@ -349,4 +354,118 @@ async fn lenient_client_is_unknown_after_reload_to_strict() {
     // Back to Lenient: the registration is still there.
     handle.apply(load_str(&lenient).unwrap().config).unwrap();
     assert_eq!(send(&app, get(&url)).await.0, 200);
+}
+
+/// Installs a log capture for this thread and returns the captured text reader.
+fn capture_logs() -> (
+    tracing::subscriber::DefaultGuard,
+    impl Fn() -> String + Clone,
+) {
+    let logs = Arc::new(Mutex::new(Vec::<u8>::new()));
+    let w = logs.clone();
+    let sub = tracing_subscriber::fmt()
+        .with_writer(move || CaptureWriter(w.clone()))
+        .with_ansi(false)
+        .finish();
+    let guard = tracing::subscriber::set_default(sub);
+    (guard, move || {
+        String::from_utf8_lossy(&logs.lock().unwrap()).into_owned()
+    })
+}
+
+#[tokio::test]
+async fn half_written_file_is_not_applied() {
+    // Poll every 100 ms. Write a valid prefix of the file that lacks [user.carol] and keep it
+    // for less than one poll interval, then write the full file. At most one poll sees the
+    // cut file, so the debounce never applies it: carol stays valid the whole time.
+    // (STRICT already has bob, so the plan's [user.bob] is carol here.)
+    let full = format!("{STRICT}\n[user.carol]\nlabel = \"Carol\"\n");
+    let (file, inputs, loaded) = config_file(&full);
+    let (app, handle) = live_app_from(loaded.config.clone());
+    let _w = watch_files(
+        handle.clone(),
+        inputs,
+        loaded.files.clone(),
+        Duration::from_millis(100),
+        SystemTime::now() - Duration::from_secs(5),
+    );
+    tokio::time::sleep(Duration::from_millis(250)).await;
+    std::fs::write(&file, STRICT).unwrap(); // cut: no carol
+    let start = std::time::Instant::now();
+    while start.elapsed() < Duration::from_millis(90) {
+        assert_eq!(
+            test_api_status(&app, "carol").await,
+            200,
+            "cut file applied"
+        );
+        tokio::time::sleep(Duration::from_millis(5)).await;
+    }
+    std::fs::write(&file, format!("{full}\n# saved\n")).unwrap(); // full again, new length
+    let start = std::time::Instant::now();
+    while start.elapsed() < Duration::from_millis(400) {
+        assert_eq!(
+            test_api_status(&app, "carol").await,
+            200,
+            "cut file applied"
+        );
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+}
+
+#[tokio::test]
+async fn touch_after_restart_key_change_warns_once() {
+    let (_guard, text) = capture_logs();
+    let (file, inputs, loaded) = config_file(STRICT);
+    let (_app, handle) = live_app_from(loaded.config.clone());
+    let _w = watch_files(
+        handle,
+        inputs,
+        loaded.files.clone(),
+        Duration::from_millis(50),
+        SystemTime::now(),
+    );
+    tokio::time::sleep(Duration::from_millis(120)).await;
+    let warning = "server.port changed; it needs a restart";
+    std::fs::write(&file, format!("[server]\nport = 9100\n{STRICT}")).unwrap();
+    wait_until(Duration::from_secs(3), || {
+        let text = text.clone();
+        async move { text().contains(warning) }
+    })
+    .await;
+    let reloaded = text().matches("config reloaded").count();
+    for offset in [5, 10] {
+        std::fs::File::options()
+            .write(true)
+            .open(&file)
+            .unwrap()
+            .set_modified(SystemTime::now() + Duration::from_secs(offset))
+            .unwrap();
+        tokio::time::sleep(Duration::from_millis(300)).await;
+    }
+    let logs = text();
+    assert_eq!(logs.matches(warning).count(), 1, "{logs}");
+    assert_eq!(logs.matches("config reloaded").count(), reloaded, "{logs}");
+}
+
+#[tokio::test]
+async fn change_before_first_poll_is_applied() {
+    let loaded_at = SystemTime::now() - Duration::from_secs(1);
+    let (file, inputs, loaded) = config_file(STRICT);
+    let (app, handle) = live_app_from(loaded.config.clone());
+    std::fs::write(
+        &file,
+        format!("{STRICT}\n[user.carol]\nlabel = \"Carol\"\n"),
+    )
+    .unwrap();
+    let _w = watch_files(
+        handle,
+        inputs,
+        loaded.files.clone(),
+        Duration::from_millis(50),
+        loaded_at,
+    );
+    wait_until(Duration::from_secs(3), || async {
+        test_api_status(&app, "carol").await == 200
+    })
+    .await;
 }

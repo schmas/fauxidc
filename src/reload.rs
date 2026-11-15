@@ -49,6 +49,9 @@ struct Live {
     router: ArcSwap<Router>,
     /// One reload at a time: the file poller and SIGHUP may race.
     applying: Mutex<()>,
+    /// The last config `config::load` produced (plan Ruling 27). The running config holds the
+    /// running values of the restart-only keys, so it cannot tell a real change from a touch.
+    last_loaded: Mutex<Option<Config>>,
 }
 
 /// Applies a new config to a running server. Cheap to clone.
@@ -85,6 +88,24 @@ impl ReloadHandle {
     pub fn current(&self) -> Arc<AppState> {
         self.live.state.load_full()
     }
+
+    /// The last config `reload_from` loaded (or the startup config). `None` before the first set.
+    pub fn last_loaded(&self) -> Option<Config> {
+        self.live
+            .last_loaded
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone()
+    }
+
+    /// Records `config` as the last loaded config. `live_router` sets it to the startup config.
+    pub fn set_last_loaded(&self, config: Config) {
+        *self
+            .live
+            .last_loaded
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner) = Some(config);
+    }
 }
 
 /// The router to serve and its handle. The served router forwards every request to the
@@ -92,12 +113,15 @@ impl ReloadHandle {
 pub fn live_router(state: Arc<AppState>) -> (Router, ReloadHandle) {
     let router = build_router(state.clone());
     let live = Arc::new(Live {
-        state: ArcSwap::new(state),
+        state: ArcSwap::new(state.clone()),
         router: ArcSwap::from_pointee(router),
         applying: Mutex::new(()),
+        last_loaded: Mutex::new(None),
     });
     let outer = Router::new().fallback(forward).with_state(live.clone());
-    (outer, ReloadHandle { live })
+    let handle = ReloadHandle { live };
+    handle.set_last_loaded(state.config.as_ref().clone());
+    (outer, handle)
 }
 
 async fn forward(State(live): State<Arc<Live>>, req: Request) -> Response {
@@ -112,8 +136,12 @@ async fn forward(State(live): State<Arc<Live>>, req: Request) -> Response {
 pub const POLL_INTERVAL: Duration = Duration::from_secs(1);
 
 /// `config::load(inputs)` then `handle.apply`. Every error is logged at ERROR with its source
-/// text and the old config stays. Returns whether the config changed. A config equal to the
-/// running one is not applied.
+/// text and the old config stays. Returns whether the config changed.
+///
+/// The new load is compared with `handle.last_loaded()`, not with the running config (plan
+/// Ruling 27): equal → "config unchanged", no apply. So a touch of an unchanged file does
+/// nothing, and a change of a restart-only key warns once. On a successful apply, or on an
+/// apply error, the new load becomes `last_loaded`.
 pub fn reload_from(handle: &ReloadHandle, inputs: &LoadInputs) -> bool {
     let config = match load(inputs) {
         Ok(loaded) => loaded.config,
@@ -122,11 +150,17 @@ pub fn reload_from(handle: &ReloadHandle, inputs: &LoadInputs) -> bool {
             return false;
         }
     };
-    if config == *handle.current().config {
+    let unchanged = match handle.last_loaded() {
+        Some(last) => last == config,
+        None => config == *handle.current().config,
+    };
+    if unchanged {
         tracing::info!("config unchanged");
         return false;
     }
-    match handle.apply(config) {
+    let result = handle.apply(config.clone());
+    handle.set_last_loaded(config);
+    match result {
         Ok(_) => true,
         Err(error) => {
             tracing::error!("config reload failed; keeping the old config\n{error}");
@@ -150,26 +184,79 @@ fn stamps(files: &[PathBuf]) -> Vec<Stamp> {
         .collect()
 }
 
-/// Polls `files` every `interval`; a change of (mtime, length) or of existence calls
-/// `reload_from`. The first poll only records the start values.
+/// The 1-poll debounce of [`watch_files`] (plan Ruling 3).
+#[derive(Debug)]
+struct Debounce {
+    /// The stamps the running config came from.
+    last_applied: Vec<Stamp>,
+    /// New stamps seen on the previous poll, not applied yet.
+    pending: Option<Vec<Stamp>>,
+}
+
+impl Debounce {
+    fn new(start: Vec<Stamp>) -> Self {
+        Debounce {
+            last_applied: start,
+            pending: None,
+        }
+    }
+
+    /// Records one poll. `true` when the caller must reload: two polls in a row saw the same
+    /// new stamps. A poll that differs from `pending` replaces it.
+    fn observe(&mut self, now: Vec<Stamp>) -> bool {
+        if now == self.last_applied {
+            self.pending = None;
+            return false;
+        }
+        if self.pending.as_ref() == Some(&now) {
+            self.pending = None;
+            self.last_applied = now;
+            return true;
+        }
+        self.pending = Some(now);
+        false
+    }
+}
+
+/// `true` when a file exists with a modification time not older than `loaded_at`.
+fn saved_since(stamps: &[Stamp], loaded_at: SystemTime) -> bool {
+    stamps
+        .iter()
+        .flatten()
+        .any(|(modified, _)| modified.is_some_and(|m| m >= loaded_at))
+}
+
+/// Polls `files` every `interval`. A change of (mtime, length) or of existence applies only
+/// when two consecutive polls see the same new stamps (plan Ruling 3): an editor that saves in
+/// place (truncate, then write) never gets a cut file applied. A change applies 1 to 2
+/// intervals after the save.
+///
+/// The first poll records the start stamps. When a file has a modification time not older
+/// than `loaded_at` (taken just before the startup `config::load`), it also calls
+/// `reload_from`, which does nothing when the config is equal (plan Ruling 28).
 pub fn watch_files(
     handle: ReloadHandle,
     inputs: LoadInputs,
     files: Vec<PathBuf>,
     interval: Duration,
+    loaded_at: SystemTime,
 ) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
         let mut ticker = tokio::time::interval(interval);
         ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
-        let mut last: Option<Vec<Stamp>> = None;
+        ticker.tick().await;
+        let start = stamps(&files);
+        if saved_since(&start, loaded_at) {
+            tracing::info!("config file changed");
+            reload_from(&handle, &inputs);
+        }
+        let mut debounce = Debounce::new(start);
         loop {
             ticker.tick().await;
-            let now = stamps(&files);
-            if last.as_ref().is_some_and(|before| *before != now) {
+            if debounce.observe(stamps(&files)) {
                 tracing::info!("config file changed");
                 reload_from(&handle, &inputs);
             }
-            last = Some(now);
         }
     })
 }
@@ -240,6 +327,31 @@ mod tests {
 
     const BASE: &str =
         "[issuer.a]\nissuer_url = \"http://localhost:9000/a\"\n\n[user.alice]\nlabel = \"Alice\"\n";
+
+    fn stamp(len: u64) -> Stamp {
+        Some((None, len))
+    }
+
+    #[test]
+    fn debounce_applies_after_two_equal_polls() {
+        let mut d = Debounce::new(vec![stamp(1)]);
+        assert!(!d.observe(vec![stamp(1)]));
+        assert!(!d.observe(vec![stamp(2)]), "first sighting");
+        assert!(d.observe(vec![stamp(2)]), "second equal poll");
+        assert!(!d.observe(vec![stamp(2)]), "already applied");
+    }
+
+    #[test]
+    fn debounce_skips_a_state_seen_once() {
+        let mut d = Debounce::new(vec![stamp(10)]);
+        assert!(!d.observe(vec![stamp(3)]), "cut file");
+        assert!(!d.observe(vec![stamp(11)]), "full file replaces pending");
+        assert!(d.observe(vec![stamp(11)]));
+        // Back to the applied state before the second poll: nothing pending.
+        assert!(!d.observe(vec![stamp(12)]));
+        assert!(!d.observe(vec![stamp(11)]));
+        assert!(!d.observe(vec![stamp(11)]));
+    }
 
     #[test]
     fn restart_only_changes_lists_port_and_key_file() {

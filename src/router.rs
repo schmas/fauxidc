@@ -208,3 +208,55 @@ async fn rfc8414_discovery(
         None => axum::http::StatusCode::NOT_FOUND.into_response(),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::{SourceMap, load_str, validate};
+    use crate::keys::KeyHandle;
+
+    /// Plan Ruling 30: a guard against a `build_router` panic on a reload. Each config has an
+    /// unusual path shape. A config that `validate` rejects never reaches `build_router` (today
+    /// that is the jwks path under `/.well-known`); every accepted one must build.
+    #[test]
+    fn build_router_accepts_unusual_valid_paths() {
+        let issuer = |url: &str, paths: &str| {
+            format!(
+                "[issuer.a]\nissuer_url = \"{url}\"\n{paths}\n[user.alice]\nlabel = \"Alice\"\n"
+            )
+        };
+        let configs = [
+            issuer(
+                "http://localhost:9000/a",
+                "paths = { token = \"/oauth/token\" }",
+            ),
+            issuer(
+                "http://localhost:9000/a/b",
+                "paths = { jwks = \"/.well-known/jwks.json\" }",
+            ),
+            issuer(
+                "http://localhost:9000/a",
+                "paths = { debugger = \"/v1/debug/\" }",
+            ),
+            issuer(
+                "http://localhost:9000/a",
+                "paths = { authorize = \"/a:b\" }",
+            ),
+            issuer("http://localhost:9000/", ""),
+        ];
+        let mut built = 0;
+        for text in configs {
+            // `load_str` runs `validate` too.
+            let Ok(loaded) = load_str(&text) else {
+                continue;
+            };
+            let config = loaded.config;
+            validate(&config, &SourceMap::new()).unwrap_or_else(|e| panic!("{text}\n{e}"));
+            built += 1;
+            let (keys, _publisher) = KeyHandle::channel();
+            let state = Arc::new(AppState::new(config, keys).unwrap());
+            let _router = build_router(state);
+        }
+        assert_eq!(built, 4, "the other four shapes are valid");
+    }
+}

@@ -188,6 +188,7 @@ async fn m3_exit() {
         inputs,
         loaded.files.clone(),
         Duration::from_millis(50),
+        std::time::SystemTime::now(),
     );
     let mock = Mock {
         addr,

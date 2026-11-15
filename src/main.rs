@@ -1,7 +1,7 @@
 #![forbid(unsafe_code)]
 
 use std::process::ExitCode;
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 
 use anyhow::Context;
 use clap::Parser;
@@ -28,6 +28,8 @@ async fn main() -> ExitCode {
 async fn run(cli: Cli) -> anyhow::Result<ExitCode> {
     let inputs = LoadInputs::from_process(cli.config.clone(), cli.overrides())
         .context("cannot read the working directory")?;
+    // Taken before the load: a file saved during the load is reloaded at the first poll.
+    let loaded_at = SystemTime::now();
     match (cli.command, config::load(&inputs)) {
         // A config error never fails the healthcheck: it falls back to the default port.
         (Some(Command::Healthcheck { url }), loaded) => {
@@ -51,11 +53,15 @@ async fn run(cli: Cli) -> anyhow::Result<ExitCode> {
             }
             Ok(ExitCode::SUCCESS)
         }
-        (None, Ok(loaded)) => serve(loaded, &inputs).await,
+        (None, Ok(loaded)) => serve(loaded, &inputs, loaded_at).await,
     }
 }
 
-async fn serve(loaded: Loaded, inputs: &LoadInputs) -> anyhow::Result<ExitCode> {
+async fn serve(
+    loaded: Loaded,
+    inputs: &LoadInputs,
+    loaded_at: SystemTime,
+) -> anyhow::Result<ExitCode> {
     let env = |name: &str| {
         inputs
             .env
@@ -93,7 +99,13 @@ async fn serve(loaded: Loaded, inputs: &LoadInputs) -> anyhow::Result<ExitCode> 
     // Env and inline values stay as at startup (spec 11): reloads reuse `inputs`.
     let handle = server.reload_handle();
     if !files.is_empty() {
-        watch_files(handle.clone(), inputs.clone(), files, POLL_INTERVAL);
+        watch_files(
+            handle.clone(),
+            inputs.clone(),
+            files,
+            POLL_INTERVAL,
+            loaded_at,
+        );
     }
     if let Err(error) = on_sighup(handle, inputs.clone()) {
         tracing::warn!("cannot listen for SIGHUP: {error}; reload on SIGHUP is off");
