@@ -21,6 +21,7 @@ M2 features:
 M3 features:
 
 - Per-Issuer keys with `RS256`, `ES256` or `PS256`, and key rotation through the Test API.
+  After M4 also `RS384`, `RS512`, `PS384`, `PS512` and `ES384`.
 - `private_key_jwt` client authentication (RFC 7523) with a Client `jwks` or `jwks_uri`.
 - Token exchange (RFC 8693).
 - The jwt-bearer grant (RFC 7523 section 2.1, On-Behalf-Of).
@@ -42,6 +43,8 @@ After M4:
 - [`response_mode=form_post`](#response_modeform_post) at `/authorize`.
 - A fixed server clock, `server.fixed_time`, for reproducible token times.
   See [configuration.md](configuration.md#fixed-time).
+- The signing algorithms `RS384`, `RS512`, `PS384`, `PS512` and `ES384`, for Issuer keys and for
+  `private_key_jwt` assertions. See [configuration.md](configuration.md#signing-keys).
 
 The exit test runbooks are in [testing/](testing/): [M1](testing/m1-exit-test.md),
 [M2](testing/m2-exit-test.md) and [M3](testing/m3-exit-test.md). The M4 page checks are in [testing/m4-pages.md](testing/m4-pages.md).
@@ -274,7 +277,8 @@ A Client can authenticate with `private_key_jwt` (RFC 7523) at `/token`, `/intro
 Give it its public keys in `client.<key>.jwks` (an inline JWK set) or `client.<key>.jwks_uri`, not both.
 `jwks_uri` must be an `http://` URL; fauxidc caches the fetched set for 60 seconds and fetches it again for an unknown `kid`,
 at most once every 10 seconds per URL. A key with a `use` other than `sig` is not used to verify an assertion.
-The assertion `alg` must be `RS256`, `PS256` or `ES256`. A Client may also have a `client_secret` and use either method.
+The assertion `alg` must be `RS256`, `RS384`, `RS512`, `PS256`, `PS384`, `PS512`, `ES256` or `ES384`.
+The Client key is an RSA key for RS* and PS*, an EC P-256 key for `ES256` and an EC P-384 key for `ES384`. A Client may also have a `client_secret` and use either method.
 
 ```toml
 [client.backend]

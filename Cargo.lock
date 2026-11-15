@@ -632,6 +632,7 @@ dependencies = [
  "minijinja",
  "openidconnect",
  "p256",
+ "p384",
  "reqwest",
  "rsa 0.10.0",
  "rust-embed",

@@ -152,9 +152,19 @@ See [ADR 0007](adr/0007-fixed-clock.md).
 
 ## Signing keys
 
-Each Issuer signs with `issuer.<id>.signing_alg`: `RS256` (default), `ES256` or `PS256`.
+Each Issuer signs with `issuer.<id>.signing_alg`:
+
+| `signing_alg` | Key |
+|---|---|
+| `RS256` (default), `RS384`, `RS512` | RSA (generated: 2048 bits) |
+| `PS256`, `PS384`, `PS512` | RSA (generated: 2048 bits) |
+| `ES256` | EC P-256 |
+| `ES384` | EC P-384 |
+
+A key file holds a PKCS#8 (`PRIVATE KEY`) PEM, a PKCS#1 (`RSA PRIVATE KEY`) PEM for RSA, or a SEC1 (`EC PRIVATE KEY`) PEM for EC.
+A key that does not fit the `signing_alg`, for example a P-256 key for `ES384` or an EC key for `RS384`, is a config error at startup and at reload.
 An RS256 Issuer without `issuer.<id>.key_file` shares the server key (`FAUXIDC_KEY_PEM`, else `server.key_file`, else generated).
-Any other Issuer has its own key: from its `key_file` if the file exists, else generated and saved to `key_file` when it is set.
+Any other Issuer, `RS384` and `RS512` too, has its own key: from its `key_file` if the file exists, else generated and saved to `key_file` when it is set.
 A generated key is saved only when generation ends: if the server stops before that, no key file is written and the next start generates a new key.
 See [ADR 0003](adr/0003-per-issuer-key-sets.md).
 

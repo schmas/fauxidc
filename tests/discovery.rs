@@ -211,6 +211,12 @@ async fn private_key_jwt_is_published() {
         "introspection_endpoint_auth_signing_alg_values_supported",
         "revocation_endpoint_auth_signing_alg_values_supported",
     ] {
-        assert_eq!(d[key], json!(["RS256", "PS256", "ES256"]), "{key}");
+        assert_eq!(
+            d[key],
+            json!([
+                "RS256", "RS384", "RS512", "PS256", "PS384", "PS512", "ES256", "ES384"
+            ]),
+            "{key}"
+        );
     }
 }

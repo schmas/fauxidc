@@ -216,6 +216,7 @@ Our own merge, about 200 lines. Parse each source to `toml::Value`, deep-merge, 
 
 - M2: `client_secret_basic`, `client_secret_post`, `none`.
 - M3: `private_key_jwt` with a Client `jwks` or `jwks_uri`.
+- Assertion `alg` (after M4): RS256, RS384, RS512, PS256, PS384, PS512, ES256 and ES384 (M3: RS256, PS256 and ES256). A Client key is an RSA key, an EC P-256 key (ES256) or an EC P-384 key (ES384). Discovery lists these algorithms in `token_endpoint_auth_signing_alg_values_supported`, `introspection_endpoint_auth_signing_alg_values_supported` and `revocation_endpoint_auth_signing_alg_values_supported`.
 - `jwks_uri` (M4): the fetched set is cached for 60 s. An unknown `kid` refetches it, at most once every 10 s per URL. A key with a `use` other than `sig` is not used to verify an assertion.
 - Discovery lists only the supported methods.
 
@@ -224,6 +225,7 @@ Our own merge, about 200 lines. Parse each source to `toml::Value`, deep-merge, 
 - RS256 in M1. One key shared by all Issuers, with one `kid`.
 - Key source order: `FAUXIDC_KEY_PEM`, then `server.key_file` if the file exists, then generate.
 - Generation runs on a background task after the listener binds. JWKS, `/token` and the Test API token endpoint wait for the key. Discovery does not wait. If `key_file` is set and writable, the generated key is saved there, unless the server stops before generation ends. Then no key is saved, and the next start generates a new key.
+- After M4: RS384, RS512, PS384, PS512 and ES384. The RSA algorithms (RS* and PS*) use an RSA 2048 key, ES256 a P-256 key and ES384 a P-384 key. RS256 stays the default, and only RS256 Issuers share the server key. A `key_file` key that does not fit the `signing_alg` (another key type or another curve) is a config error at startup and at reload. A rotated key has the Issuer's `signing_alg`. Discovery `id_token_signing_alg_values_supported` lists only the configured algorithm.
 - M3: per-Issuer keys, ES256 and PS256. `POST /_mock/{issuer-id}/rotate-key` adds a new active key and keeps the old one in JWKS. `?retire=true` removes the old key. An Issuer keeps at most 10 keys; a rotation above the cap removes the oldest key. M4: a request with an `Origin` header that is not the server's own origin (scheme + `Host`) gets 403 `access_denied`, so a web page cannot rotate the keys. A request without `Origin` is not affected.
 
 ## 8. Users and claims
@@ -356,7 +358,7 @@ None in M1 and M2. M3 adds an optional `tls` cargo feature with `rustls` (ring) 
 | Runtime | `tokio` (`current_thread`); JWT signing on the blocking pool (ADR 0005) |
 | HTTP | `axum` 0.8, `tower-http` |
 | JWT | `jsonwebtoken` with `rust_crypto` (not `aws_lc_rs`) |
-| Keys | `rsa`, `p256` |
+| Keys | `rsa`, `p256`, `p384` (ES384, after M4) |
 | Data | `serde`, `serde_json`, `toml` |
 | Config schema | `schemars` |
 | Templates | `minijinja`, `rust-embed` |
