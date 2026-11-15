@@ -9,6 +9,18 @@ repository = "https://github.com/schmas/fauxidc"
 readme = "README.md"
 keywords = ["oidc", "oauth2", "mock", "testing", "identity"]
 categories = ["development-tools::testing", "authentication"]
+exclude = [
+    "/.github",
+    "/.dockerignore",
+    "/Dockerfile",
+    "/conformance",
+    "/deny.toml",
+    "/dist",
+    "/docs/testing",
+    "/e2e",
+    "/release-plz.toml",
+    "/scripts",
+]
 
 [dependencies]
 anyhow = "1.0.104"
