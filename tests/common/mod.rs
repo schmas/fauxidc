@@ -37,7 +37,7 @@ pub fn app_from_config(config: fauxidc::config::Config) -> Router {
 }
 
 fn app_from_parts(config: fauxidc::config::Config, keys: KeyHandle) -> Router {
-    let state = AppState::new(config, keys).unwrap();
+    let state = AppState::new(config, keys, true).unwrap();
     build_router(Arc::new(state))
 }
 
@@ -329,7 +329,7 @@ pub fn live_app(toml: &str) -> (Router, fauxidc::reload::ReloadHandle) {
 
 /// The live router and its reload handle, from a loaded config and a ready shared key.
 pub fn live_app_from(config: fauxidc::config::Config) -> (Router, fauxidc::reload::ReloadHandle) {
-    let state = AppState::new(config, KeyHandle::ready(KEY.clone())).unwrap();
+    let state = AppState::new(config, KeyHandle::ready(KEY.clone()), true).unwrap();
     fauxidc::reload::live_router(Arc::new(state))
 }
 

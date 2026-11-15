@@ -1,7 +1,7 @@
 //! Signing keys (RS256, PS256, ES256): generation, PEM round trip, JWK and RFC 7638 `kid`.
 
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 use std::sync::{Arc, Mutex, PoisonError};
 
 use base64::Engine as _;
@@ -396,12 +396,35 @@ impl Slot {
     }
 }
 
+/// Makes `file` absolute against `cwd`, drops `.` components and resolves `..` lexically. No
+/// file system access, so two symlinks to one file still give two paths (plan Ruling 14).
+pub fn normalize_key_path(cwd: &Path, file: &str) -> PathBuf {
+    let mut out = PathBuf::new();
+    for component in cwd.join(file).components() {
+        match component {
+            Component::CurDir => {}
+            Component::ParentDir => {
+                out.pop();
+            }
+            other => out.push(other.as_os_str()),
+        }
+    }
+    out
+}
+
+/// [`normalize_key_path`] against the working directory, which key files are loaded from.
+fn normalized(file: &str) -> PathBuf {
+    normalize_key_path(&std::env::current_dir().unwrap_or_default(), file)
+}
+
 /// One [`KeySet`] per Issuer id.
 pub struct Keyring {
     /// The server key, which RS256 Issuers without a `key_file` share.
     server: KeyHandle,
     /// The `server.key_file` the server key was started with.
     server_key_file: String,
+    /// `true` when the server key came from `server.key_file` (not from `FAUXIDC_KEY_PEM`).
+    server_key_from_file: bool,
     slots: Mutex<HashMap<String, Slot>>,
 }
 
@@ -409,12 +432,19 @@ impl Keyring {
     /// One slot per Issuer of `config`. An RS256 Issuer with an empty `key_file` shares
     /// `server`. Any other Issuer gets its own key: from `key_file` if the file exists, else
     /// generated in the background and saved to `key_file` when it is set. Issuers with the
-    /// same `key_file` share one key; a `key_file` equal to `server.key_file` uses `server`.
-    /// Must run inside a tokio runtime when an Issuer needs its own key.
-    pub fn start(config: &Config, server: KeyHandle) -> Result<Keyring, KeyError> {
+    /// same `key_file` (compared after [`normalize_key_path`]) share one key. A `key_file`
+    /// equal to `server.key_file` uses `server` only when `server_key_from_file` is `true`;
+    /// with the key from `FAUXIDC_KEY_PEM`, that Issuer gets its own handle from the file
+    /// (plan Ruling 13). Must run inside a tokio runtime when an Issuer needs its own key.
+    pub fn start(
+        config: &Config,
+        server: KeyHandle,
+        server_key_from_file: bool,
+    ) -> Result<Keyring, KeyError> {
         let keyring = Keyring {
             server,
             server_key_file: config.server.key_file.clone(),
+            server_key_from_file,
             slots: Mutex::new(HashMap::new()),
         };
         let added = keyring.new_slots(config)?;
@@ -424,15 +454,15 @@ impl Keyring {
 
     /// Starts slots for the Issuers of `config` that have no slot yet. Nothing is stored.
     fn new_slots(&self, config: &Config) -> Result<Vec<(String, Slot)>, KeyError> {
-        let mut by_file: HashMap<String, KeyHandle> = HashMap::new();
-        if !self.server_key_file.is_empty() {
-            by_file.insert(self.server_key_file.clone(), self.server.clone());
+        let mut by_file: HashMap<PathBuf, KeyHandle> = HashMap::new();
+        if self.server_key_from_file && !self.server_key_file.is_empty() {
+            by_file.insert(normalized(&self.server_key_file), self.server.clone());
         }
         let known: Vec<String> = {
             let slots = self.lock();
             for slot in slots.values().filter(|s| !s.key_file.is_empty()) {
                 by_file
-                    .entry(slot.key_file.clone())
+                    .entry(normalized(&slot.key_file))
                     .or_insert_with(|| slot.handle.clone());
             }
             slots.keys().cloned().collect()
@@ -445,7 +475,7 @@ impl Keyring {
                 } else {
                     KeyHandle::start_for(KeySource::default(), issuer.signing_alg)?
                 }
-            } else if let Some(handle) = by_file.get(&issuer.key_file) {
+            } else if let Some(handle) = by_file.get(&normalized(&issuer.key_file)) {
                 handle.clone()
             } else {
                 let handle = KeyHandle::start_for(
@@ -455,7 +485,7 @@ impl Keyring {
                     },
                     issuer.signing_alg,
                 )?;
-                by_file.insert(issuer.key_file.clone(), handle.clone());
+                by_file.insert(normalized(&issuer.key_file), handle.clone());
                 handle
             };
             let slot = Slot {
@@ -560,11 +590,6 @@ impl Keyring {
             keys: set.iter().map(|k| k.kid.clone()).collect(),
             retired,
         })
-    }
-
-    /// The server key handle.
-    pub fn server(&self) -> &KeyHandle {
-        &self.server
     }
 }
 
@@ -1013,6 +1038,75 @@ mod tests {
     }
 
     #[test]
+    fn normalize_key_path_is_lexical() {
+        let cwd = Path::new("/work");
+        assert_eq!(
+            normalize_key_path(cwd, "./a.pem"),
+            PathBuf::from("/work/a.pem")
+        );
+        assert_eq!(
+            normalize_key_path(cwd, "keys/../a.pem"),
+            PathBuf::from("/work/a.pem")
+        );
+        assert_eq!(
+            normalize_key_path(cwd, "/abs/./b.pem"),
+            PathBuf::from("/abs/b.pem")
+        );
+    }
+
+    fn tmp_dir() -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("fauxidc-keys-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(dir.join("sub")).unwrap();
+        dir
+    }
+
+    fn issuer_with_key_file(alg: SigningAlg, key_file: String) -> crate::config::IssuerConfig {
+        crate::config::IssuerConfig {
+            issuer_url: "http://localhost:9000/x".into(),
+            signing_alg: alg,
+            key_file,
+            ..crate::config::IssuerConfig::default()
+        }
+    }
+
+    #[tokio::test]
+    async fn equal_key_files_in_two_spellings_share_one_key() {
+        let dir = tmp_dir();
+        let mut config = crate::config::Config::default();
+        let a = format!("{}/./k.pem", dir.display());
+        let b = format!("{}/sub/../k.pem", dir.display());
+        config
+            .issuer
+            .insert("a".into(), issuer_with_key_file(SigningAlg::ES256, a));
+        config
+            .issuer
+            .insert("b".into(), issuer_with_key_file(SigningAlg::ES256, b));
+        let keyring = Keyring::start(&config, KeyHandle::ready(test_key()), true).unwrap();
+        let a = keyring.key_set("a").await.unwrap();
+        let b = keyring.key_set("b").await.unwrap();
+        assert_eq!(a.active.kid, b.active.kid);
+    }
+
+    #[tokio::test]
+    async fn env_server_key_does_not_shadow_an_issuer_key_file() {
+        let dir = tmp_dir();
+        let file = dir.join("s.pem");
+        let server_file_key = test_key();
+        std::fs::write(&file, server_file_key.to_pem()).unwrap();
+        let env_key = SigningKey::generate().unwrap();
+        let mut config = crate::config::Config::default();
+        config.server.key_file = file.display().to_string();
+        config.issuer.insert(
+            "a".into(),
+            issuer_with_key_file(SigningAlg::RS256, file.display().to_string()),
+        );
+        let keyring = Keyring::start(&config, KeyHandle::ready(env_key.clone()), false).unwrap();
+        let set = keyring.key_set("a").await.unwrap();
+        assert_eq!(set.active.kid, server_file_key.kid);
+        assert_ne!(set.active.kid, env_key.kid);
+    }
+
+    #[test]
     fn rotated_caps_older_keys() {
         let mut set = KeySet::single(Arc::new(test_key()));
         for _ in 0..9 {
@@ -1038,7 +1132,7 @@ mod tests {
                 ..Default::default()
             },
         );
-        let ring = Arc::new(Keyring::start(&config, KeyHandle::ready(test_key())).unwrap());
+        let ring = Arc::new(Keyring::start(&config, KeyHandle::ready(test_key()), true).unwrap());
         let first = ring.key_set("es").await.unwrap().active.kid.clone();
         let (r1, r2) = tokio::join!(
             ring.rotate("es", SigningAlg::ES256, false),

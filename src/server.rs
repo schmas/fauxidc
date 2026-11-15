@@ -59,6 +59,8 @@ impl Server {
         let key_file = Some(config.server.key_file.as_str())
             .filter(|f| !f.is_empty())
             .map(PathBuf::from);
+        // Issuers share the server key by file name only when it came from the file.
+        let server_key_from_file = opts.key_pem.is_none();
         let keys = KeyHandle::start(KeySource {
             pem: opts.key_pem,
             key_file,
@@ -80,7 +82,7 @@ impl Server {
                 "bound to a non-loopback address: anyone who can reach it can mint tokens"
             );
         }
-        let state = Arc::new(AppState::new(config, keys)?);
+        let state = Arc::new(AppState::new(config, keys, server_key_from_file)?);
         let (router, reload) = live_router(state);
         let (tx, rx) = oneshot::channel::<()>();
         #[cfg(feature = "tls")]

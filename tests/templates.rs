@@ -72,7 +72,7 @@ fn bad_template_fails_startup() {
     .unwrap()
     .config;
     assert!(matches!(
-        fauxidc::state::AppState::new(cfg, fauxidc::keys::KeyHandle::ready(KEY.clone())),
+        fauxidc::state::AppState::new(cfg, fauxidc::keys::KeyHandle::ready(KEY.clone()), true),
         Err(fauxidc::error::StartError::Templates(_))
     ));
 }
@@ -85,7 +85,7 @@ fn missing_login_template_file_fails_startup() {
     .unwrap()
     .config;
     assert!(matches!(
-        fauxidc::state::AppState::new(cfg, fauxidc::keys::KeyHandle::ready(KEY.clone())),
+        fauxidc::state::AppState::new(cfg, fauxidc::keys::KeyHandle::ready(KEY.clone()), true),
         Err(fauxidc::error::StartError::Templates(_))
     ));
 }

@@ -1,5 +1,7 @@
 //! Semantic checks on the merged configuration.
 
+use std::path::PathBuf;
+
 use axum::http::Uri;
 
 use super::types::{ClientConfig, Config, EndpointPaths, SigningAlg};
@@ -7,6 +9,7 @@ use super::{KeyPath, Source, SourceMap};
 use crate::authorize::CUSTOM_USER;
 use crate::error::{ConfigError, ConfigErrors};
 use crate::issuer::issuer_path;
+use crate::keys::normalize_key_path;
 
 /// Returns `true` for an absolute `http` or `https` URI with an authority and no fragment.
 fn absolute_http(uri: &str) -> Option<Uri> {
@@ -229,12 +232,18 @@ fn check_key_files(config: &Config, c: &mut Collector<'_>) {
         ));
     }
     entries.retain(|(file, _, _)| !file.is_empty());
-    let mut files: Vec<&str> = entries.iter().map(|(file, _, _)| *file).collect();
+    // Two spellings of one path are one file (plan Ruling 14).
+    let cwd = std::env::current_dir().unwrap_or_default();
+    let path = |file: &str| normalize_key_path(&cwd, file);
+    let mut files: Vec<PathBuf> = entries.iter().map(|(file, _, _)| path(file)).collect();
     files.sort_unstable();
     files.dedup();
-    for file in files {
-        let group: Vec<&(&str, String, SigningAlg)> =
-            entries.iter().filter(|(f, _, _)| *f == file).collect();
+    for normalized in files {
+        let group: Vec<&(&str, String, SigningAlg)> = entries
+            .iter()
+            .filter(|(f, _, _)| path(f) == normalized)
+            .collect();
+        let file = group[0].0;
         if group.iter().all(|(_, _, alg)| *alg == group[0].2) {
             continue;
         }
@@ -913,5 +922,12 @@ mod tests {
                 .any(|m| m.message.contains("both use") && m.origin != Source::Default),
             "{e:?}"
         );
+    }
+
+    #[test]
+    fn shared_key_file_in_two_spellings_needs_the_same_alg() {
+        let text = "[issuer.a]\nissuer_url = \"http://localhost:9000/a\"\nsigning_alg = \"ES256\"\nkey_file = \"./k.pem\"\n\n[issuer.b]\nissuer_url = \"http://localhost:9000/b\"\nsigning_alg = \"PS256\"\nkey_file = \"k.pem\"\n";
+        let e = crate::config::load_str(text).unwrap_err().to_string();
+        assert!(e.contains("use the same key file"), "{e}");
     }
 }

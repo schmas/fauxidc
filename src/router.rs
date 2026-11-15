@@ -256,7 +256,7 @@ mod tests {
             validate(&config, &SourceMap::new()).unwrap_or_else(|e| panic!("{text}\n{e}"));
             built += 1;
             let (keys, _publisher) = KeyHandle::channel();
-            let state = Arc::new(AppState::new(config, keys).unwrap());
+            let state = Arc::new(AppState::new(config, keys, true).unwrap());
             let _router = build_router(state);
         }
         assert_eq!(built, 4, "the other four shapes are valid");

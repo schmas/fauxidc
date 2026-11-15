@@ -283,10 +283,16 @@ pub struct AppState {
 
 impl AppState {
     /// Builds the state. `keys` is the server key; [`Keyring::start`] gives each Issuer its
-    /// key set from it. Must run inside a tokio runtime when an Issuer needs its own key.
-    pub fn new(config: Config, keys: KeyHandle) -> Result<AppState, StartError> {
+    /// key set from it; `server_key_from_file` is `true` when that key came from
+    /// `server.key_file`. Must run inside a tokio runtime when an Issuer needs its own key.
+    pub fn new(
+        config: Config,
+        keys: KeyHandle,
+        server_key_from_file: bool,
+    ) -> Result<AppState, StartError> {
         let templates = Templates::load(&config).map_err(StartError::Templates)?;
-        let keys = Arc::new(Keyring::start(&config, keys).map_err(StartError::Key)?);
+        let keys =
+            Arc::new(Keyring::start(&config, keys, server_key_from_file).map_err(StartError::Key)?);
         let request_log = Arc::new(RequestLog::new(config.server.request_log_size));
         Ok(AppState {
             config: Arc::new(config),
@@ -402,7 +408,7 @@ impl IssuerCtx {
 pub(crate) fn test_ctx(toml: &str, issuer_id: &str) -> IssuerCtx {
     let loaded = crate::config::load_str(toml).expect("test config loads");
     let (keys, _publisher) = KeyHandle::channel();
-    let app = Arc::new(AppState::new(loaded.config, keys).expect("test state builds"));
+    let app = Arc::new(AppState::new(loaded.config, keys, true).expect("test state builds"));
     IssuerCtx {
         app,
         id: issuer_id.to_owned(),

@@ -329,3 +329,61 @@ async fn rotation_keeps_at_most_ten_keys() {
     assert!(!kids.contains(&first.as_str()), "the startup key is gone");
     assert!(!kids.contains(&last["retired"][0].as_str().unwrap()));
 }
+
+#[tokio::test]
+async fn revoke_and_endsession_accept_tokens_signed_before_a_rotation() {
+    let cfg = STRICT.replace(
+        "client_secret = \"local\"\n",
+        "client_secret = \"local\"\npost_logout_redirect_uris = [\"http://localhost:3000/\"]\n",
+    );
+    let app = app(&cfg);
+    let tokens = token_response_for(&app, &[("scope", "openid offline_access")]).await;
+    let rt = tokens["refresh_token"].as_str().unwrap().to_owned();
+    let idt = tokens["id_token"].as_str().unwrap().to_owned();
+    let (s, _, b) = send(&app, post_json("/_mock/auth0/rotate-key", &json!({}))).await;
+    assert_eq!(s, 200, "{b}");
+    // /revoke verifies the old token by kid: the refresh token stops working.
+    let auth = basic("example-app", "local");
+    let (s, _, _) = send(
+        &app,
+        post_form(
+            "/auth0/revoke",
+            &[("token", &rt)],
+            &[("authorization", &auth)],
+        ),
+    )
+    .await;
+    assert_eq!(s, 200);
+    let (s, _, b) = send(
+        &app,
+        post_form(
+            "/auth0/token",
+            &[("grant_type", "refresh_token"), ("refresh_token", &rt)],
+            &[("authorization", &auth)],
+        ),
+    )
+    .await;
+    assert_eq!(json(&b)["error"], "invalid_grant", "{s} {b}");
+    // /endsession finds the Client from the old id_token_hint.
+    let url = format!(
+        "/auth0/endsession?id_token_hint={idt}&post_logout_redirect_uri=http%3A%2F%2Flocalhost%3A3000%2F"
+    );
+    let (s, h, b) = send(&app, get(&url)).await;
+    assert_eq!(s, 302, "{b}");
+    assert_eq!(location(&h), "http://localhost:3000/");
+}
+
+/// A SEC1 (`BEGIN EC PRIVATE KEY`) P-256 test key.
+const SEC1_P256: &str = "-----BEGIN EC PRIVATE KEY-----
+MHcCAQEEIM5t9oh+5YV6JQHtLrSrdV6aAArXBPKDYZsfwBu9aFH7oAoGCCqGSM49
+AwEHoUQDQgAErAcWM9GmJWKfdhCbBtUyOzvFt2pXQ35b3vnUtyAL+6FXd0lI4c0L
+NPkSDng5nhdKYEllvttqx8drUbMvsdmzZA==
+-----END EC PRIVATE KEY-----
+";
+
+#[test]
+fn sec1_ec_pem_loads() {
+    let key = SigningKey::from_pem_for(SEC1_P256, SigningAlg::ES256).unwrap();
+    assert_eq!(key.alg, SigningAlg::ES256);
+    assert_eq!(key.jwk["crv"], "P-256");
+}
