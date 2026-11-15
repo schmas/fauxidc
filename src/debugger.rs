@@ -353,7 +353,7 @@ async fn callback_page(ctx: &IssuerCtx, headers: &HeaderMap, q: &CallbackQuery) 
     // A configured Client named `debugger` replaces the built-in one.
     let client = find_client(ctx, BUILTIN_DEBUGGER).unwrap_or_else(|| builtin_debugger(ctx));
     let body = match redeem_code(
-        &ctx,
+        ctx,
         &client,
         code,
         Some(&flow.redirect_uri),

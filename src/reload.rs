@@ -112,15 +112,16 @@ impl ReloadHandle {
 /// current inner router.
 pub fn live_router(state: Arc<AppState>) -> (Router, ReloadHandle) {
     let router = build_router(state.clone());
+    let startup = state.config.as_ref().clone();
     let live = Arc::new(Live {
-        state: ArcSwap::new(state.clone()),
+        state: ArcSwap::new(state),
         router: ArcSwap::from_pointee(router),
         applying: Mutex::new(()),
         last_loaded: Mutex::new(None),
     });
     let outer = Router::new().fallback(forward).with_state(live.clone());
     let handle = ReloadHandle { live };
-    handle.set_last_loaded(state.config.as_ref().clone());
+    handle.set_last_loaded(startup);
     (outer, handle)
 }
 
@@ -328,29 +329,30 @@ mod tests {
     const BASE: &str =
         "[issuer.a]\nissuer_url = \"http://localhost:9000/a\"\n\n[user.alice]\nlabel = \"Alice\"\n";
 
-    fn stamp(len: u64) -> Stamp {
-        Some((None, len))
+    /// The stamps of one file with this length.
+    fn stamp(len: u64) -> Vec<Stamp> {
+        vec![Some((None, len))]
     }
 
     #[test]
     fn debounce_applies_after_two_equal_polls() {
-        let mut d = Debounce::new(vec![stamp(1)]);
-        assert!(!d.observe(vec![stamp(1)]));
-        assert!(!d.observe(vec![stamp(2)]), "first sighting");
-        assert!(d.observe(vec![stamp(2)]), "second equal poll");
-        assert!(!d.observe(vec![stamp(2)]), "already applied");
+        let mut d = Debounce::new(stamp(1));
+        assert!(!d.observe(stamp(1)));
+        assert!(!d.observe(stamp(2)), "first sighting");
+        assert!(d.observe(stamp(2)), "second equal poll");
+        assert!(!d.observe(stamp(2)), "already applied");
     }
 
     #[test]
     fn debounce_skips_a_state_seen_once() {
-        let mut d = Debounce::new(vec![stamp(10)]);
-        assert!(!d.observe(vec![stamp(3)]), "cut file");
-        assert!(!d.observe(vec![stamp(11)]), "full file replaces pending");
-        assert!(d.observe(vec![stamp(11)]));
+        let mut d = Debounce::new(stamp(10));
+        assert!(!d.observe(stamp(3)), "cut file");
+        assert!(!d.observe(stamp(11)), "full file replaces pending");
+        assert!(d.observe(stamp(11)));
         // Back to the applied state before the second poll: nothing pending.
-        assert!(!d.observe(vec![stamp(12)]));
-        assert!(!d.observe(vec![stamp(11)]));
-        assert!(!d.observe(vec![stamp(11)]));
+        assert!(!d.observe(stamp(12)));
+        assert!(!d.observe(stamp(11)));
+        assert!(!d.observe(stamp(11)));
     }
 
     #[test]

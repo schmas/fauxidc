@@ -159,7 +159,8 @@ fn check_input_type(value: &str, name: &str) -> Result<(), OAuthError> {
 /// The JWT header `typ` of an access token (RFC 9068).
 const ACCESS_TOKEN_TYP: &str = "at+jwt";
 
-/// Ruling 20: access_token → header typ "at+jwt"; id_token → typ not "at+jwt"; jwt → any.
+/// Ruling 20: `access_token` → header `typ` `at+jwt`; `id_token` → `typ` not `at+jwt`;
+/// `jwt` → any.
 fn type_matches(token_type: &str, header_typ: Option<&str>) -> bool {
     let is_access_token = header_typ.is_some_and(|t| t.eq_ignore_ascii_case(ACCESS_TOKEN_TYP));
     match token_type {
