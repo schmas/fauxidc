@@ -3,6 +3,6 @@ changelog_update = true
 release_always = false
 git_tag_name = "v{{ version }}"
 # Registry mode (the default): release-plz reads the last version from crates.io and a
-# release publishes the crate there (CARGO_REGISTRY_TOKEN in release.yml), then makes the
+# release publishes the crate there (trusted publishing in release.yml), then makes the
 # tag, the CHANGELOG entry and the GitHub release. release.yml then builds the binaries and
 # the image. A crate that is not on crates.io yet is released as its current version.

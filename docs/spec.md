@@ -383,7 +383,7 @@ Rejected, with reason:
 - OIDF conformance suite in CI from M2.
 - `cargo-nextest` in CI.
 - GitHub Actions jobs: fmt, clippy, test (Linux + macOS), deny, MSRV, musl build with checks on binary size and startup time. A regression past the targets fails CI.
-- `release-plz` handles versions, CHANGELOG, tags and the GitHub release, from Conventional Commits, in registry mode: it reads the last version from crates.io and publishes the crate there with the `CARGO_REGISTRY_TOKEN` secret. When it creates a release, the release workflow builds the release binaries and the multi-arch image.
+- `release-plz` handles versions, CHANGELOG, tags and the GitHub release, from Conventional Commits, in registry mode: it reads the last version from crates.io and publishes the crate there with crates.io trusted publishing: the release job runs in the `release` GitHub environment with `id-token: write`, and `rust-lang/crates-io-auth-action` exchanges the OIDC token for a short-lived crates.io token. When it creates a release, the release workflow builds the release binaries and the multi-arch image.
 
 ### 13.6 ADRs to write
 

@@ -50,7 +50,7 @@ fn crates_io_publish_is_set_up() {
     assert!(!rp.contains("git_only = true"));
     assert!(
         read(".github/workflows/release.yml")
-            .contains("CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}")
+            .contains("CARGO_REGISTRY_TOKEN: ${{ steps.crates-io-auth.outputs.token }}")
     );
     for f in [
         "README.md",

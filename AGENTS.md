@@ -22,7 +22,7 @@ Only the pinned or unusual choices. The full crate table and the rejected crates
 - Optional `tls` feature: `rustls` with the `ring` provider (needs a C compiler).
 - Tailwind CSS v4 and daisyUI v5 at dev time only, through `scripts/build-css.sh`. Not a Cargo dependency.
 - `schemars` generates the config JSON Schema.
-- Releases: `release-plz` in registry mode. It publishes the crate to crates.io with the `CARGO_REGISTRY_TOKEN` secret.
+- Releases: `release-plz` in registry mode. It publishes the crate to crates.io with trusted publishing (OIDC, `release` environment); no registry token secret.
 
 A new dependency needs a reason in the PR.
 
