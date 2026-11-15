@@ -412,14 +412,31 @@ async fn silent_session(
         }
     };
     let session = current_session(ctx, headers, prompt.max_age).map_err(login_required)?;
+    // The `sub` merged for this request's Client (plan Ruling 25): a Client whose `id_claims`
+    // sets `sub` compares with its own `sub`.
     if let Some(sub) = hint_sub
-        && sub != session.sub
+        && sub != merged_sub(ctx, &req.client, &session.subject)
     {
         return Err(login_required(
             "prompt=none: id_token_hint does not match the session",
         ));
     }
     Ok(session)
+}
+
+/// The ID token `sub` of `subject` for `client`.
+fn merged_sub(ctx: &IssuerCtx, client: &ResolvedClient, subject: &Subject) -> String {
+    build_claims(
+        &ctx.app.config,
+        &ctx.id,
+        &client.config,
+        subject,
+        ClaimTarget::IdToken,
+    )
+    .get("sub")
+    .and_then(serde_json::Value::as_str)
+    .unwrap_or_default()
+    .to_owned()
 }
 
 /// The Session named by this Issuer's Session cookie if it exists for this Issuer, belongs
@@ -441,7 +458,7 @@ fn current_session(
     if let Subject::User { id, .. } = &session.subject
         && !ctx.app.config.user.contains_key(id)
     {
-        ctx.app.store.sessions.remove(&value);
+        ctx.app.store.sessions.remove(&ctx.id, &value);
         return Err("prompt=none: session user no longer exists");
     }
     if let Some(max_age) = max_age
@@ -640,7 +657,7 @@ fn subject_from_form(ctx: &IssuerCtx, f: &LoginForm) -> Result<Subject, &'static
 }
 
 /// Creates a Session for `subject` (`auth_time` = now, new `sid`), issues the code with them,
-/// and on a 302 appends the Session cookie. The merged `sub` comes from the ID token claims.
+/// and on a 302 appends the Session cookie.
 pub(crate) fn sign_in(ctx: &IssuerCtx, req: &ValidRequest, subject: Subject) -> Response {
     sign_in_with(ctx, req, subject, None)
 }
@@ -652,21 +669,9 @@ fn sign_in_with(
     subject: Subject,
     auto_select: Option<HeaderValue>,
 ) -> Response {
-    let sub = build_claims(
-        &ctx.app.config,
-        &ctx.id,
-        &req.client.config,
-        &subject,
-        ClaimTarget::IdToken,
-    )
-    .get("sub")
-    .and_then(serde_json::Value::as_str)
-    .unwrap_or_default()
-    .to_owned();
     let session = Session {
         issuer_id: ctx.id.clone(),
         subject: subject.clone(),
-        sub,
         sid: uuid::Uuid::new_v4().to_string(),
         auth_time: now_secs(),
     };
@@ -783,7 +788,6 @@ claims = { email = "alice@example.com" }
                     id: "ghost".into(),
                     overrides: Claims::new(),
                 },
-                sub: "ghost".into(),
                 sid: "s-1".into(),
                 auth_time: now_secs(),
             })

@@ -16,8 +16,6 @@ pub const MAX_SESSIONS: usize = 10_000;
 pub struct Session {
     pub issuer_id: String,
     pub subject: Subject,
-    /// The merged `sub` at sign-in time, for the `id_token_hint` check.
-    pub sub: String,
     /// UUID v4; the ID token `sid` claim.
     pub sid: String,
     pub auth_time: u64,
@@ -62,12 +60,15 @@ impl SessionStore {
             .cloned()
     }
 
-    /// Deletes the Session for this cookie value, if any.
-    pub fn remove(&self, value: &str) {
-        self.sessions
-            .lock()
-            .unwrap_or_else(PoisonError::into_inner)
-            .remove(value);
+    /// Deletes the Session for this cookie value if it belongs to `issuer_id`.
+    pub fn remove(&self, issuer_id: &str, value: &str) {
+        let mut sessions = self.sessions.lock().unwrap_or_else(PoisonError::into_inner);
+        if sessions
+            .get(value)
+            .is_some_and(|s| s.issuer_id == issuer_id)
+        {
+            sessions.remove(value);
+        }
     }
 
     /// The number of stored Sessions.
@@ -96,7 +97,6 @@ mod tests {
                 sub: "c-1".into(),
                 claims: Claims::new(),
             },
-            sub: "c-1".into(),
             sid: uuid::Uuid::new_v4().to_string(),
             auth_time,
         }
@@ -116,9 +116,19 @@ mod tests {
     fn remove_deletes_the_session() {
         let store = SessionStore::default();
         let value = store.create(session("auth0", 1)).unwrap();
-        store.remove(&value);
+        store.remove("auth0", &value);
         assert!(store.get("auth0", &value).is_none());
         assert!(store.is_empty());
+    }
+
+    #[test]
+    fn remove_ignores_another_issuers_session() {
+        let store = SessionStore::default();
+        let value = store.create(session("auth0", 1)).unwrap();
+        store.remove("okta", &value);
+        assert!(store.get("auth0", &value).is_some());
+        store.remove("auth0", &value);
+        assert!(store.get("auth0", &value).is_none());
     }
 
     #[test]

@@ -512,3 +512,45 @@ async fn prompt_none_with_max_age_zero_is_login_required() {
     );
     assert!(query_param(&location(&h), "code").is_none());
 }
+
+#[tokio::test]
+async fn id_token_hint_is_compared_with_the_current_clients_sub() {
+    let cfg = format!(
+        "{STRICT}\n[client.other]\nclient_secret = \"s\"\nredirect_uris = [\"http://localhost:4000/cb\"]\nid_claims = {{ sub = \"fixed\" }}\n"
+    );
+    let app = app(&cfg);
+    let (_, cookie) = login_with_session(&app).await;
+    let other = |extra: &[(&str, &str)]| {
+        let mut params = vec![
+            ("client_id", "other"),
+            ("redirect_uri", "http://localhost:4000/cb"),
+            ("prompt", "none"),
+        ];
+        params.extend_from_slice(extra);
+        authorize_url(&params)
+    };
+    let (_, h, _) = send(&app, get_with(&other(&[]), &[("cookie", &cookie)])).await;
+    let code = query_param(&location(&h), "code").expect("a code for other");
+    let (s, _, b) = send(
+        &app,
+        post_form(
+            "/auth0/token",
+            &[
+                ("grant_type", "authorization_code"),
+                ("code", &code),
+                ("redirect_uri", "http://localhost:4000/cb"),
+            ],
+            &[("authorization", &basic("other", "s"))],
+        ),
+    )
+    .await;
+    assert_eq!(s, 200, "{b}");
+    let idt = json(&b)["id_token"].as_str().unwrap().to_owned();
+    let (_, h, _) = send(
+        &app,
+        get_with(&other(&[("id_token_hint", &idt)]), &[("cookie", &cookie)]),
+    )
+    .await;
+    let loc = location(&h);
+    assert!(query_param(&loc, "code").is_some(), "{loc}");
+}

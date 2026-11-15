@@ -211,7 +211,7 @@ async fn endsession(ctx: &IssuerCtx, request: &HeaderMap, raw: Vec<(String, Stri
     };
     // The Session is deleted on the server too, so its cookie value never works again.
     if let Some(value) = read_cookie(request, &session_name(&ctx.id)) {
-        ctx.app.store.sessions.remove(&value);
+        ctx.app.store.sessions.remove(&ctx.id, &value);
     }
     let headers = response.headers_mut();
     headers.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
