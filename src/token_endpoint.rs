@@ -82,6 +82,23 @@ fn check_verifier(
     .map_err(|_| OAuthError::json("invalid_grant", "PKCE verification failed"))
 }
 
+/// The `invalid_request` error for a form body that does not parse. `endpoint` names the
+/// endpoint in the log line.
+pub(crate) fn form_rejection(
+    ctx: &IssuerCtx,
+    endpoint: &str,
+    rejection: &FormRejection,
+) -> OAuthError {
+    let description = match rejection {
+        FormRejection::InvalidFormContentType(_) => {
+            "body must be application/x-www-form-urlencoded"
+        }
+        _ => "malformed form body",
+    };
+    tracing::info!(issuer = %ctx.id, "{endpoint} request rejected: {rejection}");
+    OAuthError::json("invalid_request", description)
+}
+
 /// `POST /token`.
 pub async fn token(
     State(ctx): State<IssuerCtx>,
@@ -91,16 +108,7 @@ pub async fn token(
     record_endpoint(&ctx.id, "token");
     let Form(f) = match form {
         Ok(form) => form,
-        Err(rejection) => {
-            let description = match rejection {
-                FormRejection::InvalidFormContentType(_) => {
-                    "body must be application/x-www-form-urlencoded"
-                }
-                _ => "malformed form body",
-            };
-            tracing::info!(issuer = %ctx.id, "token request rejected: {rejection}");
-            return OAuthError::json("invalid_request", description).into_response();
-        }
+        Err(rejection) => return form_rejection(&ctx, "token", &rejection).into_response(),
     };
     match dispatch(&ctx, &headers, &f).await {
         Ok(body) => (

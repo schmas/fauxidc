@@ -52,7 +52,7 @@ pub fn now_secs() -> u64 {
         .map_or(0, |d| d.as_secs())
 }
 
-/// In-memory stores. Part 3 adds fields.
+/// In-memory stores.
 #[derive(Default)]
 pub struct Store {
     /// Clients registered on the fly in Lenient mode, by `(issuer id, client_id)`.
@@ -61,6 +61,8 @@ pub struct Store {
     pub codes: Mutex<HashMap<String, CodeGrant>>,
     /// Used refresh token `jti`s of rotating Clients.
     pub used_refresh: Mutex<HashMap<String, UsedRefresh>>,
+    /// Revoked token `jti`s and their `exp`, for `/introspect` and the refresh grant.
+    pub revoked: Mutex<HashMap<String, u64>>,
 }
 
 /// When a refresh token was first used, and when it expires.
@@ -110,6 +112,22 @@ impl Store {
             .unwrap_or_else(PoisonError::into_inner)
             .get(jti)
             .map(|u| u.used_at)
+    }
+
+    /// Adds `jti` to the revocation list until `exp`. Drops entries whose `exp` has passed.
+    pub fn revoke(&self, jti: &str, exp: u64) {
+        let mut revoked = self.revoked.lock().unwrap_or_else(PoisonError::into_inner);
+        let now = now_secs();
+        revoked.retain(|_, e| *e >= now);
+        revoked.insert(jti.to_owned(), exp);
+    }
+
+    /// `true` if `jti` is on the revocation list. Drops entries whose `exp` has passed.
+    pub fn is_revoked(&self, jti: &str) -> bool {
+        let mut revoked = self.revoked.lock().unwrap_or_else(PoisonError::into_inner);
+        let now = now_secs();
+        revoked.retain(|_, e| *e >= now);
+        revoked.contains_key(jti)
     }
 
     /// Removes and returns the grant for `code`. A code works once.
@@ -256,6 +274,18 @@ mod tests {
         assert!(!store.use_refresh_jti("j", 1000, 16, 5));
         // The first use time stays; a reuse does not extend the window.
         assert_eq!(store.refresh_used_at("j"), Some(10));
+    }
+
+    #[test]
+    fn revoke_and_prune() {
+        let store = Store::default();
+        assert!(!store.is_revoked("j"));
+        store.revoke("j", now_secs() + 60);
+        assert!(store.is_revoked("j"));
+        store.revoke("old", 1);
+        assert!(!store.is_revoked("old"));
+        assert!(!store.revoked.lock().unwrap().contains_key("old"));
+        assert!(store.is_revoked("j"));
     }
 
     #[test]

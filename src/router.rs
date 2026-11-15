@@ -20,6 +20,7 @@ use crate::health;
 use crate::issuer::issuer_path;
 use crate::jwks;
 use crate::logging::{record_endpoint, request_span};
+use crate::revoke;
 use crate::state::{AppState, IssuerCtx};
 use crate::templates;
 use crate::token_endpoint;
@@ -68,6 +69,7 @@ pub fn build_router(state: Arc<AppState>) -> Router {
                 ctx.endpoint_path(Endpoint::Endsession),
                 get(endsession::endsession_get).post(endsession::endsession_post),
             )
+            .route(ctx.endpoint_path(Endpoint::Revoke), post(revoke::revoke))
             .with_state(ctx.clone());
         router = if path == "/" {
             router.merge(sub)

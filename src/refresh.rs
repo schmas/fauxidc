@@ -105,6 +105,9 @@ pub async fn refresh_grant(
             "refresh token was not issued to this client".to_owned(),
         ));
     }
+    if ctx.app.store.is_revoked(&claims.jti) {
+        return Err(invalid_grant("refresh token was revoked".to_owned()));
+    }
     let original: Vec<String> = claims.scope.split_whitespace().map(str::to_owned).collect();
     let scope = match f.scope.as_deref().filter(|s| !s.trim().is_empty()) {
         Some(requested) => {
