@@ -307,12 +307,20 @@ mod tests {
     fn login_page_renders_form_and_escapes() {
         let templates = Templates::load(&config("")).unwrap();
         let html = templates.render_login("auth0", &login_ctx()).unwrap();
-        assert!(html.contains("<form method=\"post\" action=\"&#x2f;auth0&#x2f;authorize\">"));
+        assert!(
+            html.contains("<form method=\"post\" action=\"&#x2f;auth0&#x2f;authorize\" class=")
+        );
         assert!(html.contains("name=\"state\" value=\"a&quot;b&lt;c\""));
         assert!(html.contains("<option value=\"bob\" selected>bob</option>"));
+        assert!(html.contains("href=\"/_mock/static/fauxidc.css\""));
         assert!(html.contains("<option value=\"alice\">Alice Admin</option>"));
         assert!(html.contains("value=\"__custom__\""));
-        assert!(html.contains("Client: example-app · Issuer: auth0"));
+        assert!(html.contains(
+            "<span class=\"text-base-content/60\">Client</span><span class=\"truncate font-mono\">example-app</span>"
+        ));
+        assert!(html.contains(
+            "<span class=\"text-base-content/60\">Issuer</span><span class=\"truncate font-mono\">auth0</span>"
+        ));
         assert!(html.contains("bad &lt;input&gt;"));
         assert!(html.contains("name=\"remember\""));
     }

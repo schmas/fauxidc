@@ -158,3 +158,109 @@ fn fauxidc_css_is_under_60_kb_and_has_no_external_urls() {
         assert!(!css.contains(bad), "{bad}");
     }
 }
+
+#[tokio::test]
+async fn login_form_keeps_its_field_names() {
+    let (_, _, b) = send(&app(STRICT), get(&authorize_url(&[]))).await;
+    for needle in [
+        "<h1",
+        ">Sign in</h1>",
+        "name=\"user\"",
+        "value=\"__custom__\"",
+        "name=\"custom_sub\"",
+        "name=\"custom_claims\"",
+        "name=\"override_claims\"",
+        "name=\"remember\"",
+        "value=\"1\"",
+        "id=\"custom-user\"",
+        "/_mock/static/fauxidc.css",
+    ] {
+        assert!(b.contains(needle), "{needle}");
+    }
+    assert!(!b.contains("login.css"));
+}
+
+/// The opening tag of the element with `id`.
+fn tag_with_id<'a>(html: &'a str, id: &str) -> &'a str {
+    let at = html.find(&format!("id=\"{id}\"")).expect("element present");
+    let start = html[..at].rfind('<').unwrap();
+    let end = at + html[at..].find('>').unwrap();
+    &html[start..=end]
+}
+
+#[tokio::test]
+async fn custom_fields_are_not_hidden_in_the_html() {
+    // Without JS nothing hides them: the served HTML has no `hidden` attribute on #custom-user,
+    // and no CSS rule hides it by default.
+    let (_, _, b) = send(&app(STRICT), get(&authorize_url(&[]))).await;
+    let tag = tag_with_id(&b, "custom-user");
+    assert!(!tag.contains("hidden"), "{tag}");
+    let css = std::fs::read_to_string(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/assets/static/fauxidc.css"
+    ))
+    .unwrap();
+    assert!(!css.contains("#custom-user"));
+    // The custom option carries the data-custom hook.
+    assert!(
+        b.contains("value=\"__custom__\" data-custom"),
+        "data-custom hook"
+    );
+}
+
+#[tokio::test]
+async fn legacy_login_css_is_still_served() {
+    assert_eq!(
+        send(&app(AUTH0), get("/_mock/static/login.css")).await.0,
+        200
+    );
+}
+
+fn template_files() -> Vec<(String, String)> {
+    let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/templates");
+    let mut out = Vec::new();
+    for entry in std::fs::read_dir(dir).unwrap() {
+        let path = entry.unwrap().path();
+        out.push((
+            path.display().to_string(),
+            std::fs::read_to_string(&path).unwrap(),
+        ));
+    }
+    assert_eq!(out.len(), 4);
+    out
+}
+
+#[test]
+fn templates_have_no_external_urls() {
+    for (name, text) in template_files() {
+        for bad in ["http://", "https://", "src=\"//", "href=\"//"] {
+            assert!(!text.contains(bad), "{name}: {bad}");
+        }
+    }
+}
+
+#[test]
+fn templates_link_only_fauxidc_css() {
+    for (name, text) in template_files() {
+        if name.ends_with("debugger.html") {
+            continue; // Task 12
+        }
+        assert!(
+            text.contains("{{ static_base|href }}/fauxidc.css"),
+            "{name}"
+        );
+        assert!(!text.contains("login.css"), "{name}");
+    }
+}
+
+#[test]
+fn compiled_css_has_the_used_components() {
+    let css = std::fs::read_to_string(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/assets/static/fauxidc.css"
+    ))
+    .unwrap();
+    for class in [".card", ".btn", ".select", ".alert", ".collapse"] {
+        assert!(css.contains(class), "{class}");
+    }
+}

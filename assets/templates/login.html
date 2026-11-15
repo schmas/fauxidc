@@ -3,39 +3,84 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Sign in</title>
-<link rel="stylesheet" href="{{ static_base }}/login.css">
+<meta name="color-scheme" content="light dark">
+<title>Sign in · fauxidc</title>
+<link rel="stylesheet" href="{{ static_base|href }}/fauxidc.css">
 </head>
-<body>
-<main>
-<h1>Sign in</h1>
-<p class="meta">Client: {{ client_id }} · Issuer: {{ issuer_id }}</p>
-{% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
-<form method="post" action="{{ action }}">
+<body class="bg-base-200 text-base-content antialiased">
+<div class="mx-auto flex h-dvh w-full max-w-xl flex-col justify-center gap-4 px-4 py-6">
+<header class="flex shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-2">
+<span class="flex items-center gap-2 text-base font-semibold tracking-tight">
+<span aria-hidden="true" class="grid size-7 place-items-center rounded-lg bg-primary font-mono text-xs font-bold text-primary-content shadow-sm">fx</span>
+fauxidc
+</span>
+<span class="badge badge-warning badge-soft badge-sm gap-1.5 font-medium"><span aria-hidden="true" class="size-1.5 rounded-full bg-current"></span>Mock server · not for production</span>
+</header>
+<main class="card min-h-0 border border-base-300 bg-base-100 shadow-xl shadow-base-content/5">
+<form method="post" action="{{ action }}" class="flex min-h-0 flex-col">
 {% for pair in params %}<input type="hidden" name="{{ pair[0] }}" value="{{ pair[1] }}">
-{% endfor %}
-<label>User
-<select name="user">
+{% endfor %}<div class="flex min-h-0 flex-col gap-4 overflow-y-auto px-6 pt-5 pb-5">
+<div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+<h1 class="text-xl font-semibold tracking-tight">Sign in</h1>
+<div class="flex min-w-0 flex-wrap gap-1.5 text-xs">
+<span class="badge badge-ghost max-w-full gap-1.5"><span class="text-base-content/60">Client</span><span class="truncate font-mono">{{ client_id }}</span></span>
+<span class="badge badge-ghost max-w-full gap-1.5"><span class="text-base-content/60">Issuer</span><span class="truncate font-mono">{{ issuer_id }}</span></span>
+</div>
+</div>
+{% if error %}<div class="alert alert-error alert-soft items-start py-3 text-sm" role="alert">
+<svg aria-hidden="true" class="size-5 shrink-0" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0Zm-8-5a.75.75 0 0 1 .75.75v4.5a.75.75 0 0 1-1.5 0v-4.5A.75.75 0 0 1 10 5Zm0 10a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z" clip-rule="evenodd"/></svg>
+<span>{{ error }}</span>
+</div>{% endif %}
+<div class="flex flex-col gap-1.5">
+<label for="f-user" class="text-sm font-medium">User</label>
+<select id="f-user" name="user" class="select w-full" aria-describedby="f-user-help">
 {% for u in users %}<option value="{{ u.id }}"{% if selected == u.id %} selected{% endif %}>{{ u.label }}</option>
-{% endfor %}<option value="__custom__"{% if selected == "__custom__" %} selected{% endif %}>Custom…</option>
+{% endfor %}<option value="__custom__"{% if selected == "__custom__" %} selected{% endif %} data-custom>Custom…</option>
 </select>
-</label>
-<fieldset>
-<legend>Custom…</legend>
-<label>Subject
-<input type="text" name="custom_sub" value="{{ custom_sub }}">
-</label>
-<label>Claims (JSON)
-<textarea name="custom_claims">{{ custom_claims }}</textarea>
-</label>
+<p id="f-user-help" class="text-xs text-base-content/60">No password. Pick Custom… to type a subject and claims.</p>
+</div>
+{% set custom_error = error and selected == "__custom__" %}<fieldset id="custom-user" class="grid gap-3 rounded-box border border-dashed border-base-300 bg-base-200/60 px-4 pt-1 pb-4 sm:grid-cols-2">
+<legend class="px-1.5 text-xs font-semibold tracking-wide text-base-content/60 uppercase">Custom User<span class="font-normal normal-case [.js_&]:hidden"> · used only when User is Custom…</span></legend>
+<div class="flex flex-col gap-1.5">
+<label for="f-custom-sub" class="text-sm font-medium">Subject</label>
+<input id="f-custom-sub" type="text" name="custom_sub" value="{{ custom_sub }}" class="input w-full font-mono{% if custom_error %} input-error{% endif %}"{% if custom_error %} aria-invalid="true"{% endif %} placeholder="carol" autocomplete="off" spellcheck="false" aria-describedby="f-custom-sub-help">
+<p id="f-custom-sub-help" class="text-xs text-base-content/60">The <code class="font-mono">sub</code> claim.</p>
+</div>
+<div class="flex flex-col gap-1.5">
+<label for="f-custom-claims" class="text-sm font-medium">Claims <span class="font-normal text-base-content/60">(JSON, optional)</span></label>
+<textarea id="f-custom-claims" name="custom_claims" rows="3" class="textarea min-h-0 w-full font-mono text-xs leading-relaxed{% if custom_error %} textarea-error{% endif %}"{% if custom_error %} aria-invalid="true"{% endif %} placeholder='{"email": "carol@example.test"}' spellcheck="false">{{ custom_claims }}</textarea>
+</div>
 </fieldset>
-<details>
-<summary>Override claims</summary>
-<textarea name="override_claims">{{ override_claims }}</textarea>
+<details class="collapse collapse-arrow shrink-0 rounded-box border border-base-300 bg-base-100"{% if override_claims %} open{% endif %}>
+<summary class="collapse-title min-h-0 py-2.5 text-sm font-medium">Override claims <span class="font-normal text-base-content/60">· optional</span></summary>
+<div class="collapse-content flex flex-col gap-1.5">
+<label for="f-override" class="sr-only">Override claims (JSON)</label>
+<textarea id="f-override" name="override_claims" rows="2" class="textarea min-h-0 w-full font-mono text-xs leading-relaxed" placeholder='{"name": "Alice Example"}' spellcheck="false" aria-describedby="f-override-help">{{ override_claims }}</textarea>
+<p id="f-override-help" class="text-xs text-base-content/60">JSON merged on top of the User, for this sign-in only.</p>
+</div>
 </details>
-<label class="inline"><input type="checkbox" name="remember" value="1"{% if remember %} checked{% endif %}> Remember me and skip this page</label>
-<button type="submit">Sign in</button>
+</div>
+<div class="flex shrink-0 flex-col gap-3 border-t border-base-300 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
+<label class="flex cursor-pointer items-center gap-2.5 text-sm">
+<input type="checkbox" name="remember" value="1"{% if remember %} checked{% endif %} class="checkbox checkbox-primary checkbox-sm">
+<span>Remember me and skip this page</span>
+</label>
+<button type="submit" class="btn btn-primary w-full sm:w-40">Sign in</button>
+</div>
 </form>
 </main>
+<footer class="shrink-0 text-center text-xs text-base-content/50">A mock OpenID Provider for development and tests. Never enter real credentials.</footer>
+</div>
+<script>
+(function () {
+  document.documentElement.classList.add("js");
+  var select = document.querySelector("select[name=user]");
+  var custom = document.getElementById("custom-user");
+  if (!select || !custom) return;
+  function update() { custom.hidden = select.value !== "__custom__"; }
+  select.addEventListener("change", update);
+  update();
+})();
+</script>
 </body>
 </html>
