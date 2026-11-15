@@ -332,3 +332,21 @@ async fn touched_file_logs_no_error() {
     assert!(!text.contains("ERROR"), "{text}");
     assert_eq!(test_api_status(&app, "alice").await, 200);
 }
+
+#[tokio::test]
+async fn lenient_client_is_unknown_after_reload_to_strict() {
+    let lenient = STRICT.replace("[issuer.auth0]\n", "[issuer.auth0]\nlenient = true\n");
+    let (app, handle) = live_app(&lenient);
+    let url = authorize_url(&[
+        ("client_id", "new-app"),
+        ("redirect_uri", "http://localhost:1/cb"),
+    ]);
+    assert_eq!(send(&app, get(&url)).await.0, 200);
+    handle.apply(load_str(STRICT).unwrap().config).unwrap();
+    let (s, _, b) = send(&app, get(&url)).await;
+    assert_eq!(s, 400, "{b}");
+    assert!(b.contains("client_id"), "{b}");
+    // Back to Lenient: the registration is still there.
+    handle.apply(load_str(&lenient).unwrap().config).unwrap();
+    assert_eq!(send(&app, get(&url)).await.0, 200);
+}

@@ -27,7 +27,8 @@ impl ResolvedClient {
     }
 }
 
-/// Finds a configured client for this issuer, else a Lenient registration.
+/// Finds a configured client for this issuer, else a Lenient registration when the Issuer
+/// is Lenient now.
 pub fn find_client(ctx: &IssuerCtx, client_id: &str) -> Option<ResolvedClient> {
     let configured = ctx.app.config.client.iter().find(|(key, c)| {
         c.client_id.as_deref().unwrap_or(key) == client_id
@@ -40,6 +41,11 @@ pub fn find_client(ctx: &IssuerCtx, client_id: &str) -> Option<ResolvedClient> {
             config: config.clone(),
             lenient_registered: false,
         });
+    }
+    // A reload can turn the Issuer to Strict while the Store keeps its Lenient
+    // registrations; Strict mode must not see them.
+    if !ctx.issuer().lenient {
+        return None;
     }
     let store = ctx
         .app
