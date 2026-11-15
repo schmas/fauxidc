@@ -467,3 +467,138 @@ async fn request_object_is_not_supported_in_lenient_mode() {
         Some("request_not_supported")
     );
 }
+
+const TEMPLATE: &str = "[issuer.auth0.custom_user]\nlabel = \"Other…\"\n[issuer.auth0.custom_user.claims]\nemail = \"{username}@example.test\"\nemail_verified = true\nname = \"{username} Example\"\ngroups = [\"{username}-team\"]\norg = { unit = \"{username} st\" }\n";
+
+#[tokio::test]
+async fn login_page_shows_the_username_field() {
+    let app = app(&format!("{STRICT}{TEMPLATE}"));
+    let (s, _, b) = send(&app, get(&authorize_url(&[]))).await;
+    assert_eq!(s, 200);
+    assert!(b.contains("name=\"username\""), "{b}");
+    assert!(b.contains(">Other…</option>"), "{b}");
+    assert!(!b.contains("name=\"custom_claims\""), "{b}");
+    assert!(!b.contains("name=\"custom_sub\""), "{b}");
+    assert!(b.contains("name=\"override_claims\""), "{b}");
+}
+
+#[tokio::test]
+async fn custom_user_template_builds_the_user() {
+    let app = app(&format!("{STRICT}{TEMPLATE}"));
+    let code = login_code(
+        &app,
+        &[
+            ("user", "__custom__"),
+            ("username", "  Carol "),
+            ("custom_sub", "ignored"),
+            ("custom_claims", r#"{"extra":"ignored"}"#),
+            ("override_claims", r#"{"name":"C"}"#),
+        ],
+    )
+    .await;
+    let tokens = exchange_code_for(&app, &code).await;
+    let id = claims_of(tokens["id_token"].as_str().unwrap());
+    assert_eq!(id["sub"], "carol", "{id}");
+    assert_eq!(id["email"], "carol@example.test", "{id}");
+    assert_eq!(id["email_verified"], true, "{id}");
+    assert_eq!(id["groups"], serde_json::json!(["carol-team"]), "{id}");
+    assert_eq!(id["org"], serde_json::json!({"unit": "carol st"}), "{id}");
+    assert_eq!(id["name"], "C", "override wins: {id}");
+    assert!(id.get("extra").is_none(), "{id}");
+}
+
+#[tokio::test]
+async fn empty_username_shows_the_page_with_an_error() {
+    let app = app(&format!("{STRICT}{TEMPLATE}"));
+    let (s, h, b) = send(
+        &app,
+        post_form(
+            "/auth0/authorize",
+            &login_form(&[
+                ("user", "__custom__"),
+                ("username", "   "),
+                ("custom_sub", "dave"),
+            ]),
+            &[],
+        ),
+    )
+    .await;
+    assert_eq!(s, 400);
+    assert!(h.get("location").is_none());
+    assert!(b.contains("Enter a username"), "{b}");
+    assert!(b.contains("name=\"username\""), "{b}");
+    assert!(b.contains(r#"value="__custom__" selected"#), "{b}");
+}
+
+#[tokio::test]
+async fn username_is_kept_after_an_error() {
+    let app = app(&format!("{STRICT}{TEMPLATE}"));
+    let (s, _, b) = send(
+        &app,
+        post_form(
+            "/auth0/authorize",
+            &login_form(&[
+                ("user", "__custom__"),
+                ("username", "Dave"),
+                ("override_claims", "{not json"),
+            ]),
+            &[],
+        ),
+    )
+    .await;
+    assert_eq!(s, 400);
+    assert!(b.contains("Override claims must be a JSON object"), "{b}");
+    assert!(b.contains(r#"name="username" value="Dave""#), "{b}");
+}
+
+#[tokio::test]
+async fn without_template_the_subject_fields_stay() {
+    let app = app(STRICT);
+    let (_, _, b) = send(&app, get(&authorize_url(&[]))).await;
+    assert!(b.contains("name=\"custom_sub\"") && b.contains("name=\"custom_claims\""));
+    assert!(!b.contains("name=\"username\""), "{b}");
+    assert!(b.contains(">Custom…</option>"), "{b}");
+    let code = login_code(
+        &app,
+        &[
+            ("user", "__custom__"),
+            ("custom_sub", "dave"),
+            ("username", "ignored"),
+        ],
+    )
+    .await;
+    let tokens = exchange_code_for(&app, &code).await;
+    assert_eq!(
+        claims_of(tokens["id_token"].as_str().unwrap())["sub"],
+        "dave"
+    );
+}
+
+#[tokio::test]
+async fn custom_user_follows_reload() {
+    let (app, handle) = live_app(STRICT);
+    let (_, _, b) = send(&app, get(&authorize_url(&[]))).await;
+    assert!(!b.contains("name=\"username\""));
+    handle
+        .apply(
+            fauxidc::config::load_str(&format!("{STRICT}{TEMPLATE}"))
+                .unwrap()
+                .config,
+        )
+        .unwrap();
+    let (_, _, b) = send(&app, get(&authorize_url(&[]))).await;
+    assert!(
+        b.contains("name=\"username\"") && b.contains(">Other…</option>"),
+        "{b}"
+    );
+    let changed = TEMPLATE.replace("Other…", "Someone else…");
+    handle
+        .apply(
+            fauxidc::config::load_str(&format!("{STRICT}{changed}"))
+                .unwrap()
+                .config,
+        )
+        .unwrap();
+    let (_, _, b) = send(&app, get(&authorize_url(&[]))).await;
+    assert!(b.contains(">Someone else…</option>"), "{b}");
+}

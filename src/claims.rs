@@ -1,6 +1,6 @@
 //! Claim merging and scope filtering for ID tokens, access tokens and userinfo.
 
-use crate::config::{Claims, ClientConfig, Config};
+use crate::config::{Claims, ClientConfig, Config, USERNAME_PLACEHOLDER};
 use crate::state::Subject;
 
 /// Claims the server owns. Configuration and login overrides can never set them.
@@ -103,6 +103,28 @@ pub fn build_claims(
         out.remove(*k);
     }
     out
+}
+
+/// Replaces `{username}` with `username` in every string of `value`, nested arrays and
+/// objects too. Object keys stay as they are.
+#[must_use]
+pub fn fill_username(value: &serde_json::Value, username: &str) -> serde_json::Value {
+    use serde_json::Value;
+    match value {
+        Value::String(s) => Value::String(s.replace(USERNAME_PLACEHOLDER, username)),
+        Value::Array(items) => Value::Array(
+            items
+                .iter()
+                .map(|item| fill_username(item, username))
+                .collect(),
+        ),
+        Value::Object(map) => Value::Object(
+            map.iter()
+                .map(|(k, v)| (k.clone(), fill_username(v, username)))
+                .collect(),
+        ),
+        other => other.clone(),
+    }
 }
 
 /// Drops claims that belong to a scope the request did not grant.
@@ -256,5 +278,20 @@ claims = { email = "bob@example.com", name = "Bobby Viewer" }
         assert_eq!(f.keys().collect::<Vec<_>>(), vec!["roles", "sub"]);
         let f = filter_by_scope(c, &["openid".into(), "email".into()]);
         assert!(f.contains_key("email") && !f.contains_key("name"));
+    }
+
+    #[test]
+    fn fill_username_replaces_nested_strings() {
+        let t = json!({"email":"{username}@example.test","n":1,"ok":true,"none":null,"groups":["{username}-team"],"address":{"formatted":"{username} st"},"twice":"{username}/{username}"});
+        assert_eq!(
+            fill_username(&t, "carol"),
+            json!({"email":"carol@example.test","n":1,"ok":true,"none":null,"groups":["carol-team"],"address":{"formatted":"carol st"},"twice":"carol/carol"})
+        );
+    }
+
+    #[test]
+    fn fill_username_keeps_object_keys() {
+        let t = json!({"{username}": "{username}"});
+        assert_eq!(fill_username(&t, "carol"), json!({"{username}": "carol"}));
     }
 }

@@ -303,23 +303,134 @@ async fn error_page_wraps_a_long_message() {
     assert!(css.contains(".min-w-0{min-width:0"));
 }
 
-#[tokio::test]
-async fn login_error_marks_no_field() {
+/// The opening tags in `html` that carry `class` (an error class).
+fn tags_with<'a>(html: &'a str, class: &str) -> Vec<&'a str> {
+    html.match_indices(class)
+        .map(|(at, _)| {
+            let start = html[..at].rfind('<').unwrap();
+            let end = at + html[at..].find('>').unwrap();
+            &html[start..=end]
+        })
+        .collect()
+}
+
+/// Posts the login form with `extra` to an app from `toml`, asserts 400, returns the body.
+async fn login_error(toml: &str, extra: &[(&str, &str)]) -> String {
     let (s, _, b) = send(
-        &app(STRICT),
+        &app(toml),
+        post_form("/auth0/authorize", &login_fields(extra), &[]),
+    )
+    .await;
+    assert_eq!(s, 400, "{b}");
+    b
+}
+
+/// A config, the extra login fields, and the id of the field that must be marked.
+type Case<'a> = (&'a str, &'a [(&'a str, &'a str)], &'a str);
+
+#[tokio::test]
+async fn login_error_marks_only_the_failed_field() {
+    const TEMPLATE: &str =
+        "[issuer.auth0.custom_user.claims]\nemail = \"{username}@example.test\"\n";
+    let with_template = format!("{STRICT}{TEMPLATE}");
+    let cases: [Case<'_>; 5] = [
+        (STRICT, &[("user", "__custom__")], "f-custom-sub"),
+        (
+            STRICT,
+            &[
+                ("user", "__custom__"),
+                ("custom_sub", "c"),
+                ("custom_claims", "[1]"),
+            ],
+            "f-custom-claims",
+        ),
+        (STRICT, &[("override_claims", "{x")], "f-override"),
+        (&with_template, &[("user", "__custom__")], "f-username"),
+        (STRICT, &[("user", "mallory")], "f-user"),
+    ];
+    for (toml, extra, id) in cases {
+        let b = login_error(toml, extra).await;
+        let invalid = tags_with(&b, "aria-invalid=\"true\"");
+        assert_eq!(invalid.len(), 1, "{id}: {invalid:?}");
+        assert!(
+            invalid[0].contains(&format!("id=\"{id}\"")),
+            "{id}: {invalid:?}"
+        );
+        let error_class = tags_with(&b, "-error");
+        assert!(
+            error_class
+                .iter()
+                .filter(|t| !t.contains("alert-error"))
+                .all(|t| t.contains(&format!("id=\"{id}\""))),
+            "{id}: {error_class:?}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn login_page_without_error_marks_no_field() {
+    let (_, _, b) = send(&app(STRICT), get(&authorize_url(&[]))).await;
+    for bad in [
+        "input-error",
+        "textarea-error",
+        "select-error",
+        "aria-invalid",
+    ] {
+        assert!(!b.contains(bad), "{bad}");
+    }
+}
+
+#[tokio::test]
+async fn context_version_is_2() {
+    let dir = tmp_dir();
+    std::fs::write(
+        dir.join("login.html"),
+        "v{{ context_version }} {{ custom_label }} {{ custom_username }} [{{ username }}] {{ error_field }}",
+    )
+    .unwrap();
+    std::fs::write(dir.join("error.html"), "v{{ context_version }}").unwrap();
+    let toml = format!("[server]\ntemplates_dir = \"{}\"\n{STRICT}", dir.display());
+    let app = app(&toml);
+    let (_, _, b) = send(&app, get(&authorize_url(&[]))).await;
+    assert_eq!(b, "v2 Custom… False [] None");
+    let (_, _, b) = send(
+        &app,
         post_form(
             "/auth0/authorize",
-            &login_fields(&[("user", "__custom__")]),
+            &login_fields(&[("override_claims", "{x")]),
             &[],
         ),
     )
     .await;
-    assert_eq!(s, 400);
-    assert!(
-        b.contains("<span class=\"min-w-0 wrap-anywhere\">Custom user needs a sub"),
-        "{b}"
+    assert_eq!(b, "v2 Custom… False [] override_claims");
+    let (_, _, b) = send(
+        &app,
+        get("/auth0/authorize?client_id=nope&redirect_uri=http://x/cb&response_type=code"),
+    )
+    .await;
+    assert_eq!(b, "v2");
+}
+
+#[tokio::test]
+async fn context_has_the_username_fields() {
+    let dir = tmp_dir();
+    std::fs::write(
+        dir.join("login.html"),
+        "{{ custom_label }} {{ custom_username }} [{{ username }}] {{ error_field }}",
+    )
+    .unwrap();
+    let toml = format!(
+        "[server]\ntemplates_dir = \"{}\"\n{STRICT}[issuer.auth0.custom_user]\nlabel = \"Other…\"\n",
+        dir.display()
     );
-    for bad in ["input-error", "textarea-error", "aria-invalid"] {
-        assert!(!b.contains(bad), "{bad}");
-    }
+    let (_, _, b) = send(
+        &app(&toml),
+        post_form(
+            "/auth0/authorize",
+            &login_fields(&[("user", "__custom__"), ("username", " ")]),
+            &[],
+        ),
+    )
+    .await;
+    assert_eq!(b, "Other… True [ ] username");
 }

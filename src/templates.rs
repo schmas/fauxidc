@@ -21,7 +21,7 @@ use crate::state::AppState;
 pub const STATIC_BASE: &str = "/_mock/static";
 
 /// The current template context version.
-pub const CONTEXT_VERSION: u32 = 1;
+pub const CONTEXT_VERSION: u32 = 2;
 
 const LOGIN: &str = "login.html";
 const ERROR: &str = "error.html";
@@ -44,7 +44,7 @@ pub struct UserOption {
     pub label: String,
 }
 
-/// The context of `login.html`. Version 1.
+/// The context of `login.html`. Version 2.
 #[derive(Debug, Clone, Serialize)]
 pub struct LoginContext {
     pub context_version: u32,
@@ -55,15 +55,25 @@ pub struct LoginContext {
     pub selected: Option<String>,
     pub params: Vec<(String, String)>,
     pub error: Option<String>,
+    /// The form field that `error` is about: `user`, `username`, `custom_sub`,
+    /// `custom_claims` or `override_claims`. None when no single field failed.
+    pub error_field: Option<String>,
     pub custom_sub: String,
     pub custom_claims: String,
     pub override_claims: String,
     /// `true` to render the remember box checked.
     pub remember: bool,
     pub static_base: String,
+    /// The text of the Custom user option: `custom_user.label`, else "Custom…".
+    pub custom_label: String,
+    /// `true` when the Issuer has `custom_user`: the page shows one `username` field
+    /// instead of `custom_sub` and `custom_claims`.
+    pub custom_username: bool,
+    /// Prefilled text for the `username` field, for example after an error.
+    pub username: String,
 }
 
-/// The context of `error.html`. Version 1.
+/// The context of `error.html`. Version 2.
 #[derive(Debug, Clone, Serialize)]
 pub struct ErrorContext {
     pub context_version: u32,
@@ -72,7 +82,7 @@ pub struct ErrorContext {
     pub static_base: String,
 }
 
-/// The context of `signed_out.html`. Version 1.
+/// The context of `signed_out.html`. Version 2.
 #[derive(Debug, Clone, Serialize)]
 pub struct SignedOutContext {
     pub context_version: u32,
@@ -103,7 +113,7 @@ pub struct DecodedJwt {
     pub issuer_note: String,
 }
 
-/// The context of `debugger.html`. Version 1.
+/// The context of `debugger.html`. Version 2.
 #[derive(Debug, Clone, Serialize)]
 pub struct DebuggerContext {
     pub context_version: u32,
@@ -295,11 +305,15 @@ mod tests {
             selected: Some("bob".into()),
             params: vec![("state".into(), "a\"b<c".into())],
             error: Some("bad <input>".into()),
+            error_field: None,
             custom_sub: String::new(),
             custom_claims: String::new(),
             override_claims: String::new(),
             remember: false,
             static_base: STATIC_BASE.into(),
+            custom_label: "Custom…".into(),
+            custom_username: false,
+            username: String::new(),
         }
     }
 

@@ -7,11 +7,11 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::claims::{ClaimTarget, build_claims};
+use crate::claims::{ClaimTarget, build_claims, fill_username};
 use crate::clients::{
     ResolvedClient, debugger_redirect_ok, find_client, redirect_uri_matches, register_lenient,
 };
-use crate::config::{Claims, Endpoint};
+use crate::config::{Claims, CustomUserConfig, Endpoint};
 use crate::cookies::{auto_select_name, auto_select_set, read_cookie, session_name, session_set};
 use crate::error::{OAuthError, append_query};
 use crate::logging::{record_client, record_endpoint};
@@ -496,16 +496,34 @@ struct KeptInput {
     custom_sub: String,
     custom_claims: String,
     override_claims: String,
+    username: String,
 }
 
-/// Renders the login page. `error` is shown on the page; `kept` refills the text fields.
+/// Why the login form was rejected: the message for the page and the form field it is about.
+#[derive(Debug, Clone, Copy)]
+struct LoginError {
+    /// The form field name: `user`, `username`, `custom_sub`, `custom_claims` or
+    /// `override_claims`.
+    field: &'static str,
+    message: &'static str,
+}
+
+impl LoginError {
+    fn new(field: &'static str, message: &'static str) -> Self {
+        Self { field, message }
+    }
+}
+
+/// Renders the login page. `error` is shown on the page and marks its field; `kept` refills
+/// the text fields.
 fn login_page(
     ctx: &IssuerCtx,
     request: &ValidRequest,
     status: StatusCode,
-    error: Option<&str>,
+    error: Option<LoginError>,
     kept: &KeptInput,
 ) -> Response {
+    let custom_user = ctx.issuer().custom_user.as_ref();
     let known = |id: &&String| ctx.app.config.user.contains_key(*id);
     let selected = kept
         .user
@@ -534,12 +552,17 @@ fn login_page(
             .collect(),
         selected,
         params: request.params.hidden_fields(),
-        error: error.map(str::to_owned),
+        error: error.map(|e| e.message.to_owned()),
+        error_field: error.map(|e| e.field.to_owned()),
         custom_sub: kept.custom_sub.clone(),
         custom_claims: kept.custom_claims.clone(),
         override_claims: kept.override_claims.clone(),
         remember: kept.remember,
         static_base: STATIC_BASE.to_owned(),
+        custom_label: custom_user
+            .map_or_else(|| CustomUserConfig::default().label, |c| c.label.clone()),
+        custom_username: custom_user.is_some(),
+        username: kept.username.clone(),
     };
     match ctx.app.templates.render_login(&ctx.id, &login) {
         Ok(html) => (status, Html(html)).into_response(),
@@ -570,6 +593,8 @@ pub struct LoginForm {
     pub custom_claims: Option<String>,
     pub override_claims: Option<String>,
     pub remember: Option<String>,
+    /// The username of the Custom user template (`custom_user`).
+    pub username: Option<String>,
 }
 
 /// Parses `text` as a JSON object. Empty text gives an empty object.
@@ -607,6 +632,7 @@ pub async fn authorize_post(
         custom_sub: f.custom_sub.clone().unwrap_or_default(),
         custom_claims: f.custom_claims.clone().unwrap_or_default(),
         override_claims: f.override_claims.clone().unwrap_or_default(),
+        username: f.username.clone().unwrap_or_default(),
     };
     match subject_from_form(&ctx, &f) {
         Ok(subject) => {
@@ -616,31 +642,35 @@ pub async fn authorize_post(
             };
             sign_in_with(&ctx, &request, subject, remembered)
         }
-        Err(message) => {
-            tracing::info!(issuer = %ctx.id, "login rejected: {message}");
-            login_page(
-                &ctx,
-                &request,
-                StatusCode::BAD_REQUEST,
-                Some(message),
-                &kept,
-            )
+        Err(error) => {
+            tracing::info!(issuer = %ctx.id, "login rejected: {}", error.message);
+            login_page(&ctx, &request, StatusCode::BAD_REQUEST, Some(error), &kept)
         }
     }
 }
 
-/// Reads who signed in. The error is the message for the login page.
-fn subject_from_form(ctx: &IssuerCtx, f: &LoginForm) -> Result<Subject, &'static str> {
+/// Reads who signed in. The error is the message for the login page and its field.
+///
+/// With `custom_user`, the Custom user reads only `username` and `override_claims` (plan
+/// Ruling 40); without it, `custom_sub` and `custom_claims`.
+fn subject_from_form(ctx: &IssuerCtx, f: &LoginForm) -> Result<Subject, LoginError> {
     let override_claims = f.override_claims.as_deref().unwrap_or_default();
-    let overrides = parse_claims(override_claims).ok_or("Override claims must be a JSON object");
+    let overrides = parse_claims(override_claims).ok_or(LoginError::new(
+        "override_claims",
+        "Override claims must be a JSON object",
+    ));
     let user = f.user.as_deref().unwrap_or_default();
     if user == CUSTOM_USER {
+        if let Some(template) = &ctx.issuer().custom_user {
+            return template_subject(template, f.username.as_deref(), overrides);
+        }
         let sub = f.custom_sub.as_deref().unwrap_or_default().trim();
         if sub.is_empty() {
-            return Err("Custom user needs a sub");
+            return Err(LoginError::new("custom_sub", "Custom user needs a sub"));
         }
-        let claims = parse_claims(f.custom_claims.as_deref().unwrap_or_default())
-            .ok_or("Custom claims must be a JSON object")?;
+        let claims = parse_claims(f.custom_claims.as_deref().unwrap_or_default()).ok_or(
+            LoginError::new("custom_claims", "Custom claims must be a JSON object"),
+        )?;
         overrides?;
         return Ok(Subject::Custom {
             sub: sub.to_owned(),
@@ -648,11 +678,35 @@ fn subject_from_form(ctx: &IssuerCtx, f: &LoginForm) -> Result<Subject, &'static
         });
     }
     if !ctx.app.config.user.contains_key(user) {
-        return Err("Choose a user");
+        return Err(LoginError::new("user", "Choose a user"));
     }
     Ok(Subject::User {
         id: user.to_owned(),
         overrides: overrides?,
+    })
+}
+
+/// The Custom user of a `custom_user` template: `sub` is the username, trimmed and lowercase;
+/// the claims are the template with `{username}` filled in, then `overrides` on top. The
+/// username is checked before the overrides, as `custom_sub` is.
+fn template_subject(
+    template: &CustomUserConfig,
+    username: Option<&str>,
+    overrides: Result<Claims, LoginError>,
+) -> Result<Subject, LoginError> {
+    let username = username.unwrap_or_default().trim().to_lowercase();
+    if username.is_empty() {
+        return Err(LoginError::new("username", "Enter a username"));
+    }
+    let mut claims: Claims = template
+        .claims
+        .iter()
+        .map(|(k, v)| (k.clone(), fill_username(v, &username)))
+        .collect();
+    claims.extend(overrides?);
+    Ok(Subject::Custom {
+        sub: username,
+        claims,
     })
 }
 

@@ -1,0 +1,14 @@
+# The SPA e2e server loads this file after examples/auth0.toml and examples/okta.toml.
+# Issuer `custom` has the Custom user template, so the login page shows the username field.
+# The Clients of the example files have `issuer = "*"`, so `example-spa` works here too.
+
+[issuer.custom]
+issuer_url = "http://localhost:9000/custom/"
+
+[issuer.custom.custom_user]
+label = "Other…"
+
+[issuer.custom.custom_user.claims]
+email = "{username}@example.test"
+email_verified = true
+name = "{username} Example"

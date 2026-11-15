@@ -262,6 +262,19 @@ filter; see [docs/templates.md](docs/templates.md).
 
 You can replace the login page, the error page and the signed-out page. See [docs/templates.md](docs/templates.md).
 
+For a Custom user from one username, set a claims template on the Issuer. The "Custom…" entry
+(here "Other…") then shows one `username` field instead of the subject and JSON fields:
+
+```toml
+[issuer.auth0.custom_user]
+label = "Other…"
+[issuer.auth0.custom_user.claims]
+email = "{username}@example.test"
+email_verified = true
+```
+
+`sub` is the username, trimmed and in lowercase. `{username}` is filled in every string value, nested values too.
+
 ## Test API
 
 `POST /_mock/{issuer-id}/token` issues tokens without a browser. The body is JSON:

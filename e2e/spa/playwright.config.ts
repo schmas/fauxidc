@@ -20,7 +20,7 @@ export default defineConfig({
     {
       // server-check.mjs fails with a clear message when another server holds port 9000.
       command:
-        "node server-check.mjs && cargo run --manifest-path ../../Cargo.toml -- --config ../../examples/auth0.toml --config ../../examples/okta.toml",
+        "node server-check.mjs && cargo run --manifest-path ../../Cargo.toml -- --config ../../examples/auth0.toml --config ../../examples/okta.toml --config custom-user.toml",
       url: "http://localhost:9000/_mock/health",
       timeout: 180_000,
       reuseExistingServer: !process.env.CI,

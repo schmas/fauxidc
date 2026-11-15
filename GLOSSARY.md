@@ -10,7 +10,7 @@
 
 **User**: A test identity declared in config. It is available to every Issuer. An Issuer can shape its `sub` and claims.
 
-**Custom user**: An identity typed on the login page (a `sub` plus claims). It exists for one login only and is never saved.
+**Custom user**: An identity typed on the login page (a `sub` plus claims, or one username filled into the Issuer `custom_user` template). It exists for one login only and is never saved.
 
 **Claim override**: Claims typed on the login page and merged on top of a User for one login. It does not create a new identity.
 

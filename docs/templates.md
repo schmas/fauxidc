@@ -23,9 +23,19 @@ For other styles, put your own file in `server.static_dir` and link it.
 
 `/_mock/static/login.css`, the stylesheet of the old built-in pages, is still served, so old templates that link it keep working.
 
-## Context version 1
+## Context version 2
 
-Every context has `context_version` (integer, `1`). Fields are added in a minor release only if they are optional for existing templates. Removing or renaming a field is a breaking release.
+Every context has `context_version` (integer, `2`). Fields are added in a minor release only if they are optional for existing templates. Removing or renaming a field is a breaking release.
+
+### Changes from version 1
+
+- `context_version` is `2` in all four contexts. A template that tests `context_version == 1` must change.
+- `login.html`: new fields `custom_label`, `custom_username`, `username` and `error_field`.
+- `login.html`: new form field `username`, read when the Issuer has `custom_user`.
+- `debugger.html`: a decoded JWT has the new field `issuer_note`.
+- `signed_out.html`: `signed_in_as` is always null.
+
+No field is removed or renamed.
 
 The autoescape writes `/` as `&#x2f;`, which a browser decodes. The `href` filter escapes like the autoescape but keeps `/`, for readable links: `<a href="{{ change_href|href }}">`.
 
@@ -33,7 +43,7 @@ The autoescape writes `/` as `&#x2f;`, which a browser decodes. The `href` filte
 
 | Field | Type | Meaning |
 | --- | --- | --- |
-| `context_version` | integer | Always `1`. |
+| `context_version` | integer | Always `2`. |
 | `issuer_id` | string | Id of the issuer. |
 | `client_id` | string | The `client_id` of the authorize request. |
 | `action` | string | The form target. Post the form here with `method="post"`. |
@@ -41,32 +51,42 @@ The autoescape writes `/` as `&#x2f;`, which a browser decodes. The `href` filte
 | `selected` | string or null | The `id` of the user to preselect, or `__custom__`. |
 | `params` | list of `[name, value]` | The authorize request parameters. |
 | `error` | string or null | An error message to show above the form. |
+| `error_field` | string or null | The form field that `error` is about: `user`, `username`, `custom_sub`, `custom_claims` or `override_claims`. Null when there is no error. (Version 2.) |
 | `custom_sub` | string | Prefilled text for the custom subject. |
 | `custom_claims` | string | Prefilled JSON text for the custom claims. |
 | `override_claims` | string | Prefilled JSON text for the override claims. |
 | `remember` | boolean | `true` to render the `remember` checkbox checked, for example after a form error. |
 | `static_base` | string | URL prefix for static files, `/_mock/static`. |
+| `custom_label` | string | The text of the Custom user option: `issuer.<id>.custom_user.label`, else `Custom…`. (Version 2.) |
+| `custom_username` | boolean | `true` when the Issuer has `custom_user`. Then show one `username` field instead of `custom_sub` and `custom_claims`. (Version 2.) |
+| `username` | string | Prefilled text for the `username` field, for example after a form error. (Version 2.) |
 
 `params` must be posted back unchanged: render each pair as `<input type="hidden" name="{{ pair[0] }}" value="{{ pair[1] }}">`.
 
-The form fields the server reads: `user` (a user `id` or `__custom__`), `custom_sub`, `custom_claims`, `override_claims`, and `remember` (checkbox). The flow needs no JavaScript.
+The form fields the server reads: `user` (a user `id` or `__custom__`), `custom_sub`, `custom_claims`, `override_claims`, `username`, and `remember` (checkbox). The flow needs no JavaScript.
+
+With `user=__custom__`, the server reads only `username` and `override_claims` when the Issuer has `custom_user`, and only `custom_sub`, `custom_claims` and `override_claims` when it does not.
+An empty `username` (after trim) gives the page again with status 400, the error `Enter a username` and `error_field` = `username`.
+
+Use `error_field` to mark the failed input, for example with `aria-invalid="true"` and the `input-error`, `textarea-error` or `select-error` class.
+The built-in page marks only that input.
 
 ### `error.html`
 
 | Field | Type | Meaning |
 | --- | --- | --- |
-| `context_version` | integer | Always `1`. |
+| `context_version` | integer | Always `2`. |
 | `issuer_id` | string | Id of the issuer. |
 | `message` | string | The error message. |
 | `static_base` | string | URL prefix for static files, `/_mock/static`. |
 
 ### `signed_out.html`
 
-`/endsession` renders this page when the request has no `post_logout_redirect_uri`. It is a new, optional template: existing `templates_dir` overrides keep working, and the context version stays `1`.
+`/endsession` renders this page when the request has no `post_logout_redirect_uri`. It is an optional template: existing `templates_dir` overrides keep working.
 
 | Field | Type | Meaning |
 | --- | --- | --- |
-| `context_version` | integer | Always `1`. |
+| `context_version` | integer | Always `2`. |
 | `issuer_id` | string | Id of the issuer. |
 | `client_id` | string or null | The Client of the logout request, from `client_id` or `id_token_hint`, when known. |
 | `signed_in_as` | string or null | Always null: the same response clears the Auto-select cookie. The field stays for compatibility. |
@@ -82,7 +102,7 @@ The login flow callback renders it with the decoded tokens of the flow. It is a 
 
 | Field | Type | Meaning |
 | --- | --- | --- |
-| `context_version` | integer | Always `1`. |
+| `context_version` | integer | Always `2`. |
 | `issuer_id` | string | Id of the issuer. |
 | `action` | string | The debugger path. Post the form here with `method="post"` and a field `token`. |
 | `start_href` | string | `action` + `/start`. A link here starts the login flow with the built-in `debugger` Client. |

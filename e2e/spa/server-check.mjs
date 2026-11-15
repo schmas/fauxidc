@@ -1,5 +1,5 @@
 // Checks port 9000 before the SPA exit test. If a server answers there but it
-// is not fauxidc with examples/auth0.toml and examples/okta.toml, the check
+// is not fauxidc with examples/auth0.toml, examples/okta.toml and custom-user.toml, the check
 // fails, so the tests never run against another server.
 //
 // Two callers: global-setup.ts (when Playwright reuses a running server) and
@@ -12,10 +12,12 @@ const EXPECTED = [
   ["http://localhost:9000/auth0/.well-known/openid-configuration", "http://localhost:9000/auth0/"],
   // examples/okta.toml
   ["http://localhost:9000/oauth2/default/.well-known/openid-configuration", "http://localhost:9000/oauth2/default"],
+  // custom-user.toml
+  ["http://localhost:9000/custom/.well-known/openid-configuration", "http://localhost:9000/custom/"],
 ];
 
 export const MESSAGE =
-  "port 9000 has a server that is not fauxidc with examples/auth0.toml and examples/okta.toml; stop it or free the port";
+  "port 9000 has a server that is not fauxidc with examples/auth0.toml, examples/okta.toml and e2e/spa/custom-user.toml; stop it or free the port";
 
 /** The issuer of a discovery answer, `null` for another answer or no answer in 5 s, `undefined` when nothing listens. */
 async function issuerAt(url) {

@@ -33,29 +33,34 @@ fauxidc
 </div>{% endif %}
 <div class="flex flex-col gap-1.5">
 <label for="f-user" class="text-sm font-medium">User</label>
-<select id="f-user" name="user" class="select w-full" aria-describedby="f-user-help">
+<select id="f-user" name="user" class="select w-full{% if error_field == "user" %} select-error{% endif %}" aria-describedby="f-user-help"{% if error_field == "user" %} aria-invalid="true"{% endif %}>
 {% for u in users %}<option value="{{ u.id }}"{% if selected == u.id %} selected{% endif %}>{{ u.label }}</option>
-{% endfor %}<option value="__custom__"{% if selected == "__custom__" %} selected{% endif %} data-custom>Custom…</option>
+{% endfor %}<option value="__custom__"{% if selected == "__custom__" %} selected{% endif %} data-custom>{{ custom_label }}</option>
 </select>
-<p id="f-user-help" class="text-xs text-base-content/70">No password. Pick Custom… to type a subject and claims.</p>
+<p id="f-user-help" class="text-xs text-base-content/70">No password. Pick {{ custom_label }} to type {% if custom_username %}a username{% else %}a subject and claims{% endif %}.</p>
 </div>
-<fieldset id="custom-user" class="grid gap-3 rounded-box border border-dashed border-base-300 bg-base-200/60 px-4 pt-1 pb-4 sm:grid-cols-2">
-<legend class="px-1.5 text-xs font-semibold tracking-wide text-base-content/70 uppercase">Custom User<span class="font-normal normal-case [.js_&]:hidden"> · only for Custom…</span></legend>
-<div class="flex flex-col gap-1.5">
+<fieldset id="custom-user" class="grid gap-3 rounded-box border border-dashed border-base-300 bg-base-200/60 px-4 pt-1 pb-4{% if not custom_username %} sm:grid-cols-2{% endif %}">
+<legend class="px-1.5 text-xs font-semibold tracking-wide text-base-content/70 uppercase">Custom User<span class="font-normal normal-case [.js_&]:hidden"> · only for {{ custom_label }}</span></legend>
+{% if custom_username %}<div class="flex flex-col gap-1.5">
+<label for="f-username" class="text-sm font-medium">Username</label>
+<input id="f-username" type="text" name="username" value="{{ username }}" class="input w-full font-mono{% if error_field == "username" %} input-error{% endif %}" placeholder="carol" autocomplete="off" autocapitalize="none" spellcheck="false" aria-describedby="f-username-help"{% if error_field == "username" %} aria-invalid="true"{% endif %}>
+<p id="f-username-help" class="text-xs text-base-content/70">The <code class="font-mono">sub</code> claim, in lowercase. It fills the claims template.</p>
+</div>
+{% else %}<div class="flex flex-col gap-1.5">
 <label for="f-custom-sub" class="text-sm font-medium">Subject</label>
-<input id="f-custom-sub" type="text" name="custom_sub" value="{{ custom_sub }}" class="input w-full font-mono" placeholder="carol" autocomplete="off" spellcheck="false" aria-describedby="f-custom-sub-help">
+<input id="f-custom-sub" type="text" name="custom_sub" value="{{ custom_sub }}" class="input w-full font-mono{% if error_field == "custom_sub" %} input-error{% endif %}" placeholder="carol" autocomplete="off" spellcheck="false" aria-describedby="f-custom-sub-help"{% if error_field == "custom_sub" %} aria-invalid="true"{% endif %}>
 <p id="f-custom-sub-help" class="text-xs text-base-content/70">The <code class="font-mono">sub</code> claim.</p>
 </div>
 <div class="flex flex-col gap-1.5">
 <label for="f-custom-claims" class="text-sm font-medium">Claims <span class="font-normal text-base-content/70">(JSON, optional)</span></label>
-<textarea id="f-custom-claims" name="custom_claims" rows="3" class="textarea min-h-0 w-full font-mono text-xs leading-relaxed" placeholder='{"email": "carol@example.test"}' spellcheck="false">{{ custom_claims }}</textarea>
+<textarea id="f-custom-claims" name="custom_claims" rows="3" class="textarea min-h-0 w-full font-mono text-xs leading-relaxed{% if error_field == "custom_claims" %} textarea-error{% endif %}" placeholder='{"email": "carol@example.test"}' spellcheck="false"{% if error_field == "custom_claims" %} aria-invalid="true"{% endif %}>{{ custom_claims }}</textarea>
 </div>
-</fieldset>
-<details class="collapse collapse-arrow shrink-0 rounded-box border border-base-300 bg-base-100"{% if override_claims %} open{% endif %}>
+{% endif %}</fieldset>
+<details class="collapse collapse-arrow shrink-0 rounded-box border border-base-300 bg-base-100"{% if override_claims or error_field == "override_claims" %} open{% endif %}>
 <summary class="collapse-title min-h-0 rounded-box py-2.5 text-sm font-medium focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary">Override claims <span class="font-normal text-base-content/70">· optional</span></summary>
 <div class="collapse-content flex flex-col gap-1.5 transition-none">
 <label for="f-override" class="sr-only">Override claims (JSON)</label>
-<textarea id="f-override" name="override_claims" rows="2" class="textarea min-h-0 w-full font-mono text-xs leading-relaxed" placeholder='{"name": "Alice Example"}' spellcheck="false" aria-describedby="f-override-help">{{ override_claims }}</textarea>
+<textarea id="f-override" name="override_claims" rows="2" class="textarea min-h-0 w-full font-mono text-xs leading-relaxed{% if error_field == "override_claims" %} textarea-error{% endif %}" placeholder='{"name": "Alice Example"}' spellcheck="false" aria-describedby="f-override-help"{% if error_field == "override_claims" %} aria-invalid="true"{% endif %}>{{ override_claims }}</textarea>
 <p id="f-override-help" class="text-xs text-base-content/70">JSON merged on top of the User, for this sign-in only.</p>
 </div>
 </details>
