@@ -115,3 +115,54 @@ async fn post_without_any_token_is_bearer_missing() {
     assert_eq!(s, 401);
     assert_eq!(h["www-authenticate"], "Bearer");
 }
+
+#[tokio::test]
+async fn token_without_openid_is_insufficient_scope_in_strict() {
+    let strict = app(STRICT);
+    let at = test_token(
+        &strict,
+        "auth0",
+        json!({"user": "alice", "scope": "profile"}),
+    )
+    .await["access_token"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let (s, h, b) = send(
+        &strict,
+        get_with(
+            "/auth0/userinfo",
+            &[("authorization", &format!("Bearer {at}"))],
+        ),
+    )
+    .await;
+    assert_eq!(s, 403, "{b}");
+    let challenge = h["www-authenticate"].to_str().unwrap();
+    assert!(
+        challenge.starts_with("Bearer error=\"insufficient_scope\""),
+        "{challenge}"
+    );
+    let lenient = STRICT.replace("[issuer.auth0]\n", "[issuer.auth0]\nlenient = true\n");
+    let lenient = app(&lenient);
+    let at = test_token(
+        &lenient,
+        "auth0",
+        json!({"user": "alice", "scope": "profile"}),
+    )
+    .await["access_token"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    assert_eq!(
+        send(
+            &lenient,
+            get_with(
+                "/auth0/userinfo",
+                &[("authorization", &format!("Bearer {at}"))]
+            )
+        )
+        .await
+        .0,
+        200
+    );
+}

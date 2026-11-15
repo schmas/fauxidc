@@ -75,6 +75,10 @@ pub enum OAuthError {
     /// and no error code (RFC 6750 3.1).
     #[error("missing bearer token")]
     BearerMissing,
+    /// A valid token that lacks a needed scope (RFC 6750 3.1): 403 with
+    /// `WWW-Authenticate: Bearer error="insufficient_scope"`.
+    #[error("insufficient_scope: {description}")]
+    InsufficientScope { description: String },
     /// A missing signing key.
     #[error("server_error: signing key not available")]
     Unavailable,
@@ -101,6 +105,23 @@ fn json_body(status: StatusCode, error: &str, description: &str) -> Response {
         Json(json!({ "error": error, "error_description": description })),
     )
         .into_response()
+}
+
+/// A response with only a `WWW-Authenticate: Bearer error=.., error_description=..` header.
+/// If the description does not fit a header value, the challenge has only the error.
+fn bearer_challenge(status: StatusCode, error: &'static str, description: &str) -> Response {
+    let description = description.replace('"', "'");
+    let challenge = format!("Bearer error=\"{error}\", error_description=\"{description}\"");
+    let value = HeaderValue::try_from(challenge)
+        .or_else(|_| HeaderValue::try_from(format!("Bearer error=\"{error}\"")));
+    match value {
+        Ok(value) => (status, [(header::WWW_AUTHENTICATE, value)]).into_response(),
+        Err(_) => (
+            status,
+            [(header::WWW_AUTHENTICATE, HeaderValue::from_static("Bearer"))],
+        )
+            .into_response(),
+    }
 }
 
 impl IntoResponse for OAuthError {
@@ -148,24 +169,10 @@ impl IntoResponse for OAuthError {
                 }
             }
             Self::Bearer { description } => {
-                let description = description.replace('"', "'");
-                let challenge =
-                    format!("Bearer error=\"invalid_token\", error_description=\"{description}\"");
-                match HeaderValue::try_from(challenge) {
-                    Ok(value) => (
-                        StatusCode::UNAUTHORIZED,
-                        [(header::WWW_AUTHENTICATE, value)],
-                    )
-                        .into_response(),
-                    Err(_) => (
-                        StatusCode::UNAUTHORIZED,
-                        [(
-                            header::WWW_AUTHENTICATE,
-                            HeaderValue::from_static("Bearer error=\"invalid_token\""),
-                        )],
-                    )
-                        .into_response(),
-                }
+                bearer_challenge(StatusCode::UNAUTHORIZED, "invalid_token", &description)
+            }
+            Self::InsufficientScope { description } => {
+                bearer_challenge(StatusCode::FORBIDDEN, "insufficient_scope", &description)
             }
             Self::BearerMissing => (
                 StatusCode::UNAUTHORIZED,

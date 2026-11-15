@@ -79,6 +79,13 @@ fn form_access_token(headers: &HeaderMap, body: &[u8]) -> Option<String> {
 async fn respond(ctx: &IssuerCtx, token: &str) -> Result<Response, OAuthError> {
     let keys = ctx.keys().await?;
     let mut claims = verify_access_token(&keys, &ctx.issuer().issuer_url, token)?;
+    // OIDC Core 5.3: UserInfo is for OpenID Connect access tokens.
+    let has_openid = claims
+        .get("scope")
+        .and_then(Value::as_str)
+        .is_some_and(|scope| scope.split_whitespace().any(|s| s == "openid"));
+    ctx.enforce(has_openid, || "access token scope lacks openid".to_owned())
+        .map_err(|description| OAuthError::InsufficientScope { description })?;
     for name in PROTOCOL_CLAIMS {
         claims.remove(*name);
     }

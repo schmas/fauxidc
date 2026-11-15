@@ -13,9 +13,11 @@ use crate::config::{Claims, Endpoint};
 use crate::cookies::{auto_select_name, auto_select_set, read_cookie, session_name, session_set};
 use crate::error::{OAuthError, append_query};
 use crate::logging::{record_client, record_endpoint};
+use crate::prompt::{self, PromptError, PromptRequest};
 use crate::session::Session;
 use crate::state::{CodeGrant, IssuerCtx, PkceMethod, Subject, now_secs};
 use crate::templates::{CONTEXT_VERSION, ErrorContext, LoginContext, STATIC_BASE, UserOption};
+use crate::tokens::verify_id_token_hint;
 
 /// The `user` form value that selects the Custom user.
 pub const CUSTOM_USER: &str = "__custom__";
@@ -33,6 +35,10 @@ pub struct AuthorizeParams {
     pub code_challenge_method: Option<String>,
     pub login_hint: Option<String>,
     pub prompt: Option<String>,
+    pub max_age: Option<String>,
+    /// Used only by `prompt=none`; never posted back by the login form.
+    #[serde(skip_serializing)]
+    pub id_token_hint: Option<String>,
     pub audience: Option<String>,
     pub resource: Option<String>,
     /// A request object (OIDC Core 6.1). Not supported; never posted back by the login form.
@@ -44,7 +50,8 @@ pub struct AuthorizeParams {
 }
 
 impl AuthorizeParams {
-    /// Every set field except `prompt`, in a fixed order. The login form posts them back.
+    /// Every set field except `prompt` and `id_token_hint`, in a fixed order. The login form
+    /// posts them back.
     pub fn hidden_fields(&self) -> Vec<(String, String)> {
         [
             ("response_type", &self.response_type),
@@ -56,6 +63,7 @@ impl AuthorizeParams {
             ("code_challenge", &self.code_challenge),
             ("code_challenge_method", &self.code_challenge_method),
             ("login_hint", &self.login_hint),
+            ("max_age", &self.max_age),
             ("audience", &self.audience),
             ("resource", &self.resource),
         ]
@@ -229,13 +237,14 @@ pub async fn authorize_get(
     headers: HeaderMap,
     Query(p): Query<AuthorizeParams>,
 ) -> Response {
-    authorize_request(&ctx, &headers, &p)
+    authorize_request(&ctx, &headers, &p).await
 }
 
 /// An authorization request, sent by `GET` or as a `POST` form without a `user` field
-/// (OIDC Core 3.1.2.1): validate; `prompt=none` uses the Session only; else sign in without
-/// the page (Auto-select, `auto_login`) or show the login page.
-fn authorize_request(ctx: &IssuerCtx, headers: &HeaderMap, p: &AuthorizeParams) -> Response {
+/// (OIDC Core 3.1.2.1): validate; `prompt=none` uses the Session only; `login`,
+/// `select_account` and `max_age=0` show the page; else sign in without the page
+/// (Auto-select, `auto_login`) or show the login page.
+async fn authorize_request(ctx: &IssuerCtx, headers: &HeaderMap, p: &AuthorizeParams) -> Response {
     record_endpoint(&ctx.id, "authorize");
     if let Some(client_id) = p.client_id.as_deref() {
         record_client(client_id);
@@ -244,15 +253,18 @@ fn authorize_request(ctx: &IssuerCtx, headers: &HeaderMap, p: &AuthorizeParams) 
         Ok(request) => request,
         Err(rejection) => return reject(ctx, rejection),
     };
-    let prompt_none = p
-        .prompt
-        .as_deref()
-        .is_some_and(|v| v.split_whitespace().any(|w| w == "none"));
-    if prompt_none {
-        return match silent_session(ctx, headers, &request) {
+    let prompt = match prompt_request(ctx, &request) {
+        Ok(prompt) => prompt,
+        Err(rejection) => return reject(ctx, rejection),
+    };
+    if prompt.none {
+        return match silent_session(ctx, headers, &request, &prompt).await {
             Ok(session) => resume(ctx, &request, &session),
             Err(rejection) => reject(ctx, rejection),
         };
+    }
+    if prompt.force_login {
+        return login_page(ctx, &request, StatusCode::OK, None, &KeptInput::default());
     }
     match skip_login(ctx, &request, headers) {
         Some(id) => sign_in(
@@ -290,32 +302,100 @@ fn redirect_error(
     })
 }
 
-/// `prompt=none`: the Session named by this Issuer's Session cookie, if it exists for this
-/// Issuer. Else a `login_required` redirect.
-fn silent_session(
+/// Parses `prompt` and `max_age`. `none` with other values is an `invalid_request` in both
+/// modes; a bad `max_age` goes through `enforce` (Lenient ignores it).
+fn prompt_request(ctx: &IssuerCtx, req: &ValidRequest) -> Result<PromptRequest, Rejection> {
+    let p = &req.params;
+    let ignored = prompt::ignored_values(p.prompt.as_deref());
+    if !ignored.is_empty() {
+        tracing::info!(issuer = %ctx.id, "prompt values ignored: {}", ignored.join(" "));
+    }
+    match prompt::parse(p.prompt.as_deref(), p.max_age.as_deref()) {
+        Ok(prompt) => Ok(prompt),
+        Err(e @ PromptError::NoneWithOthers) => {
+            Err(redirect_error(ctx, req, "invalid_request", &e.rule()))
+        }
+        Err(e @ PromptError::BadMaxAge(_)) => {
+            ctx.enforce(false, || e.rule())
+                .map_err(|rule| redirect_error(ctx, req, "invalid_request", &rule))?;
+            prompt::parse(p.prompt.as_deref(), None)
+                .map_err(|e| redirect_error(ctx, req, "invalid_request", &e.rule()))
+        }
+    }
+}
+
+/// `prompt=none`: the Session named by this Issuer's Session cookie if it exists for this
+/// Issuer, belongs to a User that still exists (else it is removed), is not older than
+/// `max_age`, and matches the `id_token_hint` `sub`. Else a `login_required` redirect, or an
+/// `invalid_request` redirect for an invalid hint (through `enforce`: Lenient ignores the hint).
+async fn silent_session(
     ctx: &IssuerCtx,
     headers: &HeaderMap,
     req: &ValidRequest,
+    prompt: &PromptRequest,
 ) -> Result<Session, Rejection> {
-    read_cookie(headers, &session_name(&ctx.id))
-        .and_then(|value| ctx.app.store.sessions.get(&ctx.id, &value))
-        .ok_or_else(|| redirect_error(ctx, req, "login_required", "prompt=none: no session exists"))
+    let login_required = |rule: &str| redirect_error(ctx, req, "login_required", rule);
+    let hint_sub = match req
+        .params
+        .id_token_hint
+        .as_deref()
+        .filter(|h| !h.is_empty())
+    {
+        None => None,
+        Some(hint) => {
+            let keys = ctx.keys().await.map_err(Rejection::Redirect)?;
+            match verify_id_token_hint(&keys, &ctx.issuer().issuer_url, hint) {
+                Ok(claims) => Some(
+                    claims
+                        .get("sub")
+                        .and_then(serde_json::Value::as_str)
+                        .unwrap_or_default()
+                        .to_owned(),
+                ),
+                Err(e) => {
+                    tracing::info!(issuer = %ctx.id, "{e}");
+                    ctx.enforce(false, || "id_token_hint is invalid".to_owned())
+                        .map_err(|rule| redirect_error(ctx, req, "invalid_request", &rule))?;
+                    None
+                }
+            }
+        }
+    };
+    let value = read_cookie(headers, &session_name(&ctx.id))
+        .ok_or_else(|| login_required("prompt=none: no session exists"))?;
+    let session = ctx
+        .app
+        .store
+        .sessions
+        .get(&ctx.id, &value)
+        .ok_or_else(|| login_required("prompt=none: no session exists"))?;
+    if let Subject::User { id, .. } = &session.subject
+        && !ctx.app.config.user.contains_key(id)
+    {
+        ctx.app.store.sessions.remove(&value);
+        return Err(login_required("prompt=none: session user no longer exists"));
+    }
+    if let Some(max_age) = prompt.max_age
+        && now_secs() > session.auth_time.saturating_add(max_age)
+    {
+        return Err(login_required("prompt=none: session is older than max_age"));
+    }
+    if let Some(sub) = hint_sub
+        && sub != session.sub
+    {
+        return Err(login_required(
+            "prompt=none: id_token_hint does not match the session",
+        ));
+    }
+    Ok(session)
 }
 
 /// The configured user to sign in without the login page, if any.
 ///
-/// `prompt=login` always shows the page. Else `auto_login` with a `login_hint` that names a
-/// user wins, then the auto-select cookie.
+/// `auto_login` with a `login_hint` that names a user wins, then the Auto-select cookie.
+/// The caller handles `prompt` first.
 fn skip_login(ctx: &IssuerCtx, request: &ValidRequest, headers: &HeaderMap) -> Option<String> {
     let users = &ctx.app.config.user;
-    let wants_login = request
-        .params
-        .prompt
-        .as_deref()
-        .is_some_and(|v| v.split_whitespace().any(|w| w == "login"));
-    if wants_login {
-        return None;
-    }
     if ctx.issuer().auto_login
         && let Some(hint) = request
             .params
@@ -432,7 +512,7 @@ pub async fn authorize_post(
     Form(f): Form<LoginForm>,
 ) -> Response {
     if f.user.is_none() {
-        return authorize_request(&ctx, &headers, &f.params);
+        return authorize_request(&ctx, &headers, &f.params).await;
     }
     record_endpoint(&ctx.id, "authorize");
     if let Some(client_id) = f.params.client_id.as_deref() {
@@ -600,5 +680,62 @@ pub(crate) fn issue_code(
     match HeaderValue::try_from(location) {
         Ok(value) => (StatusCode::FOUND, [(header::LOCATION, value)]).into_response(),
         Err(_) => OAuthError::ServerError("invalid redirect location".into()).into_response(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::state::test_ctx;
+
+    const CONFIG: &str = r#"[issuer.auth0]
+issuer_url = "http://localhost:9000/auth0/"
+
+[client.example_app]
+client_id = "example-app"
+client_secret = "local"
+redirect_uris = ["http://localhost:3000/cb"]
+
+[user.alice]
+claims = { email = "alice@example.com" }
+"#;
+
+    #[tokio::test]
+    async fn removed_user_session_is_deleted() {
+        let ctx = test_ctx(CONFIG, "auth0");
+        let params = AuthorizeParams {
+            response_type: Some("code".into()),
+            client_id: Some("example-app".into()),
+            redirect_uri: Some("http://localhost:3000/cb".into()),
+            prompt: Some("none".into()),
+            ..Default::default()
+        };
+        let req = validate(&ctx, &params).unwrap();
+        let value = ctx
+            .app
+            .store
+            .sessions
+            .create(Session {
+                issuer_id: "auth0".into(),
+                subject: Subject::User {
+                    id: "ghost".into(),
+                    overrides: Claims::new(),
+                },
+                sub: "ghost".into(),
+                sid: "s-1".into(),
+                auth_time: now_secs(),
+            })
+            .unwrap();
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            header::COOKIE,
+            HeaderValue::try_from(format!("fauxidc_session_auth0={value}")).unwrap(),
+        );
+        let result = silent_session(&ctx, &headers, &req, &PromptRequest::default()).await;
+        let Err(Rejection::Redirect(OAuthError::Redirect { error, .. })) = result else {
+            panic!("expected a redirect error");
+        };
+        assert_eq!(error, "login_required");
+        assert!(ctx.app.store.sessions.get("auth0", &value).is_none());
     }
 }

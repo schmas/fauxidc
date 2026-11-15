@@ -209,3 +209,233 @@ async fn refreshed_and_test_api_id_tokens_have_no_sid() {
         .to_owned();
     assert!(claims_of(&idt).get("sid").is_none());
 }
+
+#[tokio::test]
+async fn prompt_login_shows_page_with_session() {
+    let app = app(STRICT);
+    let (_, cookie) = login_with_session(&app).await;
+    let (s, _, b) = send(
+        &app,
+        get_with(
+            &authorize_url(&[("prompt", "login")]),
+            &[("cookie", &cookie)],
+        ),
+    )
+    .await;
+    assert_eq!(s, 200);
+    assert!(b.contains("<form"));
+}
+
+#[tokio::test]
+async fn prompt_select_account_skips_auto_select() {
+    let (s, _, b) = send(
+        &app(STRICT),
+        get_with(
+            &authorize_url(&[("prompt", "select_account")]),
+            &[("cookie", "fauxidc_user_auth0=alice")],
+        ),
+    )
+    .await;
+    assert_eq!(s, 200);
+    assert!(b.contains("<form"));
+}
+
+#[tokio::test]
+async fn prompt_none_with_another_value_is_invalid_request() {
+    let (_, h, _) = send(
+        &app(STRICT),
+        get(&authorize_url(&[("prompt", "none login")])),
+    )
+    .await;
+    assert_eq!(
+        query_param(&location(&h), "error").as_deref(),
+        Some("invalid_request")
+    );
+    let lenient = STRICT.replace("[issuer.auth0]\n", "[issuer.auth0]\nlenient = true\n");
+    let (_, h, _) = send(
+        &app(&lenient),
+        get(&authorize_url(&[("prompt", "none login")])),
+    )
+    .await;
+    assert_eq!(
+        query_param(&location(&h), "error").as_deref(),
+        Some("invalid_request")
+    );
+}
+
+#[tokio::test]
+async fn max_age_exceeded_with_prompt_none_is_login_required() {
+    let app = app(STRICT);
+    let (_, cookie) = login_with_session(&app).await;
+    tokio::time::sleep(Duration::from_millis(2100)).await;
+    let (_, h, _) = send(
+        &app,
+        get_with(
+            &authorize_url(&[("prompt", "none"), ("max_age", "1")]),
+            &[("cookie", &cookie)],
+        ),
+    )
+    .await;
+    assert_eq!(
+        query_param(&location(&h), "error").as_deref(),
+        Some("login_required")
+    );
+    let (_, h, _) = send(
+        &app,
+        get_with(
+            &authorize_url(&[("prompt", "none"), ("max_age", "3600")]),
+            &[("cookie", &cookie)],
+        ),
+    )
+    .await;
+    assert!(query_param(&location(&h), "code").is_some());
+}
+
+#[tokio::test]
+async fn max_age_zero_forces_the_page_over_auto_select() {
+    let (s, _, b) = send(
+        &app(STRICT),
+        get_with(
+            &authorize_url(&[("max_age", "0")]),
+            &[("cookie", "fauxidc_user_auth0=alice")],
+        ),
+    )
+    .await;
+    assert_eq!(s, 200);
+    assert!(b.contains("<form"));
+    assert!(
+        b.contains(r#"name="max_age" value="0""#),
+        "max_age is posted back"
+    );
+}
+
+#[tokio::test]
+async fn bad_max_age_is_invalid_request_in_strict_and_ignored_in_lenient() {
+    let (_, h, _) = send(&app(STRICT), get(&authorize_url(&[("max_age", "soon")]))).await;
+    assert_eq!(
+        query_param(&location(&h), "error").as_deref(),
+        Some("invalid_request")
+    );
+    let lenient = STRICT.replace("[issuer.auth0]\n", "[issuer.auth0]\nlenient = true\n");
+    assert_eq!(
+        send(&app(&lenient), get(&authorize_url(&[("max_age", "soon")])))
+            .await
+            .0,
+        200
+    );
+}
+
+#[tokio::test]
+async fn id_token_hint_must_match_the_session() {
+    let app = app(STRICT);
+    let (code, cookie) = login_with_session(&app).await;
+    let alice_idt = exchange_code_for(&app, &code).await["id_token"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let (_, h, _) = send(
+        &app,
+        get_with(
+            &authorize_url(&[("prompt", "none"), ("id_token_hint", &alice_idt)]),
+            &[("cookie", &cookie)],
+        ),
+    )
+    .await;
+    assert!(query_param(&location(&h), "code").is_some());
+    let bob_idt = test_token(&app, "auth0", json!({"user": "bob"})).await["id_token"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let (_, h, _) = send(
+        &app,
+        get_with(
+            &authorize_url(&[("prompt", "none"), ("id_token_hint", &bob_idt)]),
+            &[("cookie", &cookie)],
+        ),
+    )
+    .await;
+    assert_eq!(
+        query_param(&location(&h), "error").as_deref(),
+        Some("login_required")
+    );
+}
+
+#[tokio::test]
+async fn expired_id_token_hint_is_accepted() {
+    let app = app(STRICT);
+    let (_, cookie) = login_with_session(&app).await;
+    let expired =
+        test_token(&app, "auth0", json!({"user": "alice", "expires_in": -60})).await["id_token"]
+            .as_str()
+            .unwrap()
+            .to_owned();
+    let (_, h, _) = send(
+        &app,
+        get_with(
+            &authorize_url(&[("prompt", "none"), ("id_token_hint", &expired)]),
+            &[("cookie", &cookie)],
+        ),
+    )
+    .await;
+    assert!(
+        query_param(&location(&h), "code").is_some(),
+        "{}",
+        location(&h)
+    );
+}
+
+#[tokio::test]
+async fn invalid_id_token_hint_is_invalid_request_in_strict_and_ignored_in_lenient() {
+    let app_strict = app(STRICT);
+    let (_, cookie) = login_with_session(&app_strict).await;
+    let (_, h, _) = send(
+        &app_strict,
+        get_with(
+            &authorize_url(&[("prompt", "none"), ("id_token_hint", "not.a.jwt")]),
+            &[("cookie", &cookie)],
+        ),
+    )
+    .await;
+    assert_eq!(
+        query_param(&location(&h), "error").as_deref(),
+        Some("invalid_request")
+    );
+
+    let lenient = app(&STRICT.replace("[issuer.auth0]\n", "[issuer.auth0]\nlenient = true\n"));
+    let (_, cookie) = login_with_session(&lenient).await;
+    let (_, h, _) = send(
+        &lenient,
+        get_with(
+            &authorize_url(&[("prompt", "none"), ("id_token_hint", "not.a.jwt")]),
+            &[("cookie", &cookie)],
+        ),
+    )
+    .await;
+    assert!(query_param(&location(&h), "code").is_some());
+}
+
+#[tokio::test]
+async fn custom_user_session_works_with_prompt_none() {
+    // The removed-User rule is covered by the `silent_session` unit test in src/authorize.rs.
+    let app = app(STRICT);
+    let (s, h, _) = send(
+        &app,
+        post_form(
+            "/auth0/authorize",
+            &login_fields(&[("user", "__custom__"), ("custom_sub", "c-1")]),
+            &[],
+        ),
+    )
+    .await;
+    assert_eq!(s, 302);
+    let cookie = set_cookie(&h, "fauxidc_session_auth0").unwrap();
+    let (_, h, _) = send(
+        &app,
+        get_with(
+            &authorize_url(&[("prompt", "none")]),
+            &[("cookie", &cookie)],
+        ),
+    )
+    .await;
+    assert!(query_param(&location(&h), "code").is_some());
+}
