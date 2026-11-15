@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0](https://github.com/schmas/fauxidc/compare/v0.1.2...v0.2.0) - 2026-11-15
+
+### Added
+
+- support the jwt-bearer grant (RFC 7523) ([#18](https://github.com/schmas/fauxidc/pull/18))
+- opt-in issuer derived from the request host ([#17](https://github.com/schmas/fauxidc/pull/17))
+
+### Other
+
+- describe the PR and release flow ([#15](https://github.com/schmas/fauxidc/pull/15))
+
 ## [0.1.2](https://github.com/schmas/fauxidc/compare/v0.1.1...v0.1.2) - 2026-11-15
 
 ### Other
