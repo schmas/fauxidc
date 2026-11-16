@@ -318,6 +318,7 @@ At a narrow width, a select box replaces the sidebar.
 | Keys | Shows the algorithm, the active `kid` and the key count from JWKS. Rotates the key, with or without `retire`. | `rotate-key` |
 | Users, Clients | Lists, shows, adds, changes and deletes entries in a JSON editor dialog. | `/_mock/users`, `/_mock/clients` |
 | Mint a token | Mints tokens for a User or a Custom user. A button opens the `id_token` in the debugger. | `POST /_mock/{issuer-id}/token` |
+| Debugger | Lists each Issuer with a link to its debugger page (`{issuer}/debugger`). The link opens the debugger page itself; the dashboard does not copy or frame it. | `/debugger` |
 | Injected failures | Sets a failure for one endpoint, or clears all failures of an Issuer. | `fail-next` |
 | Request log | Shows the log with the Issuer and path filters, and clears it. | `/_mock/requests` |
 | Config | Shows the running config as JSON with sources or as TOML, and reloads the config files. | `/_mock/config`, `POST /_mock/reload` |

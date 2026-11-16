@@ -153,6 +153,21 @@
                   }
                 },
                 {
+                  "id": "l6gAN",
+                  "type": "ref",
+                  "ref": "c:x40ze",
+                  "name": "Debugger",
+                  "width": "fill_container",
+                  "descendants": {
+                    "c:W2XqE": {
+                      "content": "Debugger"
+                    },
+                    "c:edTIG": {
+                      "icon": "bug"
+                    }
+                  }
+                },
+                {
                   "id": "dmFWg",
                   "type": "ref",
                   "ref": "c:x40ze",
@@ -963,6 +978,21 @@
                   }
                 },
                 {
+                  "id": "U1p4Kj",
+                  "type": "ref",
+                  "ref": "c:x40ze",
+                  "name": "Debugger",
+                  "width": "fill_container",
+                  "descendants": {
+                    "c:W2XqE": {
+                      "content": "Debugger"
+                    },
+                    "c:edTIG": {
+                      "icon": "bug"
+                    }
+                  }
+                },
+                {
                   "id": "m4vbOq",
                   "type": "ref",
                   "ref": "c:x40ze",
@@ -1708,6 +1738,21 @@
                     },
                     "c:edTIG": {
                       "icon": "ticket"
+                    }
+                  }
+                },
+                {
+                  "id": "tO8bW",
+                  "type": "ref",
+                  "ref": "c:x40ze",
+                  "name": "Debugger",
+                  "width": "fill_container",
+                  "descendants": {
+                    "c:W2XqE": {
+                      "content": "Debugger"
+                    },
+                    "c:edTIG": {
+                      "icon": "bug"
                     }
                   }
                 },
@@ -2555,6 +2600,21 @@
                     },
                     "c:edTIG": {
                       "icon": "ticket"
+                    }
+                  }
+                },
+                {
+                  "id": "HyPoj",
+                  "type": "ref",
+                  "ref": "c:x40ze",
+                  "name": "Debugger",
+                  "width": "fill_container",
+                  "descendants": {
+                    "c:W2XqE": {
+                      "content": "Debugger"
+                    },
+                    "c:edTIG": {
+                      "icon": "bug"
                     }
                   }
                 },
@@ -3500,6 +3560,21 @@
                     },
                     "c:edTIG": {
                       "icon": "ticket"
+                    }
+                  }
+                },
+                {
+                  "id": "Z8Dv3Z",
+                  "type": "ref",
+                  "ref": "c:x40ze",
+                  "name": "Debugger",
+                  "width": "fill_container",
+                  "descendants": {
+                    "c:W2XqE": {
+                      "content": "Debugger"
+                    },
+                    "c:edTIG": {
+                      "icon": "bug"
                     }
                   }
                 },
@@ -4531,6 +4606,21 @@
                   }
                 },
                 {
+                  "id": "Kt484",
+                  "type": "ref",
+                  "ref": "c:x40ze",
+                  "name": "Debugger",
+                  "width": "fill_container",
+                  "descendants": {
+                    "c:W2XqE": {
+                      "content": "Debugger"
+                    },
+                    "c:edTIG": {
+                      "icon": "bug"
+                    }
+                  }
+                },
+                {
                   "id": "aw5y3",
                   "type": "ref",
                   "ref": "c:x40ze",
@@ -5262,6 +5352,21 @@
                   }
                 },
                 {
+                  "id": "YMJrp",
+                  "type": "ref",
+                  "ref": "c:x40ze",
+                  "name": "Debugger",
+                  "width": "fill_container",
+                  "descendants": {
+                    "c:W2XqE": {
+                      "content": "Debugger"
+                    },
+                    "c:edTIG": {
+                      "icon": "bug"
+                    }
+                  }
+                },
+                {
                   "id": "QKT1p",
                   "type": "ref",
                   "ref": "c:x40ze",
@@ -5723,6 +5828,21 @@
                   }
                 },
                 {
+                  "id": "Cdmk4",
+                  "type": "ref",
+                  "ref": "c:x40ze",
+                  "name": "Debugger",
+                  "width": "fill_container",
+                  "descendants": {
+                    "c:W2XqE": {
+                      "content": "Debugger"
+                    },
+                    "c:edTIG": {
+                      "icon": "bug"
+                    }
+                  }
+                },
+                {
                   "id": "GeNZw",
                   "type": "ref",
                   "ref": "c:zARg5",
@@ -6164,6 +6284,21 @@
                     },
                     "c:edTIG": {
                       "icon": "ticket"
+                    }
+                  }
+                },
+                {
+                  "id": "RhDlq",
+                  "type": "ref",
+                  "ref": "c:x40ze",
+                  "name": "Debugger",
+                  "width": "fill_container",
+                  "descendants": {
+                    "c:W2XqE": {
+                      "content": "Debugger"
+                    },
+                    "c:edTIG": {
+                      "icon": "bug"
                     }
                   }
                 },
@@ -7017,6 +7152,21 @@
                   }
                 },
                 {
+                  "id": "Ga7zb",
+                  "type": "ref",
+                  "ref": "c:x40ze",
+                  "name": "Debugger",
+                  "width": "fill_container",
+                  "descendants": {
+                    "c:W2XqE": {
+                      "content": "Debugger"
+                    },
+                    "c:edTIG": {
+                      "icon": "bug"
+                    }
+                  }
+                },
+                {
                   "id": "pXbfJ",
                   "type": "ref",
                   "ref": "c:x40ze",
@@ -7383,6 +7533,21 @@
                   }
                 },
                 {
+                  "id": "b3u4N",
+                  "type": "ref",
+                  "ref": "c:x40ze",
+                  "name": "Debugger",
+                  "width": "fill_container",
+                  "descendants": {
+                    "c:W2XqE": {
+                      "content": "Debugger"
+                    },
+                    "c:edTIG": {
+                      "icon": "bug"
+                    }
+                  }
+                },
+                {
                   "id": "pIKa2",
                   "type": "ref",
                   "ref": "c:x40ze",
@@ -7743,6 +7908,21 @@
                     },
                     "c:edTIG": {
                       "icon": "ticket"
+                    }
+                  }
+                },
+                {
+                  "id": "SL33G",
+                  "type": "ref",
+                  "ref": "c:x40ze",
+                  "name": "Debugger",
+                  "width": "fill_container",
+                  "descendants": {
+                    "c:W2XqE": {
+                      "content": "Debugger"
+                    },
+                    "c:edTIG": {
+                      "icon": "bug"
                     }
                   }
                 },
@@ -8556,6 +8736,21 @@
                     },
                     "c:edTIG": {
                       "icon": "ticket"
+                    }
+                  }
+                },
+                {
+                  "id": "FuuAM",
+                  "type": "ref",
+                  "ref": "c:x40ze",
+                  "name": "Debugger",
+                  "width": "fill_container",
+                  "descendants": {
+                    "c:W2XqE": {
+                      "content": "Debugger"
+                    },
+                    "c:edTIG": {
+                      "icon": "bug"
                     }
                   }
                 },
