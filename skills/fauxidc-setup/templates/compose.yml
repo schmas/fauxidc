@@ -1,0 +1,21 @@
+# Local OpenID Connect provider (fauxidc). Start it with ./idp.sh up
+# A unique project name: the default is the directory name, which other projects can use too.
+name: {{project_name}}
+services:
+  fauxidc:
+    image: ghcr.io/schmas/fauxidc:{{image_tag}}
+    ports:
+      - "127.0.0.1:{{port}}:9000"
+    volumes:
+      - ./fauxidc.toml:/config/fauxidc.toml:ro
+      - fauxidc-keys:/data
+    healthcheck:
+      test: ["CMD", "/fauxidc", "healthcheck"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 1s
+
+volumes:
+  # Holds the signing key. `docker compose down -v` removes it, and old tokens stop verifying.
+  fauxidc-keys:

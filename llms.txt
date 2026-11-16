@@ -35,3 +35,4 @@
 ## Agent skill
 
 - [fauxidc skill](skills/fauxidc/SKILL.md): start fauxidc, write a config, mint tokens, inject failures, read the Request log, use the debugger, common pitfalls
+- [fauxidc-setup skill](skills/fauxidc-setup/SKILL.md): add fauxidc to an app project, with a config, a compose file, a wrapper script and a README from templates
