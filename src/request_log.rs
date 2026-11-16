@@ -95,11 +95,16 @@ impl RequestLog {
 
     /// Removes all entries. The id counter keeps going.
     pub fn clear(&self) {
+        self.clear_issuer(None);
+    }
+
+    /// Removes all entries, or only the entries of `issuer`. The id counter keeps going.
+    pub fn clear_issuer(&self, issuer: Option<&str>) {
         self.inner
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
             .entries
-            .clear();
+            .retain(|e| issuer.is_some_and(|i| e.issuer.as_deref() != Some(i)));
     }
 }
 

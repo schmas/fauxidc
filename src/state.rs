@@ -236,6 +236,47 @@ impl Store {
     }
 
     /// Removes every Injected failure of the Issuer.
+    /// Clears the runtime state (spec 11): codes, Sessions, used refresh `jti`s, revocations,
+    /// used client assertion `jti`s, Lenient-registered Clients, debugger flows, Injected
+    /// failures and the Client JWKS cache. Config and signing keys do not change.
+    ///
+    /// With `issuer_id`, only the data that has an Issuer id is cleared, and only for that
+    /// Issuer: codes, Sessions, Lenient Clients, debugger flows and Injected failures. The
+    /// `jti` lists, revocations and the JWKS cache have no Issuer id and stay.
+    ///
+    /// Takes one lock at a time.
+    pub fn reset(&self, issuer_id: Option<&str>) {
+        fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
+            m.lock().unwrap_or_else(PoisonError::into_inner)
+        }
+        // No `..`: a new field must be handled here before the crate compiles.
+        let Store {
+            lenient_clients,
+            codes,
+            used_refresh,
+            revoked,
+            used_assertions,
+            jwks_cache,
+            jwks_refetched,
+            sessions,
+            failures,
+            debugger_flows,
+        } = self;
+        let other = |id: &str| issuer_id.is_some_and(|keep| keep != id);
+        lock(codes).retain(|_, g| other(&g.issuer_id));
+        sessions.clear(issuer_id);
+        lock(lenient_clients).retain(|(id, _), _| other(id));
+        lock(debugger_flows).retain(|_, f| other(&f.issuer_id));
+        lock(failures).retain(|(id, _), _| other(id));
+        if issuer_id.is_none() {
+            lock(used_refresh).clear();
+            lock(revoked).clear();
+            lock(used_assertions).clear();
+            lock(jwks_cache).clear();
+            lock(jwks_refetched).clear();
+        }
+    }
+
     pub fn clear_failures(&self, issuer_id: &str) {
         self.failures
             .lock()
@@ -465,6 +506,117 @@ pub(crate) fn test_ctx(toml: &str, issuer_id: &str) -> IssuerCtx {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A Store with one entry of each kind for Issuers `a` and `b` (where the kind has an
+    /// Issuer id).
+    fn full_store() -> Store {
+        let store = Store::default();
+        for issuer in ["a", "b"] {
+            let grant = CodeGrant {
+                issuer_id: issuer.into(),
+                client_id: "c".into(),
+                redirect_uri: "http://localhost/cb".into(),
+                scope: vec![],
+                nonce: None,
+                pkce: None,
+                audience: None,
+                subject: Subject::Custom {
+                    sub: "s".into(),
+                    claims: Claims::new(),
+                },
+                auth_time: 0,
+                expires_at: u64::MAX,
+                sid: None,
+            };
+            store.insert_code(grant, 0).unwrap();
+            store
+                .sessions
+                .create(crate::session::Session {
+                    issuer_id: issuer.into(),
+                    subject: Subject::Custom {
+                        sub: "s".into(),
+                        claims: Claims::new(),
+                    },
+                    sid: issuer.into(),
+                    auth_time: 0,
+                })
+                .unwrap();
+            store
+                .lenient_clients
+                .lock()
+                .unwrap()
+                .insert((issuer.into(), "c".into()), ClientConfig::default());
+            store.debugger_flows.lock().unwrap().insert(
+                issuer.into(),
+                DebuggerFlow {
+                    issuer_id: issuer.into(),
+                    verifier: String::new(),
+                    redirect_uri: String::new(),
+                    expires_at: u64::MAX,
+                },
+            );
+            store.inject(
+                issuer,
+                "token",
+                Some(crate::failures::Injected {
+                    status: Some(500),
+                    error: "server_error".into(),
+                    remaining: 1,
+                    delay_ms: 0,
+                }),
+            );
+        }
+        store.use_refresh_jti("j", u64::MAX, 0, 0);
+        store.revoked.lock().unwrap().insert("r".into(), u64::MAX);
+        store
+            .used_assertions
+            .lock()
+            .unwrap()
+            .insert(("c".into(), "j".into()), u64::MAX);
+        store.jwks_cache.lock().unwrap().insert(
+            "http://localhost/jwks".into(),
+            (0, Arc::new(JwkSet { keys: vec![] })),
+        );
+        store
+            .jwks_refetched
+            .lock()
+            .unwrap()
+            .insert("http://localhost/jwks".into(), 0);
+        store
+    }
+
+    /// The sizes of every Store field, in declaration order.
+    fn sizes(store: &Store) -> [usize; 10] {
+        [
+            store.lenient_clients.lock().unwrap().len(),
+            store.codes.lock().unwrap().len(),
+            store.used_refresh.lock().unwrap().len(),
+            store.revoked.lock().unwrap().len(),
+            store.used_assertions.lock().unwrap().len(),
+            store.jwks_cache.lock().unwrap().len(),
+            store.jwks_refetched.lock().unwrap().len(),
+            store.sessions.len(),
+            store.failures.lock().unwrap().len(),
+            store.debugger_flows.lock().unwrap().len(),
+        ]
+    }
+
+    #[test]
+    fn reset_clears_every_kind_of_state() {
+        let store = full_store();
+        assert_eq!(sizes(&store), [2, 2, 1, 1, 1, 1, 1, 2, 2, 2]);
+        store.reset(None);
+        assert_eq!(sizes(&store), [0; 10]);
+    }
+
+    #[test]
+    fn reset_of_one_issuer_keeps_the_others_and_the_jti_lists() {
+        let store = full_store();
+        store.reset(Some("a"));
+        assert_eq!(sizes(&store), [1, 1, 1, 1, 1, 1, 1, 1, 1, 1]);
+        assert!(store.take_failure("b", "token").is_some());
+        assert!(store.take_failure("a", "token").is_none());
+    }
 
     #[test]
     fn code_is_single_use() {
