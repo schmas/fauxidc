@@ -83,7 +83,7 @@ claims = { email = "alice@example.com", email_verified = true, name = "Alice Exa
 
 - The schema file is `schema/fauxidc.schema.json` in the fauxidc repo. `fauxidc config --schema` prints it.
 - Check a config without starting the server: `fauxidc config --check --config fauxidc.toml` (exit 0 or 2).
-- `fauxidc config --config fauxidc.toml` prints the merged config and the source of each value.
+- `fauxidc config --config fauxidc.toml` prints the merged config and the source of each value. A running server shows it at `GET /_mock/config`.
 - Unknown keys are errors in every source. Ids of Issuers, Clients and Users use `a-z`, `0-9` and `_`.
 - A Client without `issuer` belongs to every Issuer (`issuer = "*"`). Set `issuer = "<id>"` to limit it.
 - Copy an example from the fauxidc repo `examples/`: `generic.toml` (default paths), `auth0.toml`, `okta.toml`,

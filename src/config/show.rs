@@ -1,27 +1,92 @@
 //! Renders the merged configuration with the source of each value.
+//!
+//! `fauxidc config` and `GET /_mock/config` use the same masking ([`masked`]) and the same
+//! leaves ([`entries`]).
 
 use std::fmt::Write as _;
 
-use super::{KeyPath, Loaded, Source, SourceMap};
+use super::{Config, KeyPath, Loaded, Source, SourceMap};
 
 /// Keys whose tables print as one inline table and are not walked.
 const CLAIM_KEYS: [&str; 4] = ["claims", "default_claims", "id_claims", "access_claims"];
 
+/// The text that replaces a secret value.
+pub const MASK: &str = "***";
+
+/// Private members of a JWK (RFC 7518 section 6): the key material of an RSA, EC or `oct` key.
+const PRIVATE_JWK_MEMBERS: [&str; 8] = ["d", "p", "q", "dp", "dq", "qi", "oth", "k"];
+
+/// One configuration leaf: its dotted key path, its masked value and its source.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Entry {
+    pub path: String,
+    pub value: toml::Value,
+    pub source: Source,
+}
+
 /// Renders every configuration leaf as `<path> = <value>  # <source>`.
 ///
-/// Values of `client_secret` print as `"***"`. A value with no recorded
-/// source came from a default.
+/// Secrets print as `"***"` (see [`masked`]). A value with no recorded source came from a
+/// default.
 #[must_use]
 pub fn render(loaded: &Loaded) -> String {
-    // Config always serializes to a table. The fallback keeps this total.
-    let root = toml::Value::try_from(&loaded.config)
-        .unwrap_or_else(|_| toml::Value::Table(toml::Table::new()));
     let mut out = String::new();
-    walk(&root, &mut Vec::new(), &loaded.sources, &mut out);
+    for e in entries(&masked(&loaded.config), &loaded.sources) {
+        let _ = writeln!(out, "{} = {}  # {}", e.path, e.value, e.source);
+    }
     out
 }
 
-fn walk(value: &toml::Value, path: &mut KeyPath, sources: &SourceMap, out: &mut String) {
+/// The config as a TOML value with every secret replaced by `"***"`: each `client_secret`,
+/// and the private members of a JWK in a Client `jwks` (`d`, `p`, `q`, `dp`, `dq`, `qi`,
+/// `oth`, `k`).
+#[must_use]
+pub fn masked(config: &Config) -> toml::Value {
+    // Config always serializes to a table. The fallback keeps this total.
+    let mut root =
+        toml::Value::try_from(config).unwrap_or_else(|_| toml::Value::Table(toml::Table::new()));
+    if let Some(clients) = root.get_mut("client").and_then(toml::Value::as_table_mut) {
+        for (_, client) in clients.iter_mut() {
+            let Some(client) = client.as_table_mut() else {
+                continue;
+            };
+            if let Some(secret) = client.get_mut("client_secret") {
+                *secret = toml::Value::String(MASK.to_owned());
+            }
+            if let Some(jwks) = client.get_mut("jwks") {
+                mask_private_jwk_members(jwks);
+            }
+        }
+    }
+    root
+}
+
+fn mask_private_jwk_members(value: &mut toml::Value) {
+    match value {
+        toml::Value::Table(table) => {
+            for (key, child) in table.iter_mut() {
+                if PRIVATE_JWK_MEMBERS.contains(&key.as_str()) {
+                    *child = toml::Value::String(MASK.to_owned());
+                } else {
+                    mask_private_jwk_members(child);
+                }
+            }
+        }
+        toml::Value::Array(items) => items.iter_mut().for_each(mask_private_jwk_members),
+        _ => {}
+    }
+}
+
+/// Every leaf of `root` (from [`masked`]) with its source, in key order. A claim map is one
+/// leaf. A leaf with no entry in `sources` has the source [`Source::Default`].
+#[must_use]
+pub fn entries(root: &toml::Value, sources: &SourceMap) -> Vec<Entry> {
+    let mut out = Vec::new();
+    walk(root, &mut Vec::new(), sources, &mut out);
+    out
+}
+
+fn walk(value: &toml::Value, path: &mut KeyPath, sources: &SourceMap, out: &mut Vec<Entry>) {
     let toml::Value::Table(table) = value else {
         return;
     };
@@ -30,15 +95,11 @@ fn walk(value: &toml::Value, path: &mut KeyPath, sources: &SourceMap, out: &mut 
         let is_claims = CLAIM_KEYS.contains(&key.as_str());
         match child {
             toml::Value::Table(_) if !is_claims => walk(child, path, sources, out),
-            _ => {
-                let shown = if key == "client_secret" {
-                    "\"***\"".to_owned()
-                } else {
-                    child.to_string()
-                };
-                let source = source_of(path, is_claims, sources);
-                let _ = writeln!(out, "{} = {shown}  # {source}", path.join("."));
-            }
+            _ => out.push(Entry {
+                path: path.join("."),
+                value: child.clone(),
+                source: source_of(path, is_claims, sources),
+            }),
         }
         path.pop();
     }
@@ -105,5 +166,35 @@ mod tests {
             )),
             "{out}"
         );
+    }
+
+    #[test]
+    fn masked_hides_private_jwk_members_and_keeps_public_ones() {
+        let mut config = crate::config::load_str(
+            "[issuer.a]\nissuer_url = \"http://localhost:9000/a\"\n[client.app]\n",
+        )
+        .unwrap()
+        .config;
+        let jwk = serde_json::json!({"kty": "EC", "crv": "P-256", "x": "pub-x", "y": "pub-y",
+            "d": "private-d", "oth": [{"r": "private-r"}]});
+        let jwks = serde_json::json!({"keys": [jwk]});
+        let serde_json::Value::Object(jwks) = jwks else {
+            unreachable!()
+        };
+        let client = config.client.get_mut("app").unwrap();
+        client.jwks = Some(jwks);
+        client.client_secret = Some("s3cret-value".into());
+        let root = masked(&config);
+        let key = &root["client"]["app"]["jwks"]["keys"][0];
+        assert_eq!(key["d"].as_str(), Some(MASK));
+        assert_eq!(key["oth"].as_str(), Some(MASK));
+        assert_eq!(key["x"].as_str(), Some("pub-x"));
+        assert_eq!(root["client"]["app"]["client_secret"].as_str(), Some(MASK));
+        let text = entries(&root, &SourceMap::new())
+            .iter()
+            .map(|e| e.value.to_string())
+            .collect::<String>();
+        assert!(!text.contains("private-"), "{text}");
+        assert!(!text.contains("s3cret"), "{text}");
     }
 }

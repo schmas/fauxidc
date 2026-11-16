@@ -22,6 +22,7 @@ so never run fauxidc in production. See [SECURITY.md](../SECURITY.md).
 | `PUT /_mock/clients/{client-key}` | Replace a Client in the config file. |
 | `PATCH /_mock/clients/{client-key}` | Merge changes into a Client (JSON Merge Patch). |
 | `DELETE /_mock/clients/{client-key}` | Remove a Client from the config file. |
+| `GET /_mock/config` | [Show the running config](#show-the-running-config) and the source of each value. |
 | `DELETE /_mock/state` | [Reset the runtime state](#reset-the-runtime-state) of all Issuers or one Issuer. |
 | `POST /_mock/reload` | [Reload the config files](#reload-the-config-files) at once. |
 | `GET /_mock/requests` | Read the [Request log](#request-log). |
@@ -216,6 +217,33 @@ fauxidc clients delete backend
 The `--from` file has the fields of `[client.<key>]`, without the header. `get` and `list` mask `client_secret`.
 The commands do not see the Lenient-registered Clients of a running server.
 Exit codes: 0 on success, 2 on invalid input or config, 1 on a conflict, an unknown Client or a write error.
+
+## Show the running config
+
+`GET /_mock/config` returns the config that the server uses now, with the source of each value.
+It is the same data as `fauxidc config`, but from the running process, also inside a container.
+The answer follows hot reload and the Users routes.
+
+```json
+{
+  "config": {"server": {"port": 9000, "bind": "127.0.0.1"}, "client": {"app": {"client_secret": "***"}}},
+  "sources": {"server.port": "env FAUXIDC__SERVER__PORT", "server.bind": "default", "client.app.client_secret": "/etc/fauxidc.toml:12"}
+}
+```
+
+- `config` is the merged config. `sources` has one entry for each value that `fauxidc config` prints, by the same dotted path.
+- A source is `default`, `<file>:<line>`, `inline`, `env <name>` or `flag <name>`, the same text as `fauxidc config`.
+- Secrets are `"***"`: each `client_secret`, and the private members of a JWK in a Client `jwks` (`d`, `p`, `q`, `dp`, `dq`, `qi`, `oth`, `k`).
+- The server loads its config sources again for the sources. If that load does not give the running value, the source is `unknown`.
+  This happens for a restart-only key that changed in a file, for a file change before the next poll or `POST /_mock/reload`, and for an invalid file.
+  A server that the library API started without load inputs has only `unknown` sources.
+- `?format=toml` returns the merged config as TOML (`application/toml`), with secrets masked and without sources.
+- An unknown format or query parameter gives 400 `invalid_request`.
+
+```sh
+curl -s localhost:9000/_mock/config
+curl -s 'localhost:9000/_mock/config?format=toml'
+```
 
 ## Reset the runtime state
 

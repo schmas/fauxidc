@@ -15,6 +15,7 @@ use tower_http::trace::{DefaultOnResponse, TraceLayer};
 use crate::authorize;
 use crate::clients_api;
 use crate::config::Endpoint;
+use crate::config_view;
 use crate::cors::client_cors_layer;
 use crate::debugger;
 use crate::discovery;
@@ -108,6 +109,10 @@ pub fn build_router(state: Arc<AppState>) -> Router {
                 .patch(clients_api::merge)
                 .delete(clients_api::remove)
                 .with_state(state.clone()),
+        )
+        .route(
+            "/_mock/config",
+            get(config_view::view).with_state(state.clone()),
         )
         .route(
             "/_mock/state",

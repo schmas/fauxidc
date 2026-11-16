@@ -167,6 +167,12 @@ impl ConfigWriter {
         }
     }
 
+    /// The load inputs of the server. `GET /_mock/config` loads them again for the source of
+    /// each value.
+    pub fn inputs(&self) -> &LoadInputs {
+        &self.inputs
+    }
+
     /// Prepares an edit with `prepare`, writes it and applies the new config. If the apply
     /// fails, the old file text is written back. Returns the new config.
     pub fn write(
