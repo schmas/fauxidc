@@ -217,9 +217,100 @@ fn agents_md_keeps_every_rule() {
 
 #[test]
 fn skill_has_front_matter_and_fits() {
-    let s = read("skills/fauxidc/SKILL.md");
-    assert!(s.starts_with("---\nname: fauxidc\ndescription: "));
-    assert!(s.lines().count() < 200, "{} lines", s.lines().count());
+    for name in ["fauxidc", "fauxidc-setup"] {
+        let s = read(&format!("skills/{name}/SKILL.md"));
+        assert!(
+            s.starts_with(&format!("---\nname: {name}\ndescription: Use when ")),
+            "{name}"
+        );
+        assert!(
+            s.lines().count() < 200,
+            "{name}: {} lines",
+            s.lines().count()
+        );
+    }
+}
+
+const SETUP_TEMPLATES: [&str; 4] = ["fauxidc.toml", "compose.yml", "idp.sh", "README.md"];
+
+/// A setup template with every `{{placeholder}}` filled in.
+fn filled_template(file: &str) -> String {
+    let mut t = read(&format!("skills/fauxidc-setup/templates/{file}"));
+    for (key, value) in [
+        ("issuer_id", "local"),
+        ("port", "9400"),
+        ("client_id", "example-app"),
+        ("client_secret", "local-secret"),
+        ("redirect_uri", "http://localhost:3000/api/auth/callback/*"),
+        ("app_url", "http://localhost:3000"),
+        ("image_tag", "0.4.0"),
+        ("project_name", "example-app-idp"),
+    ] {
+        t = t.replace(&format!("{{{{{key}}}}}"), value);
+    }
+    t
+}
+
+#[test]
+fn setup_skill_names_its_templates_and_steps() {
+    let s = read("skills/fauxidc-setup/SKILL.md");
+    for file in SETUP_TEMPLATES {
+        assert!(s.contains(&format!("templates/{file}")), "{file}");
+        let t = filled_template(file);
+        assert!(!t.contains("{{"), "{file} has an unknown placeholder");
+    }
+    for needle in [
+        "config --check",
+        "/.well-known/openid-configuration",
+        "/_mock/",
+        "/debugger",
+        "/endsession",
+        "issuer_from_host",
+        "key_file",
+        "Strict mode",
+    ] {
+        assert!(s.contains(needle), "{needle}");
+    }
+}
+
+#[test]
+fn setup_templates_are_valid() {
+    let config = filled_template("fauxidc.toml");
+    assert!(config.starts_with("#:schema https://raw.githubusercontent.com/schmas/fauxidc/"));
+    let path = std::env::temp_dir().join(format!("fauxidc-setup-{}.toml", std::process::id()));
+    std::fs::write(&path, &config).unwrap();
+    let loaded = fauxidc::config::load(&fauxidc::config::LoadInputs {
+        config_files: vec![path.clone()],
+        env: vec![],
+        flags: fauxidc::config::CliOverrides::default(),
+        cwd: ".".into(),
+    });
+    std::fs::remove_file(&path).unwrap();
+    let config = loaded.unwrap_or_else(|e| panic!("{e}")).config;
+    let issuer = &config.issuer["local"];
+    assert_eq!(issuer.issuer_url, "http://localhost:9400/local");
+    assert!(!issuer.lenient, "Strict mode");
+    assert!(
+        !config.server.key_file.is_empty(),
+        "the key survives a recreate"
+    );
+
+    let compose = filled_template("compose.yml");
+    for needle in [
+        "ghcr.io/schmas/fauxidc:0.4.0",
+        "127.0.0.1:9400:9000",
+        "./fauxidc.toml:/config/fauxidc.toml:ro",
+        "healthcheck:",
+        "name: example-app-idp",
+    ] {
+        assert!(compose.contains(needle), "{needle}");
+    }
+    let script = filled_template("idp.sh");
+    for command in ["up)", "down)", "status)", "logs)", "token)", "check)"] {
+        assert!(script.contains(command), "{command}");
+    }
+    let readme = filled_template("README.md");
+    assert!(readme.contains("http://localhost:9400/local/endsession"));
 }
 
 #[test]
@@ -253,6 +344,7 @@ fn llms_txt_lists_the_docs() {
         "schema/fauxidc.schema.json",
         "examples/cognito.toml",
         "skills/fauxidc/SKILL.md",
+        "skills/fauxidc-setup/SKILL.md",
     ] {
         assert!(l.contains(needle), "{needle}");
     }
@@ -342,6 +434,8 @@ fn doc_links_resolve() {
         "README.md".to_owned(),
         "llms.txt".to_owned(),
         "skills/fauxidc/SKILL.md".to_owned(),
+        "skills/fauxidc-setup/SKILL.md".to_owned(),
+        "skills/fauxidc-setup/templates/README.md".to_owned(),
         "AGENTS.md".to_owned(),
         "CONTRIBUTING.md".to_owned(),
     ];

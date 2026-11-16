@@ -1,0 +1,35 @@
+#:schema https://raw.githubusercontent.com/schmas/fauxidc/main/schema/fauxidc.schema.json
+# Local OpenID Connect provider (fauxidc) for development. Never use it in production.
+# Docs: https://github.com/schmas/fauxidc
+
+[server]
+# The signing key lives in the named volume, so tokens and app key caches survive a container recreate.
+key_file = "/data/server.pem"
+
+[issuer.{{issuer_id}}]
+# The exact `iss` of every token. The app must use this URL as its issuer.
+issuer_url = "http://localhost:{{port}}/{{issuer_id}}"
+# Strict mode (the default): a wrong client_id, redirect_uri, secret or a missing PKCE fails.
+
+# Custom user: remove the `#` to add a "Custom..." login option. {username} is what the visitor types.
+# [issuer.{{issuer_id}}.custom_user]
+# label = "Other user..."
+# [issuer.{{issuer_id}}.custom_user.claims]
+# email = "{username}@example.test"
+# email_verified = true
+# name = "{username}"
+
+[client.app]
+issuer = "{{issuer_id}}"
+client_id = "{{client_id}}"
+client_secret = "{{client_secret}}"
+redirect_uris = ["{{redirect_uri}}"]
+post_logout_redirect_uris = ["{{app_url}}/"]
+
+[user.alice]
+label = "Alice Admin"
+claims = { email = "alice@example.com", email_verified = true, name = "Alice Admin", given_name = "Alice", family_name = "Admin", roles = ["admin"] }
+
+[user.bob]
+label = "Bob Viewer"
+claims = { email = "bob@example.com", email_verified = true, name = "Bob Viewer", given_name = "Bob", family_name = "Viewer", roles = ["viewer"] }

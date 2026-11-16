@@ -172,10 +172,13 @@ The repo has an agent skill, [skills/fauxidc](skills/fauxidc/SKILL.md). It tells
 write a config, mint tokens, inject failures and avoid the common pitfalls.
 Install it: copy or symlink the `skills/fauxidc` directory into `.claude/skills/` (one project),
 `~/.claude/skills/` (all projects, Claude Code) or `~/.agents/skills/` (other agents that read it).
+A second skill, [skills/fauxidc-setup](skills/fauxidc-setup/SKILL.md), adds fauxidc to an app project once.
+It asks a few questions and writes a config, a compose file, a wrapper script and a README. Install it the same way.
 
 ```sh
 git clone https://github.com/schmas/fauxidc.git ~/src/fauxidc
 mkdir -p .claude/skills && ln -s ~/src/fauxidc/skills/fauxidc .claude/skills/fauxidc
+ln -s ~/src/fauxidc/skills/fauxidc-setup .claude/skills/fauxidc-setup
 ```
 
 [llms.txt](llms.txt) lists the docs for agents that read it.
