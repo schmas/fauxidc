@@ -70,6 +70,7 @@ This keeps a half-written file from being loaded. If a change fails to load or t
 It tries again on SIGHUP and on the next file change that passes the same check; a poll that sees no new change does not try again.
 SIGHUP reloads the config. So closing the terminal does not stop a foreground fauxidc; stop it with Ctrl-C or SIGTERM.
 Env vars, inline config and CLI flags change only at restart.
+`POST /_mock/reload` reloads the files at once and returns the errors or warnings ([Test API](test-api.md#reload-the-config-files)).
 Codes, Sessions, refresh tokens, revocations and the Request log stay valid across a reload.
 A Session for a removed User fails at its next use.
 A new, changed or removed `server.fixed_time` applies at once to new tokens and to every time check.

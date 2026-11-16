@@ -1,5 +1,6 @@
 //! The Test API: `POST /_mock/{issuer_id}/token` issues tokens without a browser, and
-//! `POST /_mock/{issuer_id}/rotate-key` rotates an Issuer's signing key.
+//! `POST /_mock/{issuer_id}/rotate-key` rotates an Issuer's signing key, and
+//! `POST /_mock/reload` reloads the config files.
 //!
 //! The endpoint has no authentication. fauxidc must never run in production.
 
@@ -19,8 +20,10 @@ use serde_json::json;
 
 use crate::clients::{ResolvedClient, find_client};
 use crate::config::{Claims, ClientConfig};
+use crate::config_api;
 use crate::error::OAuthError;
 use crate::issuer::issuer_path;
+use crate::reload::{ReloadError, RequestedReloadError};
 use crate::state::{AppState, IssuerCtx, Subject};
 use crate::token_endpoint::{RefreshMode, UserGrant, issue_user_tokens};
 
@@ -175,6 +178,65 @@ pub async fn reset_state(
     state.request_log.clear_issuer(issuer);
     tracing::info!(issuer = issuer.unwrap_or("*"), "runtime state reset");
     StatusCode::NO_CONTENT.into_response()
+}
+
+/// `POST /_mock/reload`: loads the config files again and applies them at once
+/// ([`ConfigWriter::reload`]). 200 with [`Reloaded`]; 422 `invalid_config` with the config
+/// errors (the old config stays); 409 `conflict` with no config file; 403 `access_denied` for a
+/// cross-origin browser request, checked first.
+///
+/// [`ConfigWriter::reload`]: crate::reload::ConfigWriter::reload
+/// [`Reloaded`]: crate::reload::Reloaded
+pub async fn reload(State(state): State<Arc<AppState>>, headers: HeaderMap) -> Response {
+    if !same_origin_or_none(&state, &headers) {
+        return config_api::error(
+            StatusCode::FORBIDDEN,
+            "access_denied",
+            "cross-origin Test API request",
+        );
+    }
+    let result = match state.config_writer.get() {
+        Some(writer) => writer.reload(),
+        None => Err(RequestedReloadError::NoFile),
+    };
+    let error = match result {
+        Ok(reloaded) => {
+            return (
+                [(header::CACHE_CONTROL, HeaderValue::from_static("no-store"))],
+                Json(reloaded),
+            )
+                .into_response();
+        }
+        Err(error) => error,
+    };
+    let reload = match &error {
+        RequestedReloadError::NoFile => {
+            return config_api::error(StatusCode::CONFLICT, "conflict", error.to_string());
+        }
+        RequestedReloadError::Stopped => {
+            return config_api::error(
+                StatusCode::SERVICE_UNAVAILABLE,
+                "temporarily_unavailable",
+                error.to_string(),
+            );
+        }
+        RequestedReloadError::Reload(reload) => reload,
+    };
+    tracing::error!("config reload failed; keeping the old config\n{reload}");
+    let errors: Vec<String> = match reload {
+        ReloadError::Config(errors) => errors.0.iter().map(ToString::to_string).collect(),
+        other => vec![other.to_string()],
+    };
+    (
+        StatusCode::UNPROCESSABLE_ENTITY,
+        [(header::CACHE_CONTROL, HeaderValue::from_static("no-store"))],
+        Json(json!({
+            "error": "invalid_config",
+            "error_description": error.to_string(),
+            "errors": errors,
+        })),
+    )
+        .into_response()
 }
 
 /// `POST /_mock/{issuer_id}/token`.

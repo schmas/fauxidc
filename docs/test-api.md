@@ -23,6 +23,7 @@ so never run fauxidc in production. See [SECURITY.md](../SECURITY.md).
 | `PATCH /_mock/clients/{client-key}` | Merge changes into a Client (JSON Merge Patch). |
 | `DELETE /_mock/clients/{client-key}` | Remove a Client from the config file. |
 | `DELETE /_mock/state` | [Reset the runtime state](#reset-the-runtime-state) of all Issuers or one Issuer. |
+| `POST /_mock/reload` | [Reload the config files](#reload-the-config-files) at once. |
 | `GET /_mock/requests` | Read the [Request log](#request-log). |
 | `DELETE /_mock/requests` | Clear the Request log. |
 
@@ -236,6 +237,24 @@ The "Remember me" (Auto-select) cookie lives in the browser. A reset does not cl
 ```sh
 curl -X DELETE localhost:9000/_mock/state
 curl -X DELETE 'localhost:9000/_mock/state?issuer=auth0'
+```
+
+## Reload the config files
+
+`POST /_mock/reload` loads the config files again and applies them at once.
+Hot reload applies a file change only after 1 to 2 s. After this call, the next request uses the new config.
+
+- 200 with `{"changed": true, "warnings": [...]}` when the new config applied.
+  `warnings` lists the keys that need a restart, for example `issuer.auth0.signing_alg changed; it needs a restart`.
+- 200 with `{"changed": false, "warnings": []}` when the files did not change.
+- 422 `invalid_config` when the new config is invalid. The old config stays. `errors` lists each error with its file and line.
+- 409 `conflict` when no config file is loaded (Zero config, inline config or env vars only).
+- 403 `access_denied` for a request with an `Origin` header that is not the server's own origin.
+
+The call reloads files only. Env vars, inline config and CLI flags change only at restart.
+
+```sh
+curl -s -X POST localhost:9000/_mock/reload
 ```
 
 ## Request log

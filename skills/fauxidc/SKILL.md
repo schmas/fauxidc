@@ -186,7 +186,7 @@ Each Issuer serves `{issuer}/debugger`, for example `http://localhost:9000/app/d
   A resource server library that requires `typ` `JWT` rejects the access token; allow `at+jwt`.
 - Refresh tokens need the `offline_access` scope and the `refresh_token` grant on the Client.
 - The `aud` of an access token is the request `audience`, else the Client `audience`, else the `client_id`.
-- Config files reload 1 to 2 s after a save. Env vars, inline config and CLI flags change only at restart.
+- Config files reload 1 to 2 s after a save, or at once with `POST /_mock/reload` (422 lists the errors). Env vars, inline config and CLI flags change only at restart.
   SIGHUP reloads; it does not stop the server. Stop it with Ctrl-C or SIGTERM.
 - In-memory state (codes, Sessions, rotated keys, Injected failures, the Request log) resets on restart.
 - Login state: the Session cookie makes `prompt=none` work. `/endsession` clears it.
