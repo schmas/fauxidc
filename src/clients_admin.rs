@@ -11,18 +11,19 @@ use serde::Serialize;
 use toml_edit::{Item, Table};
 
 use crate::config::edit::{self, Change, Edit, EditError, Section};
-use crate::config::{ClientConfig, Config, LoadInputs, load};
+use crate::config::{ClientConfig, Config, LoadInputs, MASK, load, mask_client};
 use crate::users::json_merge_patch;
 
-/// The value that replaces a `client_secret` in every read.
-pub const MASKED_SECRET: &str = "***";
+/// The value that replaces a secret in every read: the `client_secret` and the private members
+/// of a JWK in `jwks` ([`mask_client`]).
+pub const MASKED_SECRET: &str = MASK;
 
 /// Clients that Lenient mode registered in memory, by `(Issuer id, client_id)`.
 pub type LenientClients = HashMap<(String, String), ClientConfig>;
 
 /// A Client as the Test API and `fauxidc clients --json` show it: the key, the Lenient flag and
-/// the fields of `[client.<key>]` with their defaults. `client_id` is always set, and
-/// `client_secret` is [`MASKED_SECRET`].
+/// the fields of `[client.<key>]` with their defaults. `client_id` is always set. The
+/// `client_secret` and the private JWK members in `jwks` are [`MASKED_SECRET`] ([`mask_client`]).
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct ClientView {
     /// The config key. For a Lenient-registered Client: its `client_id`.
@@ -37,9 +38,7 @@ impl ClientView {
     fn new(key: &str, client: &ClientConfig, lenient: bool) -> Self {
         let mut client = client.clone();
         client.client_id.get_or_insert_with(|| key.to_owned());
-        if client.client_secret.is_some() {
-            client.client_secret = Some(MASKED_SECRET.to_owned());
-        }
+        mask_client(&mut client);
         ClientView {
             key: key.to_owned(),
             lenient,

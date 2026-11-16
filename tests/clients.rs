@@ -3,7 +3,7 @@ use common::*;
 
 use std::sync::Arc;
 
-use fauxidc::config::{CliOverrides, LoadInputs, load};
+use fauxidc::config::{CliOverrides, LoadInputs, SigningAlg, load};
 use fauxidc::reload::{ConfigWriter, ReloadHandle, live_router};
 use fauxidc::state::AppState;
 
@@ -109,6 +109,60 @@ async fn list_and_get_show_the_running_clients_with_masked_secrets() {
         (StatusCode::NOT_FOUND, Some("not_found")),
         "the path uses the key, not the client_id"
     );
+}
+
+static CLIENT_KEY: LazyLock<SigningKey> =
+    LazyLock::new(|| SigningKey::generate_for(SigningAlg::ES256).unwrap());
+
+/// The test config and a Client `backend` whose `jwks` key has the private member `d`.
+fn with_private_jwk() -> String {
+    let mut jwk = CLIENT_KEY.jwk.clone();
+    jwk["d"] = json!("private-key-d");
+    let fields: Vec<String> = jwk
+        .as_object()
+        .unwrap()
+        .iter()
+        .map(|(k, v)| format!("{k} = {v}"))
+        .collect();
+    format!(
+        "{STRICT}\n[client.backend]\nclient_secret = \"s3\"\ngrant_types = [\"client_credentials\"]\n\
+         jwks = {{ keys = [ {{ {} }} ] }}\n",
+        fields.join(", ")
+    )
+}
+
+#[tokio::test]
+async fn list_and_get_mask_the_private_jwk_members() {
+    let (app, _, _) = file_app_with(&with_private_jwk(), &[]);
+    let (s, _, all) = call(&app, "GET", "/_mock/clients", None).await;
+    assert_eq!(s, 200);
+    assert!(!all.to_string().contains("private-key-d"), "{all}");
+    let (s, _, backend) = call(&app, "GET", "/_mock/clients/backend", None).await;
+    assert_eq!(s, 200);
+    assert!(!backend.to_string().contains("private-key-d"), "{backend}");
+    let key = &backend["jwks"]["keys"][0];
+    assert_eq!(key["d"], "***");
+    assert_eq!(key["x"], CLIENT_KEY.jwk["x"], "public members stay");
+    assert_eq!(backend["client_secret"], "***");
+}
+
+#[tokio::test]
+async fn a_patch_without_jwks_keeps_the_private_jwk_members() {
+    let (app, _, file) = file_app_with(&with_private_jwk(), &[]);
+    let (s, _, backend) = call(
+        &app,
+        "PATCH",
+        "/_mock/clients/backend",
+        Some(&json!({"scopes": ["api"]})),
+    )
+    .await;
+    assert_eq!(s, 200, "{backend}");
+    assert_eq!(backend["jwks"]["keys"][0]["d"], "***");
+    let text = std::fs::read_to_string(&file).unwrap();
+    assert!(text.contains("d = \"private-key-d\""), "{text}");
+    assert!(!text.contains("***"), "{text}");
+    let (s, _, b) = send(&app, client_credentials("backend", "s3")).await;
+    assert_eq!(s, 200, "the Client still works: {b}");
 }
 
 #[tokio::test]

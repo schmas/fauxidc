@@ -159,6 +159,36 @@ mod tests {
     }
 
     #[test]
+    fn list_and_get_mask_the_private_jwk_members() {
+        let mut jwk = crate::keys::SigningKey::generate_for(crate::config::SigningAlg::ES256)
+            .unwrap()
+            .jwk;
+        jwk["d"] = serde_json::json!("private-key-d");
+        let fields: Vec<String> = jwk
+            .as_object()
+            .unwrap()
+            .iter()
+            .map(|(k, v)| format!("{k} = {v}"))
+            .collect();
+        let file = write_tmp(&format!(
+            "{BASE}jwks = {{ keys = [ {{ {} }} ] }}\n",
+            fields.join(", ")
+        ));
+        let mut i = inputs(&[]);
+        i.config_files = vec![file];
+        let get = |json| ClientsCommand::Get {
+            client_key: "web".into(),
+            json,
+        };
+        for command in [ClientsCommand::List { json: true }, get(true), get(false)] {
+            let text = exec(&command, &i, "").unwrap();
+            assert!(!text.contains("private-key-d"), "{text}");
+            assert!(text.contains("\"***\""), "{text}");
+            assert!(text.contains(jwk["x"].as_str().unwrap()), "{text}");
+        }
+    }
+
+    #[test]
     fn create_update_and_delete() {
         let (i, file) = file_inputs();
         let create = ClientsCommand::Create {
