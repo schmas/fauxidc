@@ -110,7 +110,12 @@ fn state_cookie(h: &HeaderMap) -> String {
 /// Runs the debugger flow up to the callback and returns the callback path and the state
 /// cookie (`name=value`).
 async fn run_to_callback(app: &Router) -> (String, String) {
-    let (s, h, _) = send(app, get("/auth0/debugger/start")).await;
+    run_to_callback_from(app, "/auth0/debugger/start").await
+}
+
+/// [`run_to_callback`] from the start URL `start`.
+async fn run_to_callback_from(app: &Router, start: &str) -> (String, String) {
+    let (s, h, _) = send(app, get(start)).await;
     assert_eq!(s, 302);
     let cookie = state_cookie(&h);
     let auth = location(&h);
@@ -443,14 +448,14 @@ async fn debugger_shows_badges_and_code_blocks() {
     let app = app(STRICT);
     let at = access_token_for(&app, &[]).await;
     let (_, _, b) = send(&app, post_form("/auth0/debugger", &[("token", &at)], &[])).await;
-    assert!(b.contains("badge-success"), "{b}");
+    assert!(b.contains("label-success"), "{b}");
     assert!(b.contains("<pre") && b.contains("<code"));
-    assert!(b.contains("/_mock/static/fauxidc.css"));
+    assert!(b.contains("/_mock/static/halo.css"));
     assert!(!b.contains("login.css"));
     let stranger = SigningKey::generate_for(SigningAlg::ES256).unwrap();
     let t = sign_with(&stranger, &json!({"sub":"x"}));
     let (_, _, b) = send(&app, post_form("/auth0/debugger", &[("token", &t)], &[])).await;
-    assert!(b.contains("badge-error"), "{b}");
+    assert!(b.contains("label-error"), "{b}");
 }
 
 #[tokio::test]
@@ -485,8 +490,162 @@ async fn debugger_error_alert_wraps() {
         post_form("/auth0/debugger", &[("token", &long)], &[]),
     )
     .await;
+    assert!(b.contains("<span class=\"wrap\">not a JWT"), "{b}");
+}
+
+/// Every debugger page may show in a frame of the same origin (the dashboard), never of
+/// another origin.
+#[tokio::test]
+async fn debugger_pages_allow_only_same_origin_frames() {
+    let app = app(STRICT);
+    let check = assert_same_origin_frames;
+    let (s, h, _) = send(&app, get("/auth0/debugger")).await;
+    assert_eq!(s, 200);
+    check(&h, "GET");
+    let (_, h, _) = send(&app, get("/auth0/debugger?embed=1")).await;
+    check(&h, "GET embed");
+    let (_, h, _) = send(&app, post_form("/auth0/debugger", &[("token", "x")], &[])).await;
+    check(&h, "POST");
+    let (s, h, _) = send(&app, get("/auth0/debugger/callback?state=x&code=y")).await;
+    assert_eq!(s, 400);
+    check(&h, "callback error");
+    let (cb, cookie) = run_to_callback(&app).await;
+    let (s, h, _) = send(&app, get_with(&cb, &[("cookie", &cookie)])).await;
+    assert_eq!(s, 200);
+    check(&h, "callback");
+}
+
+/// Asserts the framing headers of an Issuer HTML page: only a frame of the same origin.
+fn assert_same_origin_frames(h: &HeaderMap, what: &str) {
+    assert_eq!(h["x-frame-options"], "SAMEORIGIN", "{what}");
+    assert_eq!(
+        h["content-security-policy"], "frame-ancestors 'self'",
+        "{what}"
+    );
+}
+
+/// The other pages of the flow in the dashboard frame (login, error, `form_post`, signed
+/// out) allow a frame of the same origin too. A page of another origin cannot frame them.
+#[tokio::test]
+async fn flow_pages_allow_only_same_origin_frames() {
+    let app = app(STRICT);
+    // The login page of the debugger flow, as the frame shows it.
+    let (_, h, _) = send(&app, get("/auth0/debugger/start?embed=1")).await;
+    let auth = location(&h)
+        .trim_start_matches("http://localhost:9000")
+        .to_owned();
+    let (s, h, b) = send(&app, get(&auth)).await;
+    assert_eq!(s, 200, "{b}");
+    assert!(b.contains(">Sign in</h1>"));
+    assert_same_origin_frames(&h, "login");
+    // A login page with a field error (status 400).
+    let (s, h, _) = send(
+        &app,
+        post_form(
+            "/auth0/authorize",
+            &login_fields(&[("user", "__custom__"), ("custom_claims", "{")]),
+            &[],
+        ),
+    )
+    .await;
+    assert_eq!(s, 400);
+    assert_same_origin_frames(&h, "login with error");
+    // The error page.
+    let (s, h, b) = send(
+        &app,
+        get("/auth0/authorize?client_id=nobody&response_type=code"),
+    )
+    .await;
+    assert_eq!(s, 400, "{b}");
+    assert!(b.contains("<title>Error"));
+    assert_same_origin_frames(&h, "error");
+    // The form_post page.
+    let (s, h, _) = send(
+        &app,
+        post_form(
+            "/auth0/authorize",
+            &login_fields(&[("response_mode", "form_post")]),
+            &[],
+        ),
+    )
+    .await;
+    assert_eq!(s, 200);
+    assert_same_origin_frames(&h, "form_post");
+    // The signed-out page.
+    let (s, h, b) = send(&app, get("/auth0/endsession")).await;
+    assert_eq!(s, 200);
+    assert!(b.contains("<title>Signed out"), "{b}");
+    assert_same_origin_frames(&h, "signed out");
+}
+
+#[tokio::test]
+async fn standalone_page_has_brand_row_and_footer() {
+    let (_, _, b) = send(&app(STRICT), get("/auth0/debugger")).await;
+    assert!(b.contains("class=\"page-top\""));
+    assert!(b.contains("class=\"page-foot\""));
+    assert!(!b.contains("page-embed"));
+    assert!(b.contains("action=\"/auth0/debugger\""));
+    assert!(b.contains("href=\"/auth0/debugger/start\""));
+}
+
+/// `?embed=1`: the same page without the brand row and footer; the form, the login link
+/// and the change link keep `embed=1`.
+#[tokio::test]
+async fn embed_mode_hides_the_page_chrome_and_keeps_embed() {
+    let app = app(STRICT);
+    let (s, _, b) = send(
+        &app,
+        get_with(
+            "/auth0/debugger?embed=1",
+            &[("cookie", "fauxidc_user_auth0=alice")],
+        ),
+    )
+    .await;
+    assert_eq!(s, 200);
+    assert!(b.contains("page-embed"));
+    assert!(!b.contains("class=\"page-top\""));
+    assert!(!b.contains("class=\"page-foot\""));
+    assert!(b.contains("action=\"/auth0/debugger?embed=1\""), "{b}");
+    assert!(b.contains("href=\"/auth0/debugger/start?embed=1\""));
+    assert!(b.contains("href=\"/auth0/debugger?forget=1&amp;embed=1\""));
+    let (_, _, b) = send(
+        &app,
+        post_form("/auth0/debugger?embed=1", &[("token", "x")], &[]),
+    )
+    .await;
+    assert!(b.contains("page-embed") && b.contains("not a JWT"));
+    let (_, _, b) = send(&app, get("/auth0/debugger?embed=0")).await;
+    assert!(!b.contains("page-embed"));
+    let (s, h, _) = send(
+        &app,
+        get_with(
+            "/auth0/debugger?forget=1&embed=1",
+            &[("cookie", "fauxidc_user_auth0=alice")],
+        ),
+    )
+    .await;
+    assert_eq!(s, 303);
+    assert_eq!(location(&h), "/auth0/debugger?embed=1");
+}
+
+/// A flow started with `?embed=1` ends on the embedded page; the `redirect_uri` does not change.
+#[tokio::test]
+async fn embedded_flow_ends_on_the_embedded_page() {
+    let app = app(STRICT);
+    let (s, h, _) = send(&app, get("/auth0/debugger/start?embed=1")).await;
+    assert_eq!(s, 302);
+    assert_eq!(
+        query_param(&location(&h), "redirect_uri").as_deref(),
+        Some("http://localhost:9000/auth0/debugger/callback")
+    );
+    let (cb, cookie) = run_to_callback_from(&app, "/auth0/debugger/start?embed=1").await;
+    let (s, _, b) = send(&app, get_with(&cb, &[("cookie", &cookie)])).await;
+    assert_eq!(s, 200, "{b}");
     assert!(
-        b.contains("<span class=\"min-w-0 wrap-anywhere\">not a JWT"),
+        b.contains("page-embed") && b.contains(">id_token</h2>"),
         "{b}"
     );
+    let (cb, cookie) = run_to_callback(&app).await;
+    let (_, _, b) = send(&app, get_with(&cb, &[("cookie", &cookie)])).await;
+    assert!(!b.contains("page-embed") && b.contains(">id_token</h2>"));
 }

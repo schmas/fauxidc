@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
 <title>Dashboard · fauxidc</title>
+<link rel="stylesheet" href="{{ static_base|href }}/halo.css">
 <link rel="stylesheet" href="{{ static_base|href }}/dashboard.css">
 <script src="{{ static_base|href }}/dashboard.js" defer></script>
 </head>
@@ -121,14 +122,13 @@
 </section>
 
 <section id="debugger" class="view">
-<div class="page-head"><div><h1>Debugger</h1><p class="muted">Each Issuer has its own debugger page. It decodes a pasted JWT and checks it against the JWKS of the Issuer, or runs a code + PKCE login with the built-in <code>debugger</code> Client.</p></div></div>
-<div class="table-wrap"><table>
-<thead><tr><th>Issuer</th><th>Debugger page</th><th><span hidden>Actions</span></th></tr></thead>
-<tbody>{% for i in issuers %}<tr data-debugger-row="{{ i.id }}">
-<td class="mono">{{ i.id }}</td><td class="mono">{{ i.debugger_href }}</td>
-<td class="actions"><div class="row"><a class="btn btn-outline" href="{{ i.debugger_href|href }}" data-open-debugger>{{ icon("bug") }}Open debugger</a></div></td>
-</tr>
-{% endfor %}</tbody></table></div>
+<div class="page-head"><div><h1>Debugger</h1><p class="muted">Decode a JWT or run a code + PKCE login with the built-in <code>debugger</code> Client. The debugger of the chosen Issuer runs below.</p></div></div>
+<div class="debugger-bar">
+<label class="field">Issuer<select id="debugger-issuer" class="select">{% for i in issuers %}<option value="{{ i.id }}" data-debugger-href="{{ i.debugger_href|href }}">{{ i.id }}</option>{% endfor %}</select></label>
+<a id="debugger-open" class="btn btn-outline" href="{% if issuers %}{{ issuers[0].debugger_href|href }}{% endif %}" target="_blank" rel="noopener" data-open-debugger>{{ icon("link") }}Open in new tab</a>
+</div>
+<noscript><div class="alert">{{ icon("info") }}<div>Without JavaScript, open the debugger of an Issuer from the <a href="#issuers">Issuers</a> page.</div></div></noscript>
+<iframe id="debugger-frame" name="debugger-frame" class="debugger-frame" title="Debugger of the chosen Issuer"></iframe>
 </section>
 
 <section id="failures" class="view">

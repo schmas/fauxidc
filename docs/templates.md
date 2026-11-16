@@ -13,17 +13,36 @@ A missing `login_template` file or a template syntax error stops the server at s
 
 ## Styles
 
-The built-in pages, except the dashboard, link one stylesheet, `/_mock/static/fauxidc.css` (`{{ static_base|href }}/fauxidc.css` in a template).
-It is compiled at dev time with Tailwind CSS v4 and daisyUI v5 and embedded in the binary. The page needs no network.
-Light and dark themes follow the browser `prefers-color-scheme` setting.
+Every built-in page links `/_mock/static/halo.css` (`{{ static_base|href }}/halo.css` in a template).
+It is plain CSS without a build step, embedded in the binary. The page needs no network.
+Light and dark themes follow the browser `prefers-color-scheme` setting. The design is `docs/fauxidc-design.pen`.
+The dashboard also links `/_mock/static/dashboard.css`, its shell (sidebar and views). It uses the halo tokens.
 
-A custom template (`templates_dir` or `login_template`) can link the same file and use the classes that the built-in templates use.
-The compiled file has only those classes: it is built from `assets/templates/`, so another Tailwind or daisyUI class has no style.
-For other styles, put your own file in `server.static_dir` and link it.
+A custom template (`templates_dir` or `login_template`) can link `halo.css` and use its classes. The main ones:
 
-The dashboard links its own stylesheet, `/_mock/static/dashboard.css`. It is plain CSS without a build step.
+| Class | Use |
+| --- | --- |
+| `page`, `page-wide`, `page-top`, `page-foot`, `brand` | The page layout: a centered column, the brand row and the footer. |
+| `page-embed` | The page without its outer spacing, for a page in a frame. |
+| `card`, `card-head`, `stack`, `row`, `row-between` | Blocks and their spacing. |
+| `btn`, `btn-outline`, `select`, `input`, `textarea`, `checkbox`, `field` | Form controls. |
+| `input-error`, `select-error`, `textarea-error` | A control with an error. |
+| `alert`, `alert-error`, `label`, `label-pair`, `label-success`, `label-warning`, `label-error` | Messages and badges. |
+| `table-wrap`, `table-kv`, `code`, `details`, `muted`, `small`, `mono`, `wrap` | Tables, code blocks and text. |
 
-`/_mock/static/login.css`, the stylesheet of the old built-in pages, is still served, so old templates that link it keep working.
+For other styles, put your own file in `server.static_dir` and link it. A file there with the same name replaces the embedded one,
+so `server.static_dir` can replace `halo.css` for every page.
+
+`/_mock/static/fauxidc.css` (the Tailwind and daisyUI file of the version 0.4 pages) and `/_mock/static/login.css` (the stylesheet of older pages)
+are still served, so old templates that link them keep working. No built-in page links them, and they get no new classes.
+
+## Framing
+
+The pages of an Issuer (`login.html`, `error.html`, `signed_out.html`, `form_post.html`, `debugger.html`) have
+`X-Frame-Options: SAMEORIGIN` and `Content-Security-Policy: frame-ancestors 'self'`.
+Only a page of the same origin, the dashboard Debugger view, can show them in a frame. A page of another origin cannot.
+The dashboard has `X-Frame-Options: DENY` and `Content-Security-Policy: frame-ancestors 'none'`. No page can frame it.
+The headers do not depend on the template, so a custom template gets them too.
 
 ## Context version 2
 
@@ -40,6 +59,7 @@ Every context has `context_version` (integer, `2`). Fields are added in a minor 
 No field is removed or renamed.
 
 Added later in version 2: the optional template `form_post.html` (`response_mode=form_post`). Existing `templates_dir` overrides keep working.
+Also added later: the optional field `embed` of `debugger.html` (the dashboard frame). A custom `debugger.html` without it keeps working; it then shows its full page in the frame.
 
 The autoescape writes `/` as `&#x2f;`, which a browser decodes. The `href` filter escapes like the autoescape but keeps `/`, for readable links: `<a href="{{ change_href|href }}">`.
 
@@ -124,7 +144,7 @@ The response has status 200 and `Cache-Control: no-store`. It is an optional tem
 Render each pair of `fields` as `<input type="hidden" name="{{ pair[0] }}" value="{{ pair[1] }}">`, and the form as
 `<form method="post" action="{{ redirect_uri|href }}">`. Keep the autoescape on: `state` comes from the request.
 The built-in page submits the form with a short inline script and shows a submit button for a browser without JavaScript.
-fauxidc sends no `Content-Security-Policy` header, so an inline script works.
+The `Content-Security-Policy` header of the page has only `frame-ancestors`, so an inline script works.
 
 ### `debugger.html`
 
@@ -136,15 +156,20 @@ The login flow callback renders it with the decoded tokens of the flow. It is a 
 | `context_version` | integer | Always `2`. |
 | `issuer_id` | string | Id of the issuer. |
 | `action` | string | The debugger path. Post the form here with `method="post"` and a field `token`. |
-| `start_href` | string | `action` + `/start`. A link here starts the login flow with the built-in `debugger` Client. |
+| `start_href` | string | The debugger path + `/start`. A link here starts the login flow with the built-in `debugger` Client. |
 | `token` | string | The pasted value, to keep in the textarea. |
 | `decoded` | decoded JWT or null | The pasted token, decoded. |
 | `flow` | list of `[name, decoded JWT]` | The tokens of a finished login flow: `id_token`, `access_token`, `refresh_token` (when present). |
 | `flow_raw` | string or null | The token response of a finished login flow, as pretty JSON. |
 | `error` | string or null | An error message, for example `not a JWT: …` or an error of the login flow. |
 | `signed_in_as` | string or null | The label (or id) of the Auto-select User, when the request cookie names a configured User. |
-| `change_href` | string | `action` + `?forget=1`. |
+| `change_href` | string | The debugger path + `?forget=1`. |
 | `static_base` | string | URL prefix for static files, `/_mock/static`. |
+| `embed` | boolean | `true` when the page shows in the dashboard frame (`?embed=1`). Then hide the brand row and the footer. `action`, `start_href` and `change_href` then keep `embed=1`. (Added in version 2, optional.) |
+
+`?embed=1` on `GET {debugger}`, `POST {debugger}` and `{debugger}/start` sets `embed`. Any other value than empty or `0` counts as `1`.
+A login flow started with `{debugger}/start?embed=1` ends on a callback page with `embed` true. The `redirect_uri` of the flow does not change.
+A callback without a flow of this browser shows the page with `embed` false.
 
 A decoded JWT has these fields:
 
@@ -159,8 +184,8 @@ A decoded JWT has these fields:
 
 ### `dashboard.html`
 
-`GET /_mock/` renders this page. It is a new, optional template. The built-in page loads `{{ static_base|href }}/dashboard.css`
-and `{{ static_base|href }}/dashboard.js`. The script finds its forms and buttons by `id` and `data-action`.
+`GET /_mock/` renders this page. It is a new, optional template. The built-in page loads `{{ static_base|href }}/halo.css`,
+`{{ static_base|href }}/dashboard.css` and `{{ static_base|href }}/dashboard.js`. The script finds its forms and buttons by `id` and `data-action`.
 A custom page that loads the script must keep them, or use its own script.
 
 | Field | Type | Meaning |
@@ -179,5 +204,5 @@ An Issuer has these fields. The hrefs are paths on this server.
 | `lenient` | boolean | `true` in Lenient mode. |
 | `discovery_href` | string | The discovery document. |
 | `jwks_href` | string | The JWKS endpoint. |
-| `debugger_href` | string | The debugger page. |
+| `debugger_href` | string | The debugger page. The Debugger view shows it in the frame `#debugger-frame` with `?embed=1`. |
 | `endsession_href` | string | The `/endsession` endpoint. A browser visit signs out: it clears the Session and the Auto-select cookie. |

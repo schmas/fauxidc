@@ -91,6 +91,9 @@ pub struct DebuggerFlow {
     pub verifier: String,
     pub redirect_uri: String,
     pub expires_at: u64,
+    /// The flow started from the debugger in the dashboard frame (`?embed=1`): the
+    /// callback renders the page without its brand row and footer.
+    pub embed: bool,
 }
 
 /// When a refresh token was first used, and when it expires.
@@ -553,6 +556,7 @@ mod tests {
                     verifier: String::new(),
                     redirect_uri: String::new(),
                     expires_at: u64::MAX,
+                    embed: false,
                 },
             );
             store.inject(
@@ -793,6 +797,7 @@ mod tests {
                     verifier: "v".into(),
                     redirect_uri: "r".into(),
                     expires_at: base + i,
+                    embed: false,
                 },
                 1000,
             );
@@ -811,6 +816,7 @@ mod tests {
             verifier: "v".into(),
             redirect_uri: "r".into(),
             expires_at,
+            embed: false,
         };
         store.insert_flow("s".into(), flow(1060), 1000);
         assert!(store.take_flow("s", 1000).is_some());

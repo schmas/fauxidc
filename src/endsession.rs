@@ -6,7 +6,7 @@ use axum::{
     Form,
     extract::{Query, State},
     http::{HeaderMap, HeaderValue, StatusCode, header},
-    response::{Html, IntoResponse, Response},
+    response::{IntoResponse, Response},
 };
 use serde_json::Value;
 
@@ -18,7 +18,7 @@ use crate::debugger::change_href;
 use crate::error::{OAuthError, append_query};
 use crate::logging::{record_client, record_endpoint};
 use crate::state::IssuerCtx;
-use crate::templates::{CONTEXT_VERSION, STATIC_BASE, SignedOutContext};
+use crate::templates::{CONTEXT_VERSION, STATIC_BASE, SignedOutContext, issuer_page};
 use crate::tokens::verify_id_token_hint;
 
 /// The logout request parameters after aliases are applied.
@@ -203,7 +203,7 @@ async fn endsession(ctx: &IssuerCtx, request: &HeaderMap, raw: Vec<(String, Stri
             static_base: STATIC_BASE.to_owned(),
         };
         match ctx.app.templates.render_signed_out(&context) {
-            Ok(html) => (StatusCode::OK, Html(html)).into_response(),
+            Ok(html) => issuer_page(StatusCode::OK, html),
             Err(e) => {
                 return OAuthError::ServerError(format!("signed-out page: {e}")).into_response();
             }

@@ -1,53 +1,6 @@
-/* The dashboard (/_mock/) styles. Hand-written, no build step.
- * The tokens and sizes follow docs/fauxidc-design.pen (halo library). Light by default,
- * dark with prefers-color-scheme: dark. */
-:root {
-  color-scheme: light dark;
-  --bg: #fff; --fg: #2a2933; --card: #fff; --tile: #f5f5f5;
-  --primary: #5749f4; --primary-fg: #fff;
-  --secondary: #d9d9db; --secondary-fg: #2a2933;
-  --muted-fg: #616167; --accent: #f5f5f5; --destructive: #cc3314;
-  --border: #c5c5cb; --input: #c5c5cb; --ring: #5749f4; --link: #5749f4;
-  --sidebar: #fff; --sidebar-fg: #939399; --sidebar-border: #d9d9db;
-  --sidebar-accent: #f5f5f5; --sidebar-accent-fg: #2a2933;
-  --success: #a1e5a1; --success-fg: #003300;
-  --warning: #ffd9b2; --warning-fg: #4d2700;
-  --error: #ffbfb2; --error-fg: #590f00;
-  --info: #c9d6f0; --info-fg: #001133;
-  --overlay: #2a293366; /* --overlay in the design */
-  --font: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-}
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #131124; --fg: #e8e8ea; --card: #1a182e; --tile: #1a182e;
-    --secondary: #403f51; --secondary-fg: #fff;
-    --muted-fg: #888799; --accent: #131124;
-    --border: #2b283d; --input: #2b283d; --ring: #8a80ff;
-    /* --primary on this background is too dark for text; links use a lighter tint. */
-    --link: #9d94ff;
-    --sidebar: #1a182e; --sidebar-fg: #acabb2; --sidebar-border: #2b283d;
-    --sidebar-accent: #2b283d; --sidebar-accent-fg: #e8e8ea;
-    --success: #3b4748; --success-fg: #a1e5a1;
-    --warning: #53484f; --warning-fg: #ffd9b2;
-    --error: #53424f; --error-fg: #ffbfb2;
-    --info: #404562; --info-fg: #b2ccff;
-    --overlay: #0a091499;
-  }
-}
-
-*, *::before, *::after { box-sizing: border-box; }
-[hidden] { display: none !important; }
-html { -webkit-text-size-adjust: 100%; }
-body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.43 var(--font); }
-h1, h2, p, pre, ul { margin: 0; }
-a { color: var(--link); }
-code, pre, .mono { font-family: var(--mono); font-size: 13px; }
-button, input, select, textarea { font: inherit; color: inherit; }
-:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
-.ic { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-.ic-lg { width: 24px; height: 24px; }
-
+/* The dashboard (/_mock/) shell: sidebar, top bar, views and dialog. Hand-written,
+ * no build step. The halo tokens and components are in halo.css, which the page links
+ * first. The layout follows docs/fauxidc-design.pen. */
 /* Shell: sidebar + main (design frames "Issuers" and others). */
 .app { display: flex; gap: 16px; min-height: 100dvh; padding: 16px; }
 .sidebar {
@@ -62,8 +15,6 @@ button, input, select, textarea { font: inherit; color: inherit; }
  * radius 24, label 16/24 medium, then a 24 px icon. Only the active item has a background. */
 .sidebar-head, .sidebar-foot { display: flex; align-items: center; gap: 8px; padding: 24px; }
 .sidebar-foot { margin-top: auto; }
-.brand { display: flex; align-items: center; gap: 8px; font-size: 18px; font-weight: 600; }
-.brand .ic { color: var(--primary); width: 20px; height: 20px; }
 .sidebar-head .brand { color: var(--sidebar-accent-fg); font-size: 14px; line-height: 1.5; }
 .brand-mark { display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; }
 .sidebar-head .brand-mark .ic { width: 32px; height: 32px; color: inherit; }
@@ -83,7 +34,6 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .foot-text strong { color: var(--sidebar-accent-fg); font-weight: 600; }
 .foot-text small { color: var(--sidebar-fg); font-size: inherit; }
 .sidebar-foot > .ic { color: var(--sidebar-accent-fg); }
-.muted { color: var(--muted-fg); }
 .topbar { display: none; }
 .main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 24px; padding: 24px; }
 .view { display: flex; flex-direction: column; gap: 24px; }
@@ -92,47 +42,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .page-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .page-head > div:first-child { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0; }
 .page-head h1 { font-size: 28px; font-weight: 600; line-height: 1.2; }
-.row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
-.row-end { align-items: flex-end; }
 
-/* Buttons (Button/Default, Outline, Ghost, Destructive). */
-.btn {
-  display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 10px 16px;
-  border: 1px solid transparent; border-radius: 999px; background: var(--primary); color: var(--primary-fg);
-  font-weight: 500; line-height: 20px; text-decoration: none; white-space: nowrap; cursor: pointer;
-}
-.btn:hover { filter: brightness(1.08); }
-.btn-outline { background: transparent; border-color: var(--input); color: var(--fg); }
-.btn-ghost { background: var(--accent); color: var(--fg); }
-.btn-outline:hover, .btn-ghost:hover { background: var(--tile); filter: none; }
-.btn-danger { background: var(--destructive); color: #fff; }
-.btn:disabled { opacity: 0.6; cursor: progress; }
-
-/* Labels (badges). */
-.label { display: inline-flex; align-items: center; padding: 4px 12px; border-radius: 999px; font-weight: 500; white-space: nowrap; background: var(--secondary); color: var(--secondary-fg); }
-.label-success { background: var(--success); color: var(--success-fg); }
-.label-warning { background: var(--warning); color: var(--warning-fg); }
-.label-error { background: var(--error); color: var(--error-fg); }
-
-/* Alerts. */
-.alert { display: flex; gap: 12px; padding: 16px 24px; border-radius: 24px; background: var(--info); color: var(--info-fg); font-size: 16px; }
-.alert .ic { width: 24px; height: 24px; }
-.alert > div { display: flex; flex-direction: column; gap: 4px; min-width: 0; overflow-wrap: anywhere; }
-.alert strong { font-weight: 500; }
-.alert-success { background: var(--success); color: var(--success-fg); }
-.alert-warning { background: var(--warning); color: var(--warning-fg); }
-.alert-error { background: var(--error); color: var(--error-fg); }
-.alert .lines { font-family: var(--mono); font-size: 13px; line-height: 1.6; white-space: pre-wrap; }
-.out { display: flex; flex-direction: column; gap: 16px; }
-.out:empty { display: none; }
-
-/* Tables (Table, Table Row, Table Cell, Table Column Header). */
-.table-wrap { border: 1px solid var(--border); border-radius: 24px; overflow: hidden; background: var(--bg); }
-table { width: 100%; border-collapse: collapse; }
-th { background: var(--tile); color: var(--muted-fg); font-weight: 400; text-align: left; }
-th, td { padding: 12px; vertical-align: middle; }
-tr + tr td, thead + tbody tr td { border-top: 1px solid var(--border); }
-td { overflow-wrap: anywhere; }
+/* Table details of the dashboard. */
 td.actions { width: 1%; white-space: nowrap; }
 td.actions .row { flex-wrap: nowrap; justify-content: flex-end; }
 td .row { gap: 8px; }
@@ -143,32 +54,14 @@ tr.detail td { border-top: 0; padding: 0 16px 16px 64px; }
 .toggle { display: inline-flex; padding: 4px; border: 0; background: none; color: var(--muted-fg); cursor: pointer; }
 .toggle[aria-expanded="true"] .ic { transform: rotate(90deg); }
 
-/* Forms (Input Group, Select Group, Textarea Group). */
-.field { display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 0; font-weight: 500; }
-.field small { font-weight: 400; color: var(--muted-fg); }
-.input, .select, .textarea {
-  width: 100%; padding: 17px 24px; border: 1px solid var(--border); border-radius: 999px; background: var(--accent);
-  color: var(--fg); font-weight: 400; line-height: 20px;
-}
-.select { appearance: none; padding-right: 48px; cursor: pointer;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg' viewBox='0 0 24 24' fill='none' stroke='%23888799' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
-  background-repeat: no-repeat; background-position: right 20px center; background-size: 18px; }
-.textarea { border-radius: 6px; padding: 16px; font-family: var(--mono); font-size: 13px; line-height: 1.5; resize: vertical; }
-.input::placeholder, .textarea::placeholder { color: var(--muted-fg); }
-.input.mono { font-size: 13px; }
-.card { display: flex; flex-direction: column; gap: 16px; padding: 24px; background: var(--card); border: 1px solid var(--border); border-radius: 24px; }
-.card-narrow { max-width: 640px; }
 .fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
 .columns { display: grid; grid-template-columns: 420px minmax(0, 1fr); gap: 24px; align-items: start; }
-.stack { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
-
-/* Code blocks. */
-.code { margin: 0; padding: 16px; max-height: 32rem; overflow: auto; background: var(--tile); border: 1px solid var(--border); border-radius: 6px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
-
-/* Tabs. */
-.tabs { display: inline-flex; gap: 8px; padding: 8px; align-self: flex-start; background: var(--card); border: 1px solid var(--input); border-radius: 999px; }
-.tab { padding: 10px 24px; border: 0; border-radius: 999px; background: transparent; cursor: pointer; }
-.tab[aria-selected="true"] { background: var(--secondary); color: var(--secondary-fg); box-shadow: 0 1px 3.5px #0000000f; }
+/* Debugger view: the Issuer select, then the debugger page of that Issuer in a frame.
+ * The frame fills the rest of the screen and grows with its page (dashboard.js). */
+.debugger-bar { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; }
+.debugger-bar .field { flex: 0 1 320px; }
+.debugger-bar .btn { margin-bottom: 6px; }
+.debugger-frame { display: block; width: 100%; min-height: calc(100dvh - 300px); height: 640px; border: 0; background: transparent; }
 
 /* Dialog (Dialog component: Card with radius 40 and padding 40). */
 dialog {
@@ -197,4 +90,6 @@ dialog h2 { font-size: 18px; font-weight: 500; line-height: 1.55; }
   .table-wrap td.actions { width: 100%; }
   .table-wrap td.actions .row { justify-content: flex-start; }
   tr.detail td { padding: 0; width: 100%; }
+  .debugger-bar .field { flex: 1 1 100%; }
+  .debugger-bar .btn { width: 100%; }
 }

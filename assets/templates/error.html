@@ -5,38 +5,26 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
 <title>Error · fauxidc</title>
-<link rel="stylesheet" href="{{ static_base|href }}/fauxidc.css">
+<link rel="stylesheet" href="{{ static_base|href }}/halo.css">
 </head>
-<body class="bg-base-200 text-base-content antialiased">
-<div class="mx-auto flex min-h-dvh w-full max-w-xl flex-col justify-center gap-4 px-4 py-6 sm:h-dvh">
-<header class="flex shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-2">
-<span class="flex items-center gap-2 text-base font-semibold tracking-tight">
-<span aria-hidden="true" class="grid size-7 place-items-center rounded-lg bg-primary font-mono text-xs font-bold text-primary-content shadow-sm">fx</span>
-fauxidc
-</span>
-<span class="badge badge-warning badge-soft badge-sm gap-1.5 font-medium"><span aria-hidden="true" class="size-1.5 rounded-full bg-current"></span>Mock server · not for production</span>
+<body>
+<div class="page">
+<header class="page-top">
+<span class="brand"><svg class="ic" aria-hidden="true" viewBox="0 0 24 24"><path d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"/><circle cx="16.5" cy="7.5" r=".5"/></svg>fauxidc</span>
+<span class="label label-warning">Mock server · not for production</span>
 </header>
-<main class="card shrink-0 border border-base-300 bg-base-100 shadow-xl shadow-base-content/5">
-<div class="card-body gap-4 px-6 py-5">
-<div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-<div class="flex items-center gap-3">
-<span aria-hidden="true" class="grid size-9 place-items-center rounded-full bg-error/10 text-error">
-<svg class="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4m0 3.5v.01M10.3 3.9 2.4 17.6A2 2 0 0 0 4.1 20.6h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></svg>
-</span>
-<h1 class="text-xl font-semibold tracking-tight">Error</h1>
+<main class="card">
+<div class="card-head">
+<div class="row"><span class="icon-badge icon-error" aria-hidden="true"><svg class="ic" viewBox="0 0 24 24"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4M12 17h.01"/></svg></span><h1>Error</h1></div>
+<div class="row"><span class="label label-pair"><span>Issuer</span><span>{{ issuer_id }}</span></span></div>
 </div>
-<div class="flex min-w-0 flex-wrap gap-1.5 text-xs">
-<span class="badge badge-ghost max-w-full gap-1.5"><span class="text-base-content/70">Issuer</span><span class="truncate font-mono">{{ issuer_id }}</span></span>
+<div class="alert alert-error" role="alert">
+<svg class="ic" aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
+<span class="wrap">{{ message }}</span>
 </div>
-</div>
-<div class="alert alert-error alert-soft items-start py-3 text-sm" role="alert">
-<svg aria-hidden="true" class="size-5 shrink-0" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0Zm-8-5a.75.75 0 0 1 .75.75v4.5a.75.75 0 0 1-1.5 0v-4.5A.75.75 0 0 1 10 5Zm0 10a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z" clip-rule="evenodd"/></svg>
-<span class="min-w-0 wrap-anywhere">{{ message }}</span>
-</div>
-<p class="text-sm text-base-content/70">fauxidc cannot continue with this request. Fix the request and try again.</p>
-</div>
+<p class="muted">fauxidc cannot continue with this request. Fix the request and try again.</p>
 </main>
-<footer class="shrink-0 text-center text-xs text-base-content/70">A mock OpenID Provider for development and tests. Never enter real credentials.</footer>
+<footer class="page-foot">A mock OpenID Provider for development and tests. Never enter real credentials.</footer>
 </div>
 </body>
 </html>

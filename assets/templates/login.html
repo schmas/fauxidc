@@ -5,76 +5,73 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
 <title>Sign in · fauxidc</title>
-<link rel="stylesheet" href="{{ static_base|href }}/fauxidc.css">
+<link rel="stylesheet" href="{{ static_base|href }}/halo.css">
 </head>
-<body class="bg-base-200 text-base-content antialiased">
-<div class="mx-auto flex min-h-dvh w-full max-w-xl flex-col justify-center gap-4 px-4 py-6 sm:h-dvh">
-<header class="flex shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-2">
-<span class="flex items-center gap-2 text-base font-semibold tracking-tight">
-<span aria-hidden="true" class="grid size-7 place-items-center rounded-lg bg-primary font-mono text-xs font-bold text-primary-content shadow-sm">fx</span>
-fauxidc
-</span>
-<span class="badge badge-warning badge-soft badge-sm gap-1.5 font-medium"><span aria-hidden="true" class="size-1.5 rounded-full bg-current"></span>Mock server · not for production</span>
+<body>
+<div class="page page-fit">
+<header class="page-top">
+<span class="brand"><svg class="ic" aria-hidden="true" viewBox="0 0 24 24"><path d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"/><circle cx="16.5" cy="7.5" r=".5"/></svg>fauxidc</span>
+<span class="label label-warning">Mock server · not for production</span>
 </header>
-<main class="card min-h-0 border border-base-300 bg-base-100 shadow-xl shadow-base-content/5">
-<form method="post" action="{{ action }}" class="flex min-h-0 flex-col">
+<main class="card card-scroll">
+<form method="post" action="{{ action }}" class="login-form">
 {% for pair in params %}<input type="hidden" name="{{ pair[0] }}" value="{{ pair[1] }}">
-{% endfor %}<div class="flex min-h-0 flex-col gap-4 overflow-y-auto px-6 pt-5 pb-5">
-<div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-<h1 class="text-xl font-semibold tracking-tight">Sign in</h1>
-<div class="flex min-w-0 flex-wrap gap-1.5 text-xs">
-<span class="badge badge-ghost max-w-full gap-1.5"><span class="text-base-content/70">Client</span><span class="truncate font-mono">{{ client_id }}</span></span>
-<span class="badge badge-ghost max-w-full gap-1.5"><span class="text-base-content/70">Issuer</span><span class="truncate font-mono">{{ issuer_id }}</span></span>
+{% endfor %}<div class="card-body">
+<div class="card-head">
+<h1>Sign in</h1>
+<div class="row">
+<span class="label label-pair"><span>Client</span><span>{{ client_id }}</span></span>
+<span class="label label-pair"><span>Issuer</span><span>{{ issuer_id }}</span></span>
 </div>
 </div>
-{% if error %}<div class="alert alert-error alert-soft items-start py-3 text-sm" role="alert">
-<svg aria-hidden="true" class="size-5 shrink-0" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0Zm-8-5a.75.75 0 0 1 .75.75v4.5a.75.75 0 0 1-1.5 0v-4.5A.75.75 0 0 1 10 5Zm0 10a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z" clip-rule="evenodd"/></svg>
-<span class="min-w-0 wrap-anywhere">{{ error }}</span>
+{% if error %}<div class="alert alert-error" role="alert">
+<svg class="ic" aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
+<span class="wrap">{{ error }}</span>
 </div>{% endif %}
-<div class="flex flex-col gap-1.5">
-<label for="f-user" class="text-sm font-medium">User</label>
-<select id="f-user" name="user" class="select w-full{% if error_field == "user" %} select-error{% endif %}" aria-describedby="f-user-help"{% if error_field == "user" %} aria-invalid="true"{% endif %}>
+<div class="field">
+<label for="f-user">User</label>
+<select id="f-user" name="user" class="select{% if error_field == "user" %} select-error{% endif %}" aria-describedby="f-user-help"{% if error_field == "user" %} aria-invalid="true"{% endif %}>
 {% for u in users %}<option value="{{ u.id }}"{% if selected == u.id %} selected{% endif %}>{{ u.label }}</option>
 {% endfor %}<option value="__custom__"{% if selected == "__custom__" %} selected{% endif %} data-custom>{{ custom_label }}</option>
 </select>
-<p id="f-user-help" class="text-xs text-base-content/70">No password. Pick {{ custom_label }} to type {% if custom_username %}a username{% else %}a subject and claims{% endif %}.</p>
+<p id="f-user-help" class="hint small">No password. Pick {{ custom_label }} to type {% if custom_username %}a username{% else %}a subject and claims{% endif %}.</p>
 </div>
-<fieldset id="custom-user" class="grid gap-3 rounded-box border border-dashed border-base-300 bg-base-200/60 px-4 pt-1 pb-4{% if not custom_username %} sm:grid-cols-2{% endif %}">
-<legend class="px-1.5 text-xs font-semibold tracking-wide text-base-content/70 uppercase">Custom User<span class="font-normal normal-case [.js_&]:hidden"> · only for {{ custom_label }}</span></legend>
-{% if custom_username %}<div class="flex flex-col gap-1.5">
-<label for="f-username" class="text-sm font-medium">Username</label>
-<input id="f-username" type="text" name="username" value="{{ username }}" class="input w-full font-mono{% if error_field == "username" %} input-error{% endif %}" placeholder="carol" autocomplete="off" autocapitalize="none" spellcheck="false" aria-describedby="f-username-help"{% if error_field == "username" %} aria-invalid="true"{% endif %}>
-<p id="f-username-help" class="text-xs text-base-content/70">The <code class="font-mono">sub</code> claim, in lowercase. It fills the claims template.</p>
+<fieldset id="custom-user" class="group">
+<legend>Custom User<span> · only for {{ custom_label }}</span></legend>
+{% if custom_username %}<div class="field">
+<label for="f-username">Username</label>
+<input id="f-username" type="text" name="username" value="{{ username }}" class="input mono{% if error_field == "username" %} input-error{% endif %}" placeholder="carol" autocomplete="off" autocapitalize="none" spellcheck="false" aria-describedby="f-username-help"{% if error_field == "username" %} aria-invalid="true"{% endif %}>
+<p id="f-username-help" class="hint small">The <code>sub</code> claim, in lowercase. It fills the claims template.</p>
 </div>
-{% else %}<div class="flex flex-col gap-1.5">
-<label for="f-custom-sub" class="text-sm font-medium">Subject</label>
-<input id="f-custom-sub" type="text" name="custom_sub" value="{{ custom_sub }}" class="input w-full font-mono{% if error_field == "custom_sub" %} input-error{% endif %}" placeholder="carol" autocomplete="off" spellcheck="false" aria-describedby="f-custom-sub-help"{% if error_field == "custom_sub" %} aria-invalid="true"{% endif %}>
-<p id="f-custom-sub-help" class="text-xs text-base-content/70">The <code class="font-mono">sub</code> claim.</p>
+{% else %}<div class="field">
+<label for="f-custom-sub">Subject</label>
+<input id="f-custom-sub" type="text" name="custom_sub" value="{{ custom_sub }}" class="input mono{% if error_field == "custom_sub" %} input-error{% endif %}" placeholder="carol" autocomplete="off" spellcheck="false" aria-describedby="f-custom-sub-help"{% if error_field == "custom_sub" %} aria-invalid="true"{% endif %}>
+<p id="f-custom-sub-help" class="hint small">The <code>sub</code> claim.</p>
 </div>
-<div class="flex flex-col gap-1.5">
-<label for="f-custom-claims" class="text-sm font-medium">Claims <span class="font-normal text-base-content/70">(JSON, optional)</span></label>
-<textarea id="f-custom-claims" name="custom_claims" rows="3" class="textarea min-h-0 w-full font-mono text-xs leading-relaxed{% if error_field == "custom_claims" %} textarea-error{% endif %}" placeholder='{"email": "carol@example.test"}' spellcheck="false"{% if error_field == "custom_claims" %} aria-invalid="true"{% endif %}>{{ custom_claims }}</textarea>
+<div class="field">
+<label for="f-custom-claims">Claims <small>(JSON, optional)</small></label>
+<textarea id="f-custom-claims" name="custom_claims" rows="3" class="textarea{% if error_field == "custom_claims" %} textarea-error{% endif %}" placeholder='{"email": "carol@example.test"}' spellcheck="false"{% if error_field == "custom_claims" %} aria-invalid="true"{% endif %}>{{ custom_claims }}</textarea>
 </div>
 {% endif %}</fieldset>
-<details class="collapse collapse-arrow shrink-0 rounded-box border border-base-300 bg-base-100"{% if override_claims or error_field == "override_claims" %} open{% endif %}>
-<summary class="collapse-title min-h-0 rounded-box py-2.5 text-sm font-medium focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary">Override claims <span class="font-normal text-base-content/70">· optional</span></summary>
-<div class="collapse-content flex flex-col gap-1.5 transition-none">
+<details class="details"{% if override_claims or error_field == "override_claims" %} open{% endif %}>
+<summary><span>Override claims <small class="muted">· optional</small></span><svg class="ic" aria-hidden="true" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg></summary>
+<div>
 <label for="f-override" class="sr-only">Override claims (JSON)</label>
-<textarea id="f-override" name="override_claims" rows="2" class="textarea min-h-0 w-full font-mono text-xs leading-relaxed{% if error_field == "override_claims" %} textarea-error{% endif %}" placeholder='{"name": "Alice Example"}' spellcheck="false" aria-describedby="f-override-help"{% if error_field == "override_claims" %} aria-invalid="true"{% endif %}>{{ override_claims }}</textarea>
-<p id="f-override-help" class="text-xs text-base-content/70">JSON merged on top of the User, for this sign-in only.</p>
+<textarea id="f-override" name="override_claims" rows="2" class="textarea{% if error_field == "override_claims" %} textarea-error{% endif %}" placeholder='{"name": "Alice Example"}' spellcheck="false" aria-describedby="f-override-help"{% if error_field == "override_claims" %} aria-invalid="true"{% endif %}>{{ override_claims }}</textarea>
+<p id="f-override-help" class="hint small muted">JSON merged on top of the User, for this sign-in only.</p>
 </div>
 </details>
 </div>
-<div class="flex shrink-0 flex-col gap-3 border-t border-base-300 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
-<label class="flex cursor-pointer items-center gap-2.5 text-sm">
-<input type="checkbox" name="remember" value="1"{% if remember %} checked{% endif %} class="checkbox checkbox-primary checkbox-sm">
+<div class="card-foot">
+<label class="check">
+<input type="checkbox" name="remember" value="1"{% if remember %} checked{% endif %} class="checkbox">
 <span>Remember me and skip this page</span>
 </label>
-<button type="submit" class="btn btn-primary w-full sm:w-40">Sign in</button>
+<button type="submit" class="btn">Sign in</button>
 </div>
 </form>
 </main>
-<footer class="shrink-0 text-center text-xs text-base-content/70">A mock OpenID Provider for development and tests. Never enter real credentials.</footer>
+<footer class="page-foot">A mock OpenID Provider for development and tests. Never enter real credentials.</footer>
 </div>
 <script>
 (function () {

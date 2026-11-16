@@ -22,7 +22,9 @@ use crate::error::OAuthError;
 use crate::keys::KeySet;
 use crate::logging::record_endpoint;
 use crate::state::{DebuggerFlow, IssuerCtx};
-use crate::templates::{CONTEXT_VERSION, DebuggerContext, DecodedJwt, STATIC_BASE};
+use crate::templates::{
+    CONTEXT_VERSION, DebuggerContext, DecodedJwt, STATIC_BASE, frame_same_origin,
+};
 use crate::token_endpoint::redeem_code;
 
 /// The query of `GET {debugger}`.
@@ -30,6 +32,19 @@ use crate::token_endpoint::redeem_code;
 pub struct PageQuery {
     /// `?forget=1` clears the Auto-select cookie and redirects to the debugger page.
     pub forget: Option<String>,
+    /// `?embed=1`: the page shows inside the dashboard, without its brand row and footer.
+    pub embed: Option<String>,
+}
+
+impl PageQuery {
+    fn embed(&self) -> bool {
+        is_embed(self.embed.as_deref())
+    }
+}
+
+/// `embed=1` (or any value but `0` and empty) asks for the page without its own chrome.
+fn is_embed(v: Option<&str>) -> bool {
+    v.is_some_and(|v| !v.is_empty() && v != "0")
 }
 
 /// The form of `POST {debugger}`.
@@ -131,40 +146,58 @@ pub(crate) fn change_href(ctx: &IssuerCtx) -> String {
     format!("{}?forget=1", ctx.endpoint_href(Endpoint::Debugger))
 }
 
-/// An empty page context for this request.
-pub(crate) fn context(ctx: &IssuerCtx, headers: &HeaderMap) -> DebuggerContext {
-    let action = ctx.endpoint_href(Endpoint::Debugger);
+/// An empty page context for this request. With `embed`, the links and the form keep
+/// `embed=1`.
+pub(crate) fn context(ctx: &IssuerCtx, headers: &HeaderMap, embed: bool) -> DebuggerContext {
+    let path = ctx.endpoint_href(Endpoint::Debugger);
+    let start = format!("{}/start", path.trim_end_matches('/'));
+    let change = change_href(ctx);
+    let (action, start_href, change_href) = if embed {
+        (
+            format!("{path}?embed=1"),
+            format!("{start}?embed=1"),
+            format!("{change}&embed=1"),
+        )
+    } else {
+        (path, start, change)
+    };
     DebuggerContext {
         context_version: CONTEXT_VERSION,
         issuer_id: ctx.id.clone(),
-        start_href: format!("{}/start", action.trim_end_matches('/')),
         action,
+        start_href,
         token: String::new(),
         decoded: None,
         flow: Vec::new(),
         flow_raw: None,
         error: None,
         signed_in_as: signed_in_as(ctx, headers),
-        change_href: change_href(ctx),
+        change_href,
         static_base: STATIC_BASE.to_owned(),
+        embed,
     }
 }
 
-/// Renders the page with `status`.
+/// Renders the page with `status`, `Cache-Control: no-store` and the framing headers
+/// (`X-Frame-Options: SAMEORIGIN`, `frame-ancestors 'self'`).
 pub(crate) fn render(ctx: &IssuerCtx, status: StatusCode, page: &DebuggerContext) -> Response {
     match ctx.app.templates.render_debugger(page) {
-        Ok(html) => (
-            status,
-            [(header::CACHE_CONTROL, HeaderValue::from_static("no-store"))],
-            Html(html),
-        )
-            .into_response(),
+        Ok(html) => {
+            let mut res = (
+                status,
+                [(header::CACHE_CONTROL, HeaderValue::from_static("no-store"))],
+                Html(html),
+            )
+                .into_response();
+            frame_same_origin(&mut res);
+            res
+        }
         Err(e) => OAuthError::ServerError(format!("debugger page: {e}")).into_response(),
     }
 }
 
 /// `GET {debugger}`: the form. `?forget=1` clears the Auto-select cookie and answers 303 to
-/// the debugger page.
+/// the debugger page (with `?embed=1` when the request had it).
 pub async fn page(
     State(ctx): State<IssuerCtx>,
     headers: HeaderMap,
@@ -174,7 +207,11 @@ pub async fn page(
     if q.forget.is_some() {
         let mut res = StatusCode::SEE_OTHER.into_response();
         let h = res.headers_mut();
-        if let Ok(location) = HeaderValue::try_from(ctx.endpoint_href(Endpoint::Debugger)) {
+        let mut location = ctx.endpoint_href(Endpoint::Debugger);
+        if q.embed() {
+            location.push_str("?embed=1");
+        }
+        if let Ok(location) = HeaderValue::try_from(location) {
             h.insert(header::LOCATION, location);
         }
         if let Some(cookie) = auto_select_clear(&ctx.id, &ctx.path) {
@@ -183,14 +220,15 @@ pub async fn page(
         h.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
         return res;
     }
-    render(&ctx, StatusCode::OK, &context(&ctx, &headers))
+    render(&ctx, StatusCode::OK, &context(&ctx, &headers, q.embed()))
 }
 
 /// `POST {debugger}` with form field `token`: the page with the decoded token. Without
-/// `token`: the page with status 400 and the error "paste a JWT".
+/// `token`: the page with status 400 and the error "paste a JWT". `?embed=1` as on `GET`.
 pub async fn decode(
     State(ctx): State<IssuerCtx>,
     headers: HeaderMap,
+    Query(q): Query<PageQuery>,
     Form(f): Form<DecodeForm>,
 ) -> Response {
     record_endpoint(&ctx.id, "debugger");
@@ -198,7 +236,7 @@ pub async fn decode(
         Ok(keys) => keys,
         Err(e) => return e.into_response(),
     };
-    let mut page = context(&ctx, &headers);
+    let mut page = context(&ctx, &headers, q.embed());
     let Some(token) = f.token else {
         page.error = Some("paste a JWT".to_owned());
         return render(&ctx, StatusCode::BAD_REQUEST, &page);
@@ -222,6 +260,8 @@ const UNKNOWN_STATE: &str = "unknown or expired state";
 pub struct StartQuery {
     /// Default `openid profile email`.
     pub scope: Option<String>,
+    /// `embed=1`: the callback shows the page without its brand row and footer.
+    pub embed: Option<String>,
 }
 
 /// The query of `GET {debugger}/callback`.
@@ -293,6 +333,7 @@ pub async fn start(
             verifier,
             redirect_uri,
             expires_at: now + FLOW_TTL_SECS,
+            embed: is_embed(q.embed.as_deref()),
         },
         now,
     );
@@ -331,7 +372,9 @@ pub async fn callback(
         .as_deref()
         .is_some_and(|s| cookie.as_deref() == Some(s));
     if !bound {
-        let mut page = context(&ctx, &headers);
+        // No flow of this browser: the page has no way to know the frame, so it shows
+        // the standalone layout.
+        let mut page = context(&ctx, &headers, false);
         page.error = Some(UNKNOWN_STATE.to_owned());
         return render(&ctx, StatusCode::BAD_REQUEST, &page);
     }
@@ -344,12 +387,12 @@ pub async fn callback(
 
 /// The callback for a `state` that equals the state cookie.
 async fn callback_page(ctx: &IssuerCtx, headers: &HeaderMap, q: &CallbackQuery) -> Response {
-    let mut page = context(ctx, headers);
     let flow = q
         .state
         .as_deref()
         .and_then(|s| ctx.app.store.take_flow(s, system_now()))
         .filter(|f| f.issuer_id == ctx.id);
+    let mut page = context(ctx, headers, flow.as_ref().is_some_and(|f| f.embed));
     if let Some(error) = q.error.as_deref() {
         page.error = Some(match q.error_description.as_deref() {
             Some(d) if !d.is_empty() => format!("{error}: {d}"),

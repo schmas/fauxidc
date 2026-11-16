@@ -20,6 +20,7 @@ use crate::session::Session;
 use crate::state::{CodeGrant, IssuerCtx, PkceMethod, Subject};
 use crate::templates::{
     CONTEXT_VERSION, ErrorContext, FormPostContext, LoginContext, STATIC_BASE, UserOption,
+    frame_same_origin, issuer_page,
 };
 use crate::tokens::verify_id_token_hint;
 
@@ -451,12 +452,16 @@ fn form_post_page(
         static_base: STATIC_BASE.to_owned(),
     };
     match ctx.app.templates.render_form_post(&context) {
-        Ok(html) => (
-            StatusCode::OK,
-            [(header::CACHE_CONTROL, "no-store")],
-            Html(html),
-        )
-            .into_response(),
+        Ok(html) => {
+            let mut res = (
+                StatusCode::OK,
+                [(header::CACHE_CONTROL, "no-store")],
+                Html(html),
+            )
+                .into_response();
+            frame_same_origin(&mut res);
+            res
+        }
         Err(e) => OAuthError::ServerError(format!("form_post page: {e}")).into_response(),
     }
 }
@@ -692,7 +697,7 @@ fn login_page(
         username: kept.username.clone(),
     };
     match ctx.app.templates.render_login(&ctx.id, &login) {
-        Ok(html) => (status, Html(html)).into_response(),
+        Ok(html) => issuer_page(status, html),
         Err(e) => OAuthError::ServerError(format!("login page: {e}")).into_response(),
     }
 }
@@ -705,7 +710,7 @@ pub(crate) fn error_page(ctx: &IssuerCtx, status: StatusCode, message: String) -
         static_base: STATIC_BASE.to_owned(),
     };
     match ctx.app.templates.render_error(&context) {
-        Ok(html) => (status, Html(html)).into_response(),
+        Ok(html) => issuer_page(status, html),
         Err(e) => OAuthError::ServerError(format!("error page: {e}")).into_response(),
     }
 }

@@ -102,6 +102,10 @@ The page also shows "Signed in as <label> · change" when the Auto-select cookie
 The "change" link (`{issuer}/debugger?forget=1`) clears the cookie.
 The signed-out page never shows this line, because the same response clears the cookie.
 
+The dashboard Debugger view (`/_mock/#debugger/<issuer id>`) shows the same page in a frame, with `?embed=1`.
+`?embed=1` hides the brand row and the footer. The form, "Run login flow" and "change" keep it, so the whole
+login flow stays in the frame. The page allows a frame of the same origin only (`X-Frame-Options: SAMEORIGIN`).
+
 You can replace the page with a `debugger.html` template. The default template writes its links with the `href`
 filter; see [templates.md](templates.md).
 
