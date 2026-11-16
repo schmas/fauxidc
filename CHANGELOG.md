@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0](https://github.com/schmas/fauxidc/compare/v0.4.0...v0.5.0) - 2026-11-16
+
+### Added
+
+- use the halo design on all HTML pages and embed the debugger ([#43](https://github.com/schmas/fauxidc/pull/43))
+- add the admin dashboard at /_mock/ for every Test API operation ([#41](https://github.com/schmas/fauxidc/pull/41))
+- add GET /_mock/config to show the running config with sources ([#39](https://github.com/schmas/fauxidc/pull/39))
+- add POST /_mock/reload to reload the config files at once ([#38](https://github.com/schmas/fauxidc/pull/38))
+- add Test API and CLI to list and change Clients ([#37](https://github.com/schmas/fauxidc/pull/37))
+- add DELETE /_mock/state to reset runtime state ([#34](https://github.com/schmas/fauxidc/pull/34))
+- add Test API and CLI to list and change Users ([#33](https://github.com/schmas/fauxidc/pull/33))
+
+### Fixed
+
+- align dashboard sidebar with the halo design and add the debugger ([#42](https://github.com/schmas/fauxidc/pull/42))
+- mask private JWK members in Clients Test API and CLI ([#40](https://github.com/schmas/fauxidc/pull/40))
+
+### Other
+
+- add fauxidc-setup skill to add a local IdP to an app project ([#36](https://github.com/schmas/fauxidc/pull/36))
+
 ## [0.4.0](https://github.com/schmas/fauxidc/compare/v0.3.0...v0.4.0) - 2026-11-15
 
 ### Added
