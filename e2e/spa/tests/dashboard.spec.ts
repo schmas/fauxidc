@@ -153,12 +153,36 @@ test("Sign out shows the signed-out page with a link back", async ({ page }) => 
   await expect(page).toHaveURL(`${MOCK}/_mock/`);
 });
 
+test("the sidebar marks one item and the Debugger item opens the debugger page", async ({ page }) => {
+  await open(page);
+  const items = page.locator(".sidebar .nav-item");
+  for (const view of await items.evaluateAll((all) => all.map((a) => (a as HTMLElement).dataset.view!))) {
+    await page.locator(`.nav-item[data-view="${view}"]`).click();
+    await expect(page.locator(`#${view}`)).toBeVisible();
+    await expect(page.locator('.nav-item[aria-current="page"]')).toHaveCount(1);
+    await expect(page.locator(`.nav-item[data-view="${view}"]`)).toHaveAttribute("aria-current", "page");
+    // Hover must not paint the active background on a second item.
+    const painted = await items.evaluateAll(
+      (all) => all.filter((a) => getComputedStyle(a).backgroundColor !== "rgba(0, 0, 0, 0)").length,
+    );
+    expect(painted).toBe(1);
+  }
+  await page.locator('.nav-item[data-view="debugger"]').click();
+  const link = page.locator('[data-debugger-row="auth0"]').getByRole("link", { name: "Open debugger" });
+  await expect(link).toHaveAttribute("href", "/auth0/debugger");
+  await link.click();
+  await expect(page).toHaveURL(`${MOCK}/auth0/debugger`);
+  await expect(page).toHaveTitle(/Debugger/);
+});
+
 test("the dashboard does not widen the page at 375 px", async ({ page }) => {
   await page.setViewportSize({ width: 375, height: 720 });
   await open(page);
   await expect(page.locator(".sidebar")).toBeHidden();
   await page.locator("#nav-select").selectOption("users");
   await expect(page.locator("#users")).toBeVisible();
+  await page.locator("#nav-select").selectOption("debugger");
+  await expect(page.locator("#debugger")).toBeVisible();
   const { scrollWidth, clientWidth } = await page.evaluate(() => ({
     scrollWidth: document.scrollingElement!.scrollWidth,
     clientWidth: document.scrollingElement!.clientWidth,

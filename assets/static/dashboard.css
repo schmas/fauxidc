@@ -53,23 +53,37 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .sidebar {
   position: sticky; top: 16px; display: flex; flex-direction: column; flex: none;
   width: 256px; height: calc(100dvh - 32px); background: var(--sidebar);
-  border: 1px solid var(--sidebar-border); border-radius: 24px; box-shadow: 0 4px 5px #10182808;
+  /* An inner stroke as in the design: the inset shadow takes no layout space, so the content is 224 px wide. */
+  border-radius: 24px; box-shadow: inset 0 0 0 1px var(--sidebar-border), 0 4px 5px #10182808;
 }
+/* Sidebar, Sidebar Section Title, Sidebar Item/Active and Sidebar Item/Default (halo).
+ * Header and footer: padding 24, gap 8. Content: padding 0 16, no gap between rows.
+ * Title: padding 8, 14/21 semibold, --sidebar-fg. Item: 48 high, padding 12 16 12 24, gap 8,
+ * radius 24, label 16/24 medium, then a 24 px icon. Only the active item has a background. */
 .sidebar-head, .sidebar-foot { display: flex; align-items: center; gap: 8px; padding: 24px; }
 .sidebar-foot { margin-top: auto; }
 .brand { display: flex; align-items: center; gap: 8px; font-size: 18px; font-weight: 600; }
 .brand .ic { color: var(--primary); width: 20px; height: 20px; }
+.sidebar-head .brand { color: var(--sidebar-accent-fg); font-size: 14px; line-height: 1.5; }
+.brand-mark { display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; }
+.sidebar-head .brand-mark .ic { width: 32px; height: 32px; color: inherit; }
 .sidebar nav { display: flex; flex-direction: column; padding: 0 16px; overflow-y: auto; }
-.nav-title { padding: 8px; color: var(--sidebar-fg); font-weight: 600; }
+.nav-title { padding: 8px; color: var(--sidebar-fg); font-size: 14px; font-weight: 600; line-height: 1.5; }
 .nav-item {
   display: flex; align-items: center; gap: 8px; padding: 12px 16px 12px 24px; border-radius: 24px;
-  color: var(--sidebar-accent-fg); font-size: 16px; font-weight: 500; text-decoration: none;
+  color: var(--sidebar-accent-fg); font-size: 16px; font-weight: 500; line-height: 1.5; text-decoration: none;
 }
-.nav-item span { flex: 1; }
-.nav-item:hover, .nav-item[aria-current="page"] { background: var(--sidebar-accent); }
-.foot-text { flex: 1; display: flex; flex-direction: column; gap: 4px; }
-.foot-text strong { font-weight: 500; }
-.foot-text small, .muted { color: var(--muted-fg); }
+.nav-item span { flex: 1; min-width: 0; }
+.nav-item .ic { color: var(--sidebar-fg); }
+/* The design has no hover state. Hover changes only the icon color, so it never looks
+ * like a second active item. */
+.nav-item:hover .ic, .nav-item[aria-current="page"] .ic { color: var(--sidebar-accent-fg); }
+.nav-item[aria-current="page"] { background: var(--sidebar-accent); }
+.foot-text { flex: 1; display: flex; flex-direction: column; gap: 4px; font-size: 16px; line-height: 1.5; }
+.foot-text strong { color: var(--sidebar-accent-fg); font-weight: 600; }
+.foot-text small { color: var(--sidebar-fg); font-size: inherit; }
+.sidebar-foot > .ic { color: var(--sidebar-accent-fg); }
+.muted { color: var(--muted-fg); }
 .topbar { display: none; }
 .main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 24px; padding: 24px; }
 .view { display: flex; flex-direction: column; gap: 24px; }

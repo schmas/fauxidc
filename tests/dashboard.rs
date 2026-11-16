@@ -198,3 +198,32 @@ async fn dashboard_stylesheet_has_both_themes_and_no_external_urls() {
         assert!(!css.contains(bad), "{bad}");
     }
 }
+
+/// The sidebar has a Debugger item. Its view links to the debugger page of each Issuer
+/// (the page is not copied or framed).
+#[tokio::test]
+async fn dashboard_sidebar_has_the_debugger() {
+    let (_, _, b) = send(&app(TWO_ISSUERS), get("/_mock/")).await;
+    for needle in [
+        "class=\"nav-item\" href=\"#debugger\" data-view=\"debugger\"",
+        "<option value=\"debugger\">Debugger</option>",
+        "<section id=\"debugger\" class=\"view\">",
+        "data-debugger-row=\"auth0\"",
+        "data-debugger-row=\"okta\"",
+    ] {
+        assert!(b.contains(needle), "{needle}");
+    }
+    assert!(!b.contains("<iframe"));
+    // One Open debugger link per Issuer, to the configured debugger path.
+    assert_eq!(b.matches(">Open debugger</a>").count(), 2);
+    assert!(b.contains("href=\"/oauth2/default/v1/debug\" data-open-debugger"));
+}
+
+/// The icon of a sidebar item comes after its label, as in the halo Sidebar Item.
+#[tokio::test]
+async fn dashboard_sidebar_item_has_label_then_icon() {
+    let (_, _, b) = send(&app(TWO_ISSUERS), get("/_mock/")).await;
+    assert!(b.contains(
+        "data-view=\"issuers\"><span>Issuers</span><svg class=\"ic ic-lg\" aria-hidden=\"true\"><use href=\"#i-server\"/></svg></a>"
+    ));
+}
