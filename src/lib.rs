@@ -15,6 +15,7 @@ pub mod clients_cli;
 pub mod clock;
 pub mod config;
 pub mod config_api;
+pub mod config_view;
 pub mod cookies;
 pub mod cors;
 pub mod debugger;

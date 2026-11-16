@@ -183,7 +183,8 @@ If no file, no inline config and no `FAUXIDC__*` vars are given:
 
 ### 5.7 `fauxidc config`
 
-- `fauxidc config` prints the merged config with the source of each value (default, `file:line`, inline, env, flag), then exits. Secrets are masked.
+- `fauxidc config` prints the merged config with the source of each value (default, `file:line`, inline, env, flag), then exits. Secrets are masked: each `client_secret`, and the private members of a JWK in a Client `jwks` (`d`, `p`, `q`, `dp`, `dq`, `qi`, `oth`, `k`).
+- `GET /_mock/config` shows the running config the same way, as JSON. It follows hot reload. Section 10 and `docs/test-api.md` have the details.
 - `fauxidc config --check` only validates. Exit 0 or 2. For CI.
 - `fauxidc config --schema` prints the JSON Schema (draft 2020-12) of the config file, derived from the config structs. It reads no config and conflicts with `--check`. The output is committed as `schema/fauxidc.schema.json`; a test fails on drift.
 
@@ -306,6 +307,7 @@ Paths are below the Issuer path unless they start with `/_mock`.
 | `POST /_mock/{issuer-id}/rotate-key` | Key rotation. A foreign `Origin` header gives 403 `access_denied` (M4). | M3, M4 |
 | `POST /_mock/{issuer-id}/fail-next` | Injected failure: `{endpoint, status, error, count, delay_ms}`. | M3 |
 | `POST /_mock/reload` | Reloads the config files at once (section 11). 200 `{changed, warnings}`, 422 `invalid_config` with `errors`, 409 with no config file. A foreign `Origin` header gives 403. | after M4 |
+| `GET /_mock/config` | The running config as `{config, sources}`, with the masking of 5.7. The sources come from a new load of the config inputs. A value that the new load does not give (a restart-only key changed in a file, a change before the next poll, a server without load inputs) has the source `unknown`. `?format=toml` gives TOML without sources. | after M4 |
 
 CORS (M2) on `/token`, `/userinfo` and `/revoke`: allowed origins come from the Client `web_origins`. If `web_origins` is not set, the origins of its redirect URIs are allowed.
 

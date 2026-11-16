@@ -21,7 +21,8 @@ pub struct StartOptions {
     /// Signing key PEM. Wins over `server.key_file`.
     pub key_pem: Option<String>,
     /// The inputs `config` was loaded from. With them, the Test API can write Users to the last
-    /// config file (ADR 0008). Without them, a write answers 409.
+    /// config file (ADR 0008), and `GET /_mock/config` shows the source of each value. Without
+    /// them, a write answers 409 and every source is `unknown`.
     pub load_inputs: Option<LoadInputs>,
 }
 
