@@ -93,7 +93,7 @@ impl Server {
         }
         if !is_loopback_bind(&config.server.bind) {
             tracing::warn!(
-                "bound to a non-loopback address: anyone who can reach it can mint tokens"
+                "bound to a non-loopback address: anyone who can reach it can mint tokens and use the dashboard at /_mock/"
             );
         }
         let state = Arc::new(AppState::new(config, keys, server_key_from_file)?);

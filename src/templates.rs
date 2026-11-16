@@ -28,6 +28,7 @@ const ERROR: &str = "error.html";
 const SIGNED_OUT: &str = "signed_out.html";
 const DEBUGGER: &str = "debugger.html";
 const FORM_POST: &str = "form_post.html";
+const DASHBOARD: &str = "dashboard.html";
 
 #[derive(RustEmbed)]
 #[folder = "assets/templates"]
@@ -152,6 +153,31 @@ pub struct DebuggerContext {
     pub static_base: String,
 }
 
+/// One Issuer on the dashboard. The hrefs are paths on this server.
+#[derive(Debug, Clone, Serialize)]
+pub struct DashboardIssuer {
+    pub id: String,
+    /// The `iss` of the Issuer for this request.
+    pub issuer_url: String,
+    pub lenient: bool,
+    pub discovery_href: String,
+    pub jwks_href: String,
+    pub debugger_href: String,
+    /// The `/endsession` path. A browser visit signs out: it clears the Session and the
+    /// Auto-select cookie.
+    pub endsession_href: String,
+}
+
+/// The context of `dashboard.html`. Version 2.
+#[derive(Debug, Clone, Serialize)]
+pub struct DashboardContext {
+    pub context_version: u32,
+    pub issuers: Vec<DashboardIssuer>,
+    /// `false` when `server.request_log_size` is 0.
+    pub request_log: bool,
+    pub static_base: String,
+}
+
 /// The compiled templates: embedded defaults, `templates_dir` overrides and per-issuer login pages.
 pub struct Templates {
     env: Environment<'static>,
@@ -164,7 +190,7 @@ impl Templates {
         env.set_auto_escape_callback(|_| AutoEscape::Html);
         env.add_filter("href", href);
         let dir = &config.server.templates_dir;
-        for name in [LOGIN, ERROR, SIGNED_OUT, DEBUGGER, FORM_POST] {
+        for name in [LOGIN, ERROR, SIGNED_OUT, DEBUGGER, FORM_POST, DASHBOARD] {
             let source = if dir.is_empty() {
                 None
             } else {
@@ -218,6 +244,11 @@ impl Templates {
     /// Renders the auto-submit page of `response_mode=form_post`.
     pub fn render_form_post(&self, ctx: &FormPostContext) -> Result<String, String> {
         self.render(FORM_POST, ctx)
+    }
+
+    /// Renders the dashboard page.
+    pub fn render_dashboard(&self, ctx: &DashboardContext) -> Result<String, String> {
+        self.render(DASHBOARD, ctx)
     }
 
     fn render(&self, name: &str, ctx: &impl Serialize) -> Result<String, String> {

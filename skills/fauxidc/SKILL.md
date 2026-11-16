@@ -49,7 +49,7 @@ In a fauxidc checkout, use `cargo run -- --config <file>`.
 - Zero config: with no file, no inline config and no `FAUXIDC__*` env var, fauxidc starts with one Issuer `default`
   at `http://localhost:9000/default` in Lenient mode, one public Client `test`, and the Users `alice` and `bob`.
 - A `FAUXIDC__*` env var (for example `FAUXIDC__SERVER__PORT=9100`) turns off Zero config. Give a config with an Issuer too.
-- The default port is 9000 and the default bind address is `127.0.0.1`. Health: `curl -s http://localhost:9000/_mock/health` gives `{"key":"ready","status":"ok"}`. `fauxidc healthcheck` exits 0 when it is up.
+- The default port is 9000 and the default bind address is `127.0.0.1`. Health: `curl -s http://localhost:9000/_mock/health` gives `{"key":"ready","status":"ok"}`. `fauxidc healthcheck` exits 0 when it is up. For a human, `http://localhost:9000/_mock/` is a dashboard for every Test API route.
 
 ## Write a config
 

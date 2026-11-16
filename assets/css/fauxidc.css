@@ -2,6 +2,8 @@
  * The compiled file has only the classes that assets/templates/ use. */
 @import "tailwindcss" source(none);
 @source "../templates";
+/* The dashboard has its own stylesheet, assets/static/dashboard.css. */
+@source not "../templates/dashboard.html";
 /* Only the daisyUI parts the built-in pages use, to keep the file under 60 KB.
  * themes: false, because the two themes below define every variable; a built-in
  * theme under them would be emitted too and only add bytes. */

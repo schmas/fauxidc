@@ -169,6 +169,7 @@ claims = { sub = "00u-alice" }
 - Default templates and static files are embedded in the binary.
 - `templates_dir` and `static_dir` replace them file by file. A missing file falls back to the embedded one.
 - `issuer.<id>.login_template` gives one Issuer its own login page.
+- The dashboard (`dashboard.html`) loads the embedded files `/_mock/static/dashboard.css` and `/_mock/static/dashboard.js`. The script calls only the JSON routes of the Test API. The design is `docs/fauxidc-design.pen`.
 - The template context is a documented, versioned contract. A breaking change to it is a breaking release.
 
 ### 5.6 Zero config
@@ -301,6 +302,7 @@ Paths are below the Issuer path unless they start with `/_mock`.
 | `/introspect` | Requires an authenticated confidential Client of the same Issuer. | M2 |
 | `/revoke` | Confidential Clients, or public Clients by `client_id` for their own tokens. Limitation: a revoked JWT stays valid for resource servers that verify it locally. Only `/introspect` sees the revocation. | M2 |
 | `/debugger` | Decodes a pasted JWT and checks it against this Issuer's JWKS. Runs a code + PKCE flow with a built-in `debugger` Client and shows the decoded tokens. M4: the built-in Client allows only the exact callback URL that `/debugger/start` builds, and needs PKCE S256 in both modes. `/debugger/start` sets the cookie `fauxidc_debugger_<issuer id>` with the flow `state`; without the matching cookie the callback gives 400. The server keeps at most 10 000 pending flows and drops the one that expires first. | M3, M4 |
+| `GET /_mock/` | Admin dashboard: one HTML page for every Test API operation, built on the JSON routes. `GET /` and `GET /_mock` redirect to it when no Issuer route is at that path. `Cache-Control: no-store`, `X-Frame-Options: DENY`, `Content-Security-Policy: frame-ancestors 'none'`. | after M4 |
 | `GET /_mock/health` | Health check. | M1 |
 | `POST /_mock/{issuer-id}/token` | Issues tokens without a browser: User id, extra claims, `expires_in` (negative allowed). | M2 |
 | `GET /_mock/requests?issuer=&path=`, `DELETE /_mock/requests` | Request log. Ring buffer of `request_log_size`, raw bodies. | M2 |
@@ -346,7 +348,7 @@ CORS (M2) on `/token`, `/userinfo` and `/revoke`: allowed origins come from the 
 - `tracing` + `tracing-subscriber` (`fmt`, `json`, `env-filter`) + `tower-http` `TraceLayer`.
 - Logs go to stderr. Text by default, `--log-format json` for CI.
 - Each request gets a span with Issuer id, endpoint and `client_id`.
-- At startup, the mock logs a warning when it binds to a non-loopback address: anyone who can reach it can mint tokens.
+- At startup, the mock logs a warning when it binds to a non-loopback address: anyone who can reach it can mint tokens and use the dashboard at `/_mock/`.
 
 ### 12.3 Distribution
 
