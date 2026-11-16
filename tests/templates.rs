@@ -135,6 +135,21 @@ async fn templates_dir_replaces_signed_out_page() {
     assert_eq!((s.as_u16(), b.as_str()), (200, "BYE auth0"));
 }
 
+/// The halo base of every page: plain CSS, small, both themes, no network.
+#[tokio::test]
+async fn halo_css_is_served_small_and_offline() {
+    let (s, h, css) = send(&app(AUTH0), get("/_mock/static/halo.css")).await;
+    assert_eq!(s, 200);
+    assert!(h["content-type"].to_str().unwrap().starts_with("text/css"));
+    assert!(css.contains("@media (prefers-color-scheme: dark)"));
+    assert!(css.len() < 24 * 1024, "{} bytes", css.len());
+    for bad in ["http://", "https://", "url(//", "@import"] {
+        assert!(!css.contains(bad), "{bad}");
+    }
+}
+
+/// The Tailwind stylesheet of the old built-in pages stays served, so a custom template
+/// that links it keeps its style.
 #[tokio::test]
 async fn fauxidc_css_is_served() {
     let (s, h, b) = send(&app(AUTH0), get("/_mock/static/fauxidc.css")).await;
@@ -173,7 +188,7 @@ async fn login_form_keeps_its_field_names() {
         "name=\"remember\"",
         "value=\"1\"",
         "id=\"custom-user\"",
-        "/_mock/static/fauxidc.css",
+        "/_mock/static/halo.css",
     ] {
         assert!(b.contains(needle), "{needle}");
     }
@@ -197,7 +212,7 @@ async fn custom_fields_are_not_hidden_in_the_html() {
     assert!(!tag.contains("hidden"), "{tag}");
     let css = std::fs::read_to_string(concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/assets/static/fauxidc.css"
+        "/assets/static/halo.css"
     ))
     .unwrap();
     assert!(!css.contains("#custom-user"));
@@ -240,27 +255,42 @@ fn templates_have_no_external_urls() {
 }
 
 #[test]
-fn templates_link_only_fauxidc_css() {
+fn templates_link_the_halo_css() {
     for (name, text) in template_files() {
-        // The dashboard has its own stylesheet (docs/fauxidc-design.pen).
-        let css = if name.ends_with("dashboard.html") {
-            "{{ static_base|href }}/dashboard.css"
-        } else {
-            "{{ static_base|href }}/fauxidc.css"
-        };
-        assert!(text.contains(css), "{name}");
+        // Every page links the halo base; the dashboard adds its shell (docs/fauxidc-design.pen).
+        assert!(text.contains("{{ static_base|href }}/halo.css"), "{name}");
+        assert_eq!(
+            text.contains("{{ static_base|href }}/dashboard.css"),
+            name.ends_with("dashboard.html"),
+            "{name}"
+        );
+        assert!(!text.contains("fauxidc.css"), "{name}");
         assert!(!text.contains("login.css"), "{name}");
     }
 }
 
 #[test]
-fn compiled_css_has_the_used_components() {
+fn halo_css_has_the_used_components() {
     let css = std::fs::read_to_string(concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/assets/static/fauxidc.css"
+        "/assets/static/halo.css"
     ))
     .unwrap();
-    for class in [".card", ".btn", ".select", ".alert", ".collapse"] {
+    for class in [
+        ".card",
+        ".btn",
+        ".select",
+        ".input",
+        ".textarea",
+        ".checkbox",
+        ".alert",
+        ".label",
+        ".table-wrap",
+        ".details",
+        ".input-error",
+        ".select-error",
+        ".textarea-error",
+    ] {
         assert!(css.contains(class), "{class}");
     }
 }
@@ -269,17 +299,19 @@ fn compiled_css_has_the_used_components() {
 fn debugger_code_blocks_wrap() {
     let css = std::fs::read_to_string(concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/assets/static/fauxidc.css"
+        "/assets/static/halo.css"
     ))
     .unwrap();
-    assert!(css.contains("white-space:pre-wrap"), "wrap rule");
-    assert!(css.contains("overflow-wrap:anywhere"), "break rule");
+    assert!(css.contains("white-space: pre-wrap"), "wrap rule");
+    assert!(css.contains("overflow-wrap: anywhere"), "break rule");
 }
 
 #[test]
 fn templates_doc_names_the_stylesheet() {
     let doc =
         std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/docs/templates.md")).unwrap();
+    assert!(doc.contains("/_mock/static/halo.css"));
+    // The old Tailwind file is still named, for old custom templates.
     assert!(doc.contains("/_mock/static/fauxidc.css"));
 }
 
@@ -295,15 +327,15 @@ async fn error_page_wraps_a_long_message() {
     .await;
     assert_eq!(s, 400);
     assert!(
-        b.contains("<span class=\"min-w-0 wrap-anywhere\">redirect_uri not registered"),
+        b.contains("<span class=\"wrap\">redirect_uri not registered"),
         "{b}"
     );
     let css = std::fs::read_to_string(concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/assets/static/fauxidc.css"
+        "/assets/static/halo.css"
     ))
     .unwrap();
-    assert!(css.contains(".min-w-0{min-width:0"));
+    assert!(css.contains(".wrap { min-width: 0; overflow-wrap: anywhere; }"));
 }
 
 /// The opening tags in `html` that carry `class` (an error class).

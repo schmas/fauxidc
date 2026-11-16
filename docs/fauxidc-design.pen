@@ -9916,6 +9916,3661 @@
           "fontWeight": "600"
         }
       ]
+    },
+    {
+      "type": "frame",
+      "id": "c45GL3",
+      "x": 10040,
+      "y": 2160,
+      "name": "Debugger",
+      "clip": true,
+      "width": 1440,
+      "height": 960,
+      "fill": "$c:--background",
+      "gap": 16,
+      "padding": 16,
+      "children": [
+        {
+          "id": "swQ5u",
+          "type": "ref",
+          "ref": "c:Cpvvc",
+          "name": "Sidebar",
+          "height": "fill_container",
+          "descendants": {
+            "c:Fpzpi": {
+              "content": "fauxidc"
+            },
+            "c:hYFpr": {
+              "children": [
+                {
+                  "id": "ko7Vy",
+                  "type": "ref",
+                  "ref": "c:rVnGm",
+                  "name": "Overview",
+                  "width": "fill_container",
+                  "descendants": {
+                    "c:V5UNQ": {
+                      "content": "Overview"
+                    }
+                  }
+                },
+                {
+                  "id": "G7JoKm",
+                  "type": "ref",
+                  "ref": "c:x40ze",
+                  "name": "Issuers",
+                  "width": "fill_container",
+                  "descendants": {
+                    "c:W2XqE": {
+                      "content": "Issuers"
+                    },
+                    "c:edTIG": {
+                      "icon": "server"
+                    }
+                  }
+                },
+                {
+                  "id": "xKJru",
+                  "type": "ref",
+                  "ref": "c:x40ze",
+                  "name": "Keys",
+                  "width": "fill_container",
+                  "descendants": {
+                    "c:W2XqE": {
+                      "content": "Keys"
+                    },
+                    "c:edTIG": {
+                      "icon": "key-round"
+                    }
+                  }
+                },
+                {
+                  "id": "mzUKw",
+                  "type": "ref",
+                  "ref": "c:rVnGm",
+                  "name": "Config",
+                  "width": "fill_container",
+                  "descendants": {
+                    "c:V5UNQ": {
+                      "content": "Config"
+                    }
+                  }
+                },
+                {
+                  "id": "x8Vi7",
+                  "type": "ref",
+                  "ref": "c:x40ze",
+                  "name": "Users",
+                  "width": "fill_container",
+                  "descendants": {
+                    "c:W2XqE": {
+                      "content": "Users"
+                    },
+                    "c:edTIG": {
+                      "icon": "users"
+                    }
+                  }
+                },
+                {
+                  "id": "xik8w",
+                  "type": "ref",
+                  "ref": "c:x40ze",
+                  "name": "Clients",
+                  "width": "fill_container",
+                  "descendants": {
+                    "c:W2XqE": {
+                      "content": "Clients"
+                    },
+                    "c:edTIG": {
+                      "icon": "app-window"
+                    }
+                  }
+                },
+                {
+                  "id": "G0hCJK",
+                  "type": "ref",
+                  "ref": "c:x40ze",
+                  "name": "Config",
+                  "width": "fill_container",
+                  "descendants": {
+                    "c:W2XqE": {
+                      "content": "Config"
+                    },
+                    "c:edTIG": {
+                      "icon": "file-cog"
+                    }
+                  }
+                },
+                {
+                  "id": "z651z",
+                  "type": "ref",
+                  "ref": "c:rVnGm",
+                  "name": "Testing",
+                  "width": "fill_container",
+                  "descendants": {
+                    "c:V5UNQ": {
+                      "content": "Testing"
+                    }
+                  }
+                },
+                {
+                  "id": "g3dqw5",
+                  "type": "ref",
+                  "ref": "c:x40ze",
+                  "name": "Tokens",
+                  "width": "fill_container",
+                  "descendants": {
+                    "c:W2XqE": {
+                      "content": "Tokens"
+                    },
+                    "c:edTIG": {
+                      "icon": "ticket"
+                    }
+                  }
+                },
+                {
+                  "id": "UtAgh",
+                  "type": "ref",
+                  "ref": "c:zARg5",
+                  "name": "Debugger",
+                  "width": "fill_container",
+                  "descendants": {
+                    "c:W2XqE": {
+                      "content": "Debugger"
+                    },
+                    "c:edTIG": {
+                      "icon": "bug"
+                    }
+                  }
+                },
+                {
+                  "id": "z8gm9c",
+                  "type": "ref",
+                  "ref": "c:x40ze",
+                  "name": "Failures",
+                  "width": "fill_container",
+                  "descendants": {
+                    "c:W2XqE": {
+                      "content": "Failures"
+                    },
+                    "c:edTIG": {
+                      "icon": "zap"
+                    }
+                  }
+                },
+                {
+                  "id": "D9E5R",
+                  "type": "ref",
+                  "ref": "c:x40ze",
+                  "name": "Request log",
+                  "width": "fill_container",
+                  "descendants": {
+                    "c:W2XqE": {
+                      "content": "Request log"
+                    },
+                    "c:edTIG": {
+                      "icon": "list"
+                    }
+                  }
+                },
+                {
+                  "id": "nUzG2",
+                  "type": "ref",
+                  "ref": "c:x40ze",
+                  "name": "Reset state",
+                  "width": "fill_container",
+                  "descendants": {
+                    "c:W2XqE": {
+                      "content": "Reset state"
+                    },
+                    "c:edTIG": {
+                      "icon": "rotate-ccw"
+                    }
+                  }
+                }
+              ]
+            },
+            "c:56YSe": {
+              "content": "Mock server"
+            },
+            "c:95h3W": {
+              "content": "Not for production"
+            },
+            "c:xqIDC": {
+              "icon": "triangle-alert"
+            }
+          }
+        },
+        {
+          "type": "frame",
+          "id": "p63yj8",
+          "name": "Main",
+          "width": "fill_container",
+          "height": "fill_container",
+          "layout": "vertical",
+          "gap": 24,
+          "padding": 24,
+          "children": [
+            {
+              "type": "frame",
+              "id": "Km6ub",
+              "name": "Page Header",
+              "width": "fill_container",
+              "gap": 16,
+              "justifyContent": "space_between",
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "RMXuk",
+                  "name": "Titles",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 4,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "nV20A",
+                      "name": "Title",
+                      "fill": "$c:--foreground",
+                      "content": "Debugger",
+                      "fontFamily": "$c:--font-primary",
+                      "fontSize": 28,
+                      "fontWeight": "600"
+                    },
+                    {
+                      "type": "text",
+                      "id": "u1ARa",
+                      "name": "Description",
+                      "fill": "$c:--muted-foreground",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "Decode a JWT or run a code + PKCE login with the built-in debugger Client. The debugger of the chosen Issuer runs below.",
+                      "fontFamily": "$c:--font-primary",
+                      "fontSize": 14,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "vfWHX",
+              "name": "Issuer picker",
+              "gap": 12,
+              "alignItems": "end",
+              "children": [
+                {
+                  "id": "Nv9KE",
+                  "type": "ref",
+                  "ref": "c:9mQMg",
+                  "name": "Issuer",
+                  "width": 320,
+                  "descendants": {
+                    "c:yBLtW": {
+                      "content": "Issuer"
+                    },
+                    "c:8mNGM": {
+                      "content": "auth0",
+                      "fontFamily": "Roboto Mono",
+                      "fontSize": 13
+                    }
+                  }
+                },
+                {
+                  "id": "ajFTE",
+                  "type": "ref",
+                  "ref": "c:L73ds",
+                  "name": "Open in new tab",
+                  "descendants": {
+                    "c:zF167": {
+                      "icon": "external-link"
+                    },
+                    "c:FT3cO": {
+                      "content": "Open in new tab"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "m4wawy",
+              "name": "Embedded debugger",
+              "clip": true,
+              "width": "fill_container",
+              "height": "fill_container",
+              "fill": "$c:--tile",
+              "cornerRadius": 24,
+              "stroke": "$c:--border",
+              "strokeWidth": 1,
+              "strokeAlignment": "inner",
+              "gap": 16,
+              "padding": 24,
+              "children": [
+                {
+                  "id": "d3ukQT",
+                  "type": "ref",
+                  "ref": "c:ZqeIe",
+                  "name": "Debugger card",
+                  "width": 400,
+                  "descendants": {
+                    "c:SaWqo": {
+                      "height": "fit_content",
+                      "padding": [
+                        32,
+                        32,
+                        16,
+                        32
+                      ],
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "qHQCx",
+                          "name": "Title row",
+                          "width": "fill_container",
+                          "gap": 12,
+                          "justifyContent": "space_between",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "k2nslR",
+                              "name": "Title",
+                              "fill": "$c:--foreground",
+                              "content": "Debugger",
+                              "fontFamily": "$c:--font-primary",
+                              "fontSize": 20,
+                              "fontWeight": "600"
+                            },
+                            {
+                              "id": "Y60GIl",
+                              "type": "ref",
+                              "ref": "c:Tn1Ii",
+                              "name": "Label Issuer auth0",
+                              "descendants": {
+                                "c:1qRIv": {
+                                  "content": "Issuer auth0"
+                                }
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    "c:KD4A5": {
+                      "height": "fit_content",
+                      "padding": [
+                        0,
+                        32
+                      ],
+                      "gap": 16,
+                      "justifyContent": "start",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "IgON0",
+                          "name": "Login row",
+                          "width": "fill_container",
+                          "layout": "vertical",
+                          "gap": 8,
+                          "children": [
+                            {
+                              "id": "s4JeT",
+                              "type": "ref",
+                              "ref": "c:L73ds",
+                              "name": "Run login flow",
+                              "descendants": {
+                                "c:zF167": {
+                                  "icon": "log-in"
+                                },
+                                "c:FT3cO": {
+                                  "content": "Run login flow"
+                                }
+                              }
+                            },
+                            {
+                              "type": "frame",
+                              "id": "eUmkr",
+                              "name": "Signed in",
+                              "gap": 4,
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "zdDKI",
+                                  "name": "Signed in text",
+                                  "fill": "$c:--muted-foreground",
+                                  "content": "Signed in as Alice Example ·",
+                                  "fontFamily": "$c:--font-primary",
+                                  "fontSize": 13,
+                                  "fontWeight": "normal"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "U4mhuG",
+                                  "name": "Change link",
+                                  "fill": "$c:--primary",
+                                  "content": "change",
+                                  "fontFamily": "$c:--font-primary",
+                                  "fontSize": 13,
+                                  "fontWeight": "500"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "id": "hlq5N",
+                          "type": "ref",
+                          "ref": "c:H7bEI",
+                          "name": "JWT",
+                          "width": "fill_container",
+                          "descendants": {
+                            "c:J6cRM": {
+                              "content": "JWT"
+                            },
+                            "c:t0VwL": {
+                              "cornerRadius": "$c:--radius-xs",
+                              "padding": 16,
+                              "height": 120
+                            },
+                            "c:7Lfkv": {
+                              "content": "eyJhbGciOiJFUzI1NiIsImtpZCI6ImsxIiwidHlwIjoiSldUIn0.eyJpc3MiOiJodHRwOi8vbG9jYWxob3N0OjkwMDAvYXV0aDAvIiwic3ViIjoiYWxpY2UiLC…",
+                              "fontFamily": "Roboto Mono",
+                              "fontSize": 12,
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container"
+                            }
+                          }
+                        },
+                        {
+                          "type": "text",
+                          "id": "NpeBE",
+                          "name": "Help",
+                          "fill": "$c:--muted-foreground",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "Paste an ID token or access token. fauxidc checks the signature with this Issuer's keys.",
+                          "fontFamily": "$c:--font-primary",
+                          "fontSize": 13,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    "c:508Xp": {
+                      "height": "fit_content",
+                      "padding": [
+                        16,
+                        32,
+                        32,
+                        32
+                      ],
+                      "children": [
+                        {
+                          "id": "dd81N",
+                          "type": "ref",
+                          "ref": "c:xBc88",
+                          "name": "Decode",
+                          "descendants": {
+                            "c:zF167": {
+                              "icon": "scan-search"
+                            },
+                            "c:FT3cO": {
+                              "content": "Decode"
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "id": "J9UyL",
+                  "type": "ref",
+                  "ref": "c:ZqeIe",
+                  "name": "Result card",
+                  "width": "fill_container",
+                  "descendants": {
+                    "c:SaWqo": {
+                      "height": "fit_content",
+                      "padding": [
+                        32,
+                        32,
+                        16,
+                        32
+                      ],
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "I09nY",
+                          "name": "Title row",
+                          "width": "fill_container",
+                          "gap": 8,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "W3JCpo",
+                              "name": "Title",
+                              "fill": "$c:--foreground",
+                              "content": "id_token",
+                              "fontFamily": "Roboto Mono",
+                              "fontSize": 20,
+                              "fontWeight": "600"
+                            },
+                            {
+                              "type": "frame",
+                              "id": "TfVix",
+                              "name": "Spacer",
+                              "width": "fill_container",
+                              "height": 1
+                            },
+                            {
+                              "id": "VdVMT",
+                              "type": "ref",
+                              "ref": "c:qHX3A",
+                              "name": "Label signature valid",
+                              "descendants": {
+                                "c:1qRIv": {
+                                  "content": "signature valid"
+                                }
+                              }
+                            },
+                            {
+                              "id": "aX0X4",
+                              "type": "ref",
+                              "ref": "c:qHX3A",
+                              "name": "Label iss ok",
+                              "descendants": {
+                                "c:1qRIv": {
+                                  "content": "iss ok"
+                                }
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    "c:KD4A5": {
+                      "height": "fit_content",
+                      "padding": [
+                        0,
+                        32,
+                        32,
+                        32
+                      ],
+                      "gap": 16,
+                      "justifyContent": "start",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "rbH7H",
+                          "name": "Checks",
+                          "width": "fill_container",
+                          "layout": "vertical",
+                          "gap": 10,
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "f8Rcpm",
+                              "name": "Signature",
+                              "width": "fill_container",
+                              "gap": 16,
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "uruk5",
+                                  "name": "Key",
+                                  "fill": "$c:--muted-foreground",
+                                  "textGrowth": "fixed-width",
+                                  "width": 96,
+                                  "content": "Signature",
+                                  "fontFamily": "$c:--font-primary",
+                                  "fontSize": 13,
+                                  "fontWeight": "normal"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "psuyL",
+                                  "name": "Value",
+                                  "fill": "$c:--foreground",
+                                  "content": "valid (kid k1, ES256)",
+                                  "fontFamily": "Roboto Mono",
+                                  "fontSize": 13,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "W3Sm4",
+                              "name": "Issuer",
+                              "width": "fill_container",
+                              "gap": 16,
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "A8MC4",
+                                  "name": "Key",
+                                  "fill": "$c:--muted-foreground",
+                                  "textGrowth": "fixed-width",
+                                  "width": 96,
+                                  "content": "Issuer",
+                                  "fontFamily": "$c:--font-primary",
+                                  "fontSize": 13,
+                                  "fontWeight": "normal"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "HvkBu",
+                                  "name": "Value",
+                                  "fill": "$c:--foreground",
+                                  "content": "iss matches this Issuer",
+                                  "fontFamily": "Roboto Mono",
+                                  "fontSize": 13,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "bHUg8",
+                              "name": "Expiry",
+                              "width": "fill_container",
+                              "gap": 16,
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "NTVCC",
+                                  "name": "Key",
+                                  "fill": "$c:--muted-foreground",
+                                  "textGrowth": "fixed-width",
+                                  "width": 96,
+                                  "content": "Expiry",
+                                  "fontFamily": "$c:--font-primary",
+                                  "fontSize": 13,
+                                  "fontWeight": "normal"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "uaNjG",
+                                  "name": "Value",
+                                  "fill": "$c:--foreground",
+                                  "content": "exp 1790000000: expires in 3600 s",
+                                  "fontFamily": "Roboto Mono",
+                                  "fontSize": 13,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "uQUwK",
+                          "name": "Code blocks",
+                          "width": "fill_container",
+                          "gap": 12,
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "W1OkPT",
+                              "name": "HEADER",
+                              "width": 200,
+                              "height": 197,
+                              "fill": "$c:--tile",
+                              "cornerRadius": 16,
+                              "stroke": "$c:--border",
+                              "strokeWidth": 1,
+                              "strokeAlignment": "inner",
+                              "layout": "vertical",
+                              "gap": 8,
+                              "padding": 16,
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "ZWdMs",
+                                  "name": "Title",
+                                  "fill": "$c:--muted-foreground",
+                                  "content": "HEADER",
+                                  "fontFamily": "$c:--font-primary",
+                                  "fontSize": 11,
+                                  "fontWeight": "600",
+                                  "letterSpacing": 1
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "OTf1R",
+                                  "name": "Code",
+                                  "fill": "$c:--foreground",
+                                  "textGrowth": "fixed-width",
+                                  "width": "fill_container",
+                                  "content": "{\n  \"alg\": \"ES256\",\n  \"kid\": \"k1\",\n  \"typ\": \"JWT\"\n}",
+                                  "lineHeight": 1.5,
+                                  "fontFamily": "Roboto Mono",
+                                  "fontSize": 12,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "k3j9e",
+                              "name": "PAYLOAD",
+                              "width": "fill_container",
+                              "fill": "$c:--tile",
+                              "cornerRadius": 16,
+                              "stroke": "$c:--border",
+                              "strokeWidth": 1,
+                              "strokeAlignment": "inner",
+                              "layout": "vertical",
+                              "gap": 8,
+                              "padding": 16,
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "BSVZe",
+                                  "name": "Title",
+                                  "fill": "$c:--muted-foreground",
+                                  "content": "PAYLOAD",
+                                  "fontFamily": "$c:--font-primary",
+                                  "fontSize": 11,
+                                  "fontWeight": "600",
+                                  "letterSpacing": 1
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "sUJoE",
+                                  "name": "Code",
+                                  "fill": "$c:--foreground",
+                                  "textGrowth": "fixed-width",
+                                  "width": "fill_container",
+                                  "content": "{\n  \"iss\": \"http://localhost:9000/auth0/\",\n  \"sub\": \"alice\",\n  \"aud\": \"debugger\",\n  \"email\": \"alice@example.com\",\n  \"exp\": 1790000000,\n  \"iat\": 1789996400\n}",
+                                  "lineHeight": 1.5,
+                                  "fontFamily": "Roboto Mono",
+                                  "fontSize": 12,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    "c:508Xp": {
+                      "height": "fit_content(0)",
+                      "padding": [
+                        16,
+                        32,
+                        32,
+                        32
+                      ],
+                      "enabled": false
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "CyUkM",
+      "x": 10040,
+      "y": 3440,
+      "name": "Debugger - Dark",
+      "theme": {
+        "c:Mode": "Dark"
+      },
+      "clip": true,
+      "width": 1440,
+      "height": 960,
+      "fill": "$c:--background",
+      "gap": 16,
+      "padding": 16,
+      "children": [
+        {
+          "id": "D7i2mY",
+          "type": "ref",
+          "ref": "c:Cpvvc",
+          "name": "Sidebar",
+          "height": "fill_container",
+          "descendants": {
+            "c:Fpzpi": {
+              "content": "fauxidc"
+            },
+            "c:hYFpr": {
+              "children": [
+                {
+                  "id": "uA5mv",
+                  "type": "ref",
+                  "ref": "c:rVnGm",
+                  "name": "Overview",
+                  "width": "fill_container",
+                  "descendants": {
+                    "c:V5UNQ": {
+                      "content": "Overview"
+                    }
+                  }
+                },
+                {
+                  "id": "KW3an",
+                  "type": "ref",
+                  "ref": "c:x40ze",
+                  "name": "Issuers",
+                  "width": "fill_container",
+                  "descendants": {
+                    "c:W2XqE": {
+                      "content": "Issuers"
+                    },
+                    "c:edTIG": {
+                      "icon": "server"
+                    }
+                  }
+                },
+                {
+                  "id": "rh64H",
+                  "type": "ref",
+                  "ref": "c:x40ze",
+                  "name": "Keys",
+                  "width": "fill_container",
+                  "descendants": {
+                    "c:W2XqE": {
+                      "content": "Keys"
+                    },
+                    "c:edTIG": {
+                      "icon": "key-round"
+                    }
+                  }
+                },
+                {
+                  "id": "k2vkU",
+                  "type": "ref",
+                  "ref": "c:rVnGm",
+                  "name": "Config",
+                  "width": "fill_container",
+                  "descendants": {
+                    "c:V5UNQ": {
+                      "content": "Config"
+                    }
+                  }
+                },
+                {
+                  "id": "vQc6n",
+                  "type": "ref",
+                  "ref": "c:x40ze",
+                  "name": "Users",
+                  "width": "fill_container",
+                  "descendants": {
+                    "c:W2XqE": {
+                      "content": "Users"
+                    },
+                    "c:edTIG": {
+                      "icon": "users"
+                    }
+                  }
+                },
+                {
+                  "id": "Sdp7o",
+                  "type": "ref",
+                  "ref": "c:x40ze",
+                  "name": "Clients",
+                  "width": "fill_container",
+                  "descendants": {
+                    "c:W2XqE": {
+                      "content": "Clients"
+                    },
+                    "c:edTIG": {
+                      "icon": "app-window"
+                    }
+                  }
+                },
+                {
+                  "id": "ygzTE",
+                  "type": "ref",
+                  "ref": "c:x40ze",
+                  "name": "Config",
+                  "width": "fill_container",
+                  "descendants": {
+                    "c:W2XqE": {
+                      "content": "Config"
+                    },
+                    "c:edTIG": {
+                      "icon": "file-cog"
+                    }
+                  }
+                },
+                {
+                  "id": "fKURu",
+                  "type": "ref",
+                  "ref": "c:rVnGm",
+                  "name": "Testing",
+                  "width": "fill_container",
+                  "descendants": {
+                    "c:V5UNQ": {
+                      "content": "Testing"
+                    }
+                  }
+                },
+                {
+                  "id": "kwBxA",
+                  "type": "ref",
+                  "ref": "c:x40ze",
+                  "name": "Tokens",
+                  "width": "fill_container",
+                  "descendants": {
+                    "c:W2XqE": {
+                      "content": "Tokens"
+                    },
+                    "c:edTIG": {
+                      "icon": "ticket"
+                    }
+                  }
+                },
+                {
+                  "id": "OGdq6",
+                  "type": "ref",
+                  "ref": "c:zARg5",
+                  "name": "Debugger",
+                  "width": "fill_container",
+                  "descendants": {
+                    "c:W2XqE": {
+                      "content": "Debugger"
+                    },
+                    "c:edTIG": {
+                      "icon": "bug"
+                    }
+                  }
+                },
+                {
+                  "id": "eMTuk",
+                  "type": "ref",
+                  "ref": "c:x40ze",
+                  "name": "Failures",
+                  "width": "fill_container",
+                  "descendants": {
+                    "c:W2XqE": {
+                      "content": "Failures"
+                    },
+                    "c:edTIG": {
+                      "icon": "zap"
+                    }
+                  }
+                },
+                {
+                  "id": "aqzzx",
+                  "type": "ref",
+                  "ref": "c:x40ze",
+                  "name": "Request log",
+                  "width": "fill_container",
+                  "descendants": {
+                    "c:W2XqE": {
+                      "content": "Request log"
+                    },
+                    "c:edTIG": {
+                      "icon": "list"
+                    }
+                  }
+                },
+                {
+                  "id": "fwA0v",
+                  "type": "ref",
+                  "ref": "c:x40ze",
+                  "name": "Reset state",
+                  "width": "fill_container",
+                  "descendants": {
+                    "c:W2XqE": {
+                      "content": "Reset state"
+                    },
+                    "c:edTIG": {
+                      "icon": "rotate-ccw"
+                    }
+                  }
+                }
+              ]
+            },
+            "c:56YSe": {
+              "content": "Mock server"
+            },
+            "c:95h3W": {
+              "content": "Not for production"
+            },
+            "c:xqIDC": {
+              "icon": "triangle-alert"
+            }
+          }
+        },
+        {
+          "type": "frame",
+          "id": "hNUM9",
+          "name": "Main",
+          "width": "fill_container",
+          "height": "fill_container",
+          "layout": "vertical",
+          "gap": 24,
+          "padding": 24,
+          "children": [
+            {
+              "type": "frame",
+              "id": "W14vrk",
+              "name": "Page Header",
+              "width": "fill_container",
+              "gap": 16,
+              "justifyContent": "space_between",
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "TRYvC",
+                  "name": "Titles",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 4,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "PVFc6",
+                      "name": "Title",
+                      "fill": "$c:--foreground",
+                      "content": "Debugger",
+                      "fontFamily": "$c:--font-primary",
+                      "fontSize": 28,
+                      "fontWeight": "600"
+                    },
+                    {
+                      "type": "text",
+                      "id": "h2oTOf",
+                      "name": "Description",
+                      "fill": "$c:--muted-foreground",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "Decode a JWT or run a code + PKCE login with the built-in debugger Client. The debugger of the chosen Issuer runs below.",
+                      "fontFamily": "$c:--font-primary",
+                      "fontSize": 14,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "E3BpH5",
+              "name": "Issuer picker",
+              "gap": 12,
+              "alignItems": "end",
+              "children": [
+                {
+                  "id": "ZYb83",
+                  "type": "ref",
+                  "ref": "c:9mQMg",
+                  "name": "Issuer",
+                  "width": 320,
+                  "descendants": {
+                    "c:yBLtW": {
+                      "content": "Issuer"
+                    },
+                    "c:8mNGM": {
+                      "content": "auth0",
+                      "fontFamily": "Roboto Mono",
+                      "fontSize": 13
+                    }
+                  }
+                },
+                {
+                  "id": "z7L7c",
+                  "type": "ref",
+                  "ref": "c:L73ds",
+                  "name": "Open in new tab",
+                  "descendants": {
+                    "c:zF167": {
+                      "icon": "external-link"
+                    },
+                    "c:FT3cO": {
+                      "content": "Open in new tab"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "Ljmg4",
+              "name": "Embedded debugger",
+              "clip": true,
+              "width": "fill_container",
+              "height": "fill_container",
+              "fill": "$c:--tile",
+              "cornerRadius": 24,
+              "stroke": "$c:--border",
+              "strokeWidth": 1,
+              "strokeAlignment": "inner",
+              "gap": 16,
+              "padding": 24,
+              "children": [
+                {
+                  "id": "ebqa2",
+                  "type": "ref",
+                  "ref": "c:ZqeIe",
+                  "name": "Debugger card",
+                  "width": 400,
+                  "descendants": {
+                    "c:SaWqo": {
+                      "height": "fit_content",
+                      "padding": [
+                        32,
+                        32,
+                        16,
+                        32
+                      ],
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "oVuoO",
+                          "name": "Title row",
+                          "width": "fill_container",
+                          "gap": 12,
+                          "justifyContent": "space_between",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "V3GV7",
+                              "name": "Title",
+                              "fill": "$c:--foreground",
+                              "content": "Debugger",
+                              "fontFamily": "$c:--font-primary",
+                              "fontSize": 20,
+                              "fontWeight": "600"
+                            },
+                            {
+                              "id": "WYZN0",
+                              "type": "ref",
+                              "ref": "c:Tn1Ii",
+                              "name": "Label Issuer auth0",
+                              "descendants": {
+                                "c:1qRIv": {
+                                  "content": "Issuer auth0"
+                                }
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    "c:KD4A5": {
+                      "height": "fit_content",
+                      "padding": [
+                        0,
+                        32
+                      ],
+                      "gap": 16,
+                      "justifyContent": "start",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "IM33q",
+                          "name": "Login row",
+                          "width": "fill_container",
+                          "layout": "vertical",
+                          "gap": 8,
+                          "children": [
+                            {
+                              "id": "tllGh",
+                              "type": "ref",
+                              "ref": "c:L73ds",
+                              "name": "Run login flow",
+                              "descendants": {
+                                "c:zF167": {
+                                  "icon": "log-in"
+                                },
+                                "c:FT3cO": {
+                                  "content": "Run login flow"
+                                }
+                              }
+                            },
+                            {
+                              "type": "frame",
+                              "id": "SO14d",
+                              "name": "Signed in",
+                              "gap": 4,
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "H54LX",
+                                  "name": "Signed in text",
+                                  "fill": "$c:--muted-foreground",
+                                  "content": "Signed in as Alice Example ·",
+                                  "fontFamily": "$c:--font-primary",
+                                  "fontSize": 13,
+                                  "fontWeight": "normal"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "l0jz2A",
+                                  "name": "Change link",
+                                  "fill": "$c:--primary",
+                                  "content": "change",
+                                  "fontFamily": "$c:--font-primary",
+                                  "fontSize": 13,
+                                  "fontWeight": "500"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "id": "M2m6th",
+                          "type": "ref",
+                          "ref": "c:H7bEI",
+                          "name": "JWT",
+                          "width": "fill_container",
+                          "descendants": {
+                            "c:J6cRM": {
+                              "content": "JWT"
+                            },
+                            "c:t0VwL": {
+                              "cornerRadius": "$c:--radius-xs",
+                              "padding": 16,
+                              "height": 120
+                            },
+                            "c:7Lfkv": {
+                              "content": "eyJhbGciOiJFUzI1NiIsImtpZCI6ImsxIiwidHlwIjoiSldUIn0.eyJpc3MiOiJodHRwOi8vbG9jYWxob3N0OjkwMDAvYXV0aDAvIiwic3ViIjoiYWxpY2UiLC…",
+                              "fontFamily": "Roboto Mono",
+                              "fontSize": 12,
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container"
+                            }
+                          }
+                        },
+                        {
+                          "type": "text",
+                          "id": "kUlhC",
+                          "name": "Help",
+                          "fill": "$c:--muted-foreground",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "Paste an ID token or access token. fauxidc checks the signature with this Issuer's keys.",
+                          "fontFamily": "$c:--font-primary",
+                          "fontSize": 13,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    "c:508Xp": {
+                      "height": "fit_content",
+                      "padding": [
+                        16,
+                        32,
+                        32,
+                        32
+                      ],
+                      "children": [
+                        {
+                          "id": "TV7Bj",
+                          "type": "ref",
+                          "ref": "c:xBc88",
+                          "name": "Decode",
+                          "descendants": {
+                            "c:zF167": {
+                              "icon": "scan-search"
+                            },
+                            "c:FT3cO": {
+                              "content": "Decode"
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "id": "YsFdU",
+                  "type": "ref",
+                  "ref": "c:ZqeIe",
+                  "name": "Result card",
+                  "width": "fill_container",
+                  "descendants": {
+                    "c:SaWqo": {
+                      "height": "fit_content",
+                      "padding": [
+                        32,
+                        32,
+                        16,
+                        32
+                      ],
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "qhXgg",
+                          "name": "Title row",
+                          "width": "fill_container",
+                          "gap": 8,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "IHHbt",
+                              "name": "Title",
+                              "fill": "$c:--foreground",
+                              "content": "id_token",
+                              "fontFamily": "Roboto Mono",
+                              "fontSize": 20,
+                              "fontWeight": "600"
+                            },
+                            {
+                              "type": "frame",
+                              "id": "seV19",
+                              "name": "Spacer",
+                              "width": "fill_container",
+                              "height": 1
+                            },
+                            {
+                              "id": "gBQB9",
+                              "type": "ref",
+                              "ref": "c:qHX3A",
+                              "name": "Label signature valid",
+                              "descendants": {
+                                "c:1qRIv": {
+                                  "content": "signature valid"
+                                }
+                              }
+                            },
+                            {
+                              "id": "ThJmW",
+                              "type": "ref",
+                              "ref": "c:qHX3A",
+                              "name": "Label iss ok",
+                              "descendants": {
+                                "c:1qRIv": {
+                                  "content": "iss ok"
+                                }
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    "c:KD4A5": {
+                      "height": "fit_content",
+                      "padding": [
+                        0,
+                        32,
+                        32,
+                        32
+                      ],
+                      "gap": 16,
+                      "justifyContent": "start",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "P8xQR",
+                          "name": "Checks",
+                          "width": "fill_container",
+                          "layout": "vertical",
+                          "gap": 10,
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "zdnKP",
+                              "name": "Signature",
+                              "width": "fill_container",
+                              "gap": 16,
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "vDp5y",
+                                  "name": "Key",
+                                  "fill": "$c:--muted-foreground",
+                                  "textGrowth": "fixed-width",
+                                  "width": 96,
+                                  "content": "Signature",
+                                  "fontFamily": "$c:--font-primary",
+                                  "fontSize": 13,
+                                  "fontWeight": "normal"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "OLM97",
+                                  "name": "Value",
+                                  "fill": "$c:--foreground",
+                                  "content": "valid (kid k1, ES256)",
+                                  "fontFamily": "Roboto Mono",
+                                  "fontSize": 13,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "TYZcJ",
+                              "name": "Issuer",
+                              "width": "fill_container",
+                              "gap": 16,
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "gVgYx",
+                                  "name": "Key",
+                                  "fill": "$c:--muted-foreground",
+                                  "textGrowth": "fixed-width",
+                                  "width": 96,
+                                  "content": "Issuer",
+                                  "fontFamily": "$c:--font-primary",
+                                  "fontSize": 13,
+                                  "fontWeight": "normal"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "JaKka",
+                                  "name": "Value",
+                                  "fill": "$c:--foreground",
+                                  "content": "iss matches this Issuer",
+                                  "fontFamily": "Roboto Mono",
+                                  "fontSize": 13,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "Yf2uf",
+                              "name": "Expiry",
+                              "width": "fill_container",
+                              "gap": 16,
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "C2Zcb",
+                                  "name": "Key",
+                                  "fill": "$c:--muted-foreground",
+                                  "textGrowth": "fixed-width",
+                                  "width": 96,
+                                  "content": "Expiry",
+                                  "fontFamily": "$c:--font-primary",
+                                  "fontSize": 13,
+                                  "fontWeight": "normal"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "RxM51",
+                                  "name": "Value",
+                                  "fill": "$c:--foreground",
+                                  "content": "exp 1790000000: expires in 3600 s",
+                                  "fontFamily": "Roboto Mono",
+                                  "fontSize": 13,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "VRpjE",
+                          "name": "Code blocks",
+                          "width": "fill_container",
+                          "gap": 12,
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "noY6g",
+                              "name": "HEADER",
+                              "width": 200,
+                              "height": 197,
+                              "fill": "$c:--tile",
+                              "cornerRadius": 16,
+                              "stroke": "$c:--border",
+                              "strokeWidth": 1,
+                              "strokeAlignment": "inner",
+                              "layout": "vertical",
+                              "gap": 8,
+                              "padding": 16,
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "FFWyx",
+                                  "name": "Title",
+                                  "fill": "$c:--muted-foreground",
+                                  "content": "HEADER",
+                                  "fontFamily": "$c:--font-primary",
+                                  "fontSize": 11,
+                                  "fontWeight": "600",
+                                  "letterSpacing": 1
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "KWo19",
+                                  "name": "Code",
+                                  "fill": "$c:--foreground",
+                                  "textGrowth": "fixed-width",
+                                  "width": "fill_container",
+                                  "content": "{\n  \"alg\": \"ES256\",\n  \"kid\": \"k1\",\n  \"typ\": \"JWT\"\n}",
+                                  "lineHeight": 1.5,
+                                  "fontFamily": "Roboto Mono",
+                                  "fontSize": 12,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "sFjgT",
+                              "name": "PAYLOAD",
+                              "width": "fill_container",
+                              "fill": "$c:--tile",
+                              "cornerRadius": 16,
+                              "stroke": "$c:--border",
+                              "strokeWidth": 1,
+                              "strokeAlignment": "inner",
+                              "layout": "vertical",
+                              "gap": 8,
+                              "padding": 16,
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "y45hpI",
+                                  "name": "Title",
+                                  "fill": "$c:--muted-foreground",
+                                  "content": "PAYLOAD",
+                                  "fontFamily": "$c:--font-primary",
+                                  "fontSize": 11,
+                                  "fontWeight": "600",
+                                  "letterSpacing": 1
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "oskS4",
+                                  "name": "Code",
+                                  "fill": "$c:--foreground",
+                                  "textGrowth": "fixed-width",
+                                  "width": "fill_container",
+                                  "content": "{\n  \"iss\": \"http://localhost:9000/auth0/\",\n  \"sub\": \"alice\",\n  \"aud\": \"debugger\",\n  \"email\": \"alice@example.com\",\n  \"exp\": 1790000000,\n  \"iat\": 1789996400\n}",
+                                  "lineHeight": 1.5,
+                                  "fontFamily": "Roboto Mono",
+                                  "fontSize": 12,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    "c:508Xp": {
+                      "height": "fit_content(0)",
+                      "padding": [
+                        16,
+                        32,
+                        32,
+                        32
+                      ],
+                      "enabled": false
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "VnMfM",
+      "x": 11600,
+      "y": 2160,
+      "name": "Sign in",
+      "clip": true,
+      "width": 1440,
+      "height": 960,
+      "fill": "$c:--background",
+      "layout": "vertical",
+      "padding": [
+        48,
+        0
+      ],
+      "alignItems": "center",
+      "children": [
+        {
+          "type": "frame",
+          "id": "KNRbh",
+          "name": "Column",
+          "width": 560,
+          "layout": "vertical",
+          "gap": 24,
+          "children": [
+            {
+              "type": "frame",
+              "id": "aKpIg",
+              "name": "Top row",
+              "width": "fill_container",
+              "justifyContent": "space_between",
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "vVBKt",
+                  "name": "Brand",
+                  "gap": 8,
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon",
+                      "id": "FcIWt",
+                      "name": "Key icon",
+                      "width": 20,
+                      "height": 20,
+                      "icon": "key-round",
+                      "library": "lucide",
+                      "fill": "$c:--primary"
+                    },
+                    {
+                      "type": "text",
+                      "id": "S0xAC4",
+                      "name": "Brand name",
+                      "fill": "$c:--foreground",
+                      "content": "fauxidc",
+                      "fontFamily": "$c:--font-primary",
+                      "fontSize": 18,
+                      "fontWeight": "600"
+                    }
+                  ]
+                },
+                {
+                  "id": "nJFz6",
+                  "type": "ref",
+                  "ref": "c:2bkgE",
+                  "name": "Label Mock server · not for production",
+                  "descendants": {
+                    "c:1qRIv": {
+                      "content": "Mock server · not for production"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "id": "l1reXi",
+              "type": "ref",
+              "ref": "c:ZqeIe",
+              "name": "Sign in card",
+              "width": "fill_container",
+              "descendants": {
+                "c:SaWqo": {
+                  "height": "fit_content",
+                  "padding": [
+                    32,
+                    32,
+                    16,
+                    32
+                  ],
+                  "gap": 12,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "zE1Wh",
+                      "name": "Title",
+                      "fill": "$c:--foreground",
+                      "content": "Sign in",
+                      "fontFamily": "$c:--font-primary",
+                      "fontSize": 24,
+                      "fontWeight": "600"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "im8vs",
+                      "name": "Labels",
+                      "gap": 8,
+                      "children": [
+                        {
+                          "id": "f3dbIP",
+                          "type": "ref",
+                          "ref": "c:7JOF0",
+                          "name": "Label Client example-spa",
+                          "descendants": {
+                            "c:1qRIv": {
+                              "content": "Client example-spa"
+                            }
+                          }
+                        },
+                        {
+                          "id": "X6jF6",
+                          "type": "ref",
+                          "ref": "c:Tn1Ii",
+                          "name": "Label Issuer auth0",
+                          "descendants": {
+                            "c:1qRIv": {
+                              "content": "Issuer auth0"
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                },
+                "c:KD4A5": {
+                  "height": "fit_content",
+                  "padding": [
+                    0,
+                    32
+                  ],
+                  "gap": 16,
+                  "justifyContent": "start",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "ZXezM",
+                      "name": "User field",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 8,
+                      "children": [
+                        {
+                          "id": "to2PY",
+                          "type": "ref",
+                          "ref": "c:9mQMg",
+                          "name": "User",
+                          "width": "fill_container",
+                          "descendants": {
+                            "c:yBLtW": {
+                              "content": "User"
+                            },
+                            "c:8mNGM": {
+                              "content": "Alice Example"
+                            }
+                          }
+                        },
+                        {
+                          "type": "text",
+                          "id": "FzYUj",
+                          "name": "Help",
+                          "fill": "$c:--muted-foreground",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "No password. Pick Custom… to type a subject and claims.",
+                          "fontFamily": "$c:--font-primary",
+                          "fontSize": 13,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "EPkUs",
+                      "name": "Custom user",
+                      "width": "fill_container",
+                      "fill": "$c:--tile",
+                      "cornerRadius": 24,
+                      "stroke": "$c:--border",
+                      "strokeWidth": 1,
+                      "strokeAlignment": "inner",
+                      "layout": "vertical",
+                      "gap": 16,
+                      "padding": 20,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "ZFRFk",
+                          "name": "Group title",
+                          "fill": "$c:--muted-foreground",
+                          "content": "CUSTOM USER",
+                          "fontFamily": "$c:--font-primary",
+                          "fontSize": 11,
+                          "fontWeight": "600",
+                          "letterSpacing": 1
+                        },
+                        {
+                          "id": "t8lnip",
+                          "type": "ref",
+                          "ref": "c:uEeaR",
+                          "name": "Subject",
+                          "width": "fill_container",
+                          "descendants": {
+                            "c:EVJFg": {
+                              "content": "Subject"
+                            },
+                            "c:FcSY0": {
+                              "fill": "$c:--background"
+                            },
+                            "c:SdDrF": {
+                              "content": "carol"
+                            }
+                          }
+                        },
+                        {
+                          "id": "pGEHj",
+                          "type": "ref",
+                          "ref": "c:5QESV",
+                          "name": "Claims",
+                          "width": "fill_container",
+                          "descendants": {
+                            "c:J6cRM": {
+                              "content": "Claims (JSON, optional)"
+                            },
+                            "c:t0VwL": {
+                              "cornerRadius": "$c:--radius-xs",
+                              "padding": 16,
+                              "fill": "$c:--background"
+                            },
+                            "c:7Lfkv": {
+                              "content": "{\"email\": \"carol@example.test\"}",
+                              "fontFamily": "Roboto Mono",
+                              "fontSize": 12
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "Rk3BA",
+                      "name": "Override claims",
+                      "width": "fill_container",
+                      "cornerRadius": "$c:--radius-pill",
+                      "stroke": "$c:--border",
+                      "strokeWidth": 1,
+                      "strokeAlignment": "inner",
+                      "padding": [
+                        14,
+                        20
+                      ],
+                      "justifyContent": "space_between",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "ibKQ7",
+                          "name": "Label",
+                          "gap": 6,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "NbgQQ",
+                              "name": "Text",
+                              "fill": "$c:--foreground",
+                              "content": "Override claims",
+                              "fontFamily": "$c:--font-primary",
+                              "fontSize": 14,
+                              "fontWeight": "500"
+                            },
+                            {
+                              "type": "text",
+                              "id": "OitES",
+                              "name": "Optional",
+                              "fill": "$c:--muted-foreground",
+                              "content": "· optional",
+                              "fontFamily": "$c:--font-primary",
+                              "fontSize": 14,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "icon",
+                          "id": "TOrMA",
+                          "name": "Chevron",
+                          "width": 16,
+                          "height": 16,
+                          "icon": "chevron-right",
+                          "library": "lucide",
+                          "fill": "$c:--muted-foreground"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "rectangle",
+                      "id": "RnYvB",
+                      "name": "Divider",
+                      "fill": "$c:--border",
+                      "width": "fill_container",
+                      "height": 1
+                    }
+                  ]
+                },
+                "c:508Xp": {
+                  "height": "fit_content",
+                  "padding": [
+                    16,
+                    32,
+                    32,
+                    32
+                  ],
+                  "justifyContent": "space_between",
+                  "children": [
+                    {
+                      "id": "mEMrm",
+                      "type": "ref",
+                      "ref": "c:RPa0G",
+                      "name": "Remember me",
+                      "descendants": {
+                        "c:mJz5e": {
+                          "content": "Remember me and skip this page"
+                        }
+                      }
+                    },
+                    {
+                      "id": "J7sHIg",
+                      "type": "ref",
+                      "ref": "c:xBc88",
+                      "name": "Sign in",
+                      "descendants": {
+                        "c:zF167": {
+                          "icon": "log-in"
+                        },
+                        "c:FT3cO": {
+                          "content": "Sign in"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "type": "text",
+              "id": "o7yje",
+              "name": "Footer",
+              "fill": "$c:--muted-foreground",
+              "textGrowth": "fixed-width",
+              "width": "fill_container",
+              "content": "A mock OpenID Provider for development and tests. Never enter real credentials.",
+              "textAlign": "center",
+              "fontFamily": "$c:--font-primary",
+              "fontSize": 12,
+              "fontWeight": "normal"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "T3QSUW",
+      "x": 13160,
+      "y": 2160,
+      "name": "Signed out",
+      "clip": true,
+      "width": 1440,
+      "height": 960,
+      "fill": "$c:--background",
+      "layout": "vertical",
+      "padding": [
+        48,
+        0
+      ],
+      "alignItems": "center",
+      "children": [
+        {
+          "type": "frame",
+          "id": "yOV9x",
+          "name": "Column",
+          "width": 560,
+          "layout": "vertical",
+          "gap": 24,
+          "children": [
+            {
+              "type": "frame",
+              "id": "S7gYA",
+              "name": "Top row",
+              "width": "fill_container",
+              "justifyContent": "space_between",
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "l5cwtc",
+                  "name": "Brand",
+                  "gap": 8,
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon",
+                      "id": "GTSGe",
+                      "name": "Key icon",
+                      "width": 20,
+                      "height": 20,
+                      "icon": "key-round",
+                      "library": "lucide",
+                      "fill": "$c:--primary"
+                    },
+                    {
+                      "type": "text",
+                      "id": "u0sK7",
+                      "name": "Brand name",
+                      "fill": "$c:--foreground",
+                      "content": "fauxidc",
+                      "fontFamily": "$c:--font-primary",
+                      "fontSize": 18,
+                      "fontWeight": "600"
+                    }
+                  ]
+                },
+                {
+                  "id": "X8HZjb",
+                  "type": "ref",
+                  "ref": "c:2bkgE",
+                  "name": "Label Mock server · not for production",
+                  "descendants": {
+                    "c:1qRIv": {
+                      "content": "Mock server · not for production"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "id": "K5HOlJ",
+              "type": "ref",
+              "ref": "c:ZqeIe",
+              "name": "Signed out card",
+              "width": "fill_container",
+              "descendants": {
+                "c:SaWqo": {
+                  "height": "fit_content",
+                  "padding": [
+                    40,
+                    32,
+                    16,
+                    32
+                  ],
+                  "gap": 12,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "kH74R",
+                      "name": "Status icon",
+                      "width": 48,
+                      "height": 48,
+                      "fill": "$c:--color-success",
+                      "cornerRadius": "$c:--radius-pill",
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "hxFVB",
+                          "name": "Icon",
+                          "width": 24,
+                          "height": 24,
+                          "icon": "check",
+                          "library": "lucide",
+                          "fill": "$c:--color-success-foreground"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "WDhwk",
+                      "name": "Title",
+                      "fill": "$c:--foreground",
+                      "content": "Signed out",
+                      "fontFamily": "$c:--font-primary",
+                      "fontSize": 24,
+                      "fontWeight": "600"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "ZqA8g",
+                      "name": "Labels",
+                      "gap": 8,
+                      "children": [
+                        {
+                          "id": "B4XNYN",
+                          "type": "ref",
+                          "ref": "c:7JOF0",
+                          "name": "Label Client example-spa",
+                          "descendants": {
+                            "c:1qRIv": {
+                              "content": "Client example-spa"
+                            }
+                          }
+                        },
+                        {
+                          "id": "yuURu",
+                          "type": "ref",
+                          "ref": "c:Tn1Ii",
+                          "name": "Label Issuer auth0",
+                          "descendants": {
+                            "c:1qRIv": {
+                              "content": "Issuer auth0"
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                },
+                "c:KD4A5": {
+                  "height": "fit_content",
+                  "padding": [
+                    0,
+                    32,
+                    40,
+                    32
+                  ],
+                  "gap": 16,
+                  "justifyContent": "start",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "p9YsBr",
+                      "name": "Message",
+                      "width": "fill_container",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "gNs5I",
+                          "name": "Text",
+                          "fill": "$c:--muted-foreground",
+                          "content": "You are signed out. You can close this page, or go to the ",
+                          "fontFamily": "$c:--font-primary",
+                          "fontSize": 14,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "F2wyH",
+                          "name": "Link",
+                          "fill": "$c:--primary",
+                          "content": "dashboard",
+                          "fontFamily": "$c:--font-primary",
+                          "fontSize": 14,
+                          "fontWeight": "500"
+                        },
+                        {
+                          "type": "text",
+                          "id": "U3hQL",
+                          "name": "Dot",
+                          "fill": "$c:--muted-foreground",
+                          "content": ".",
+                          "fontFamily": "$c:--font-primary",
+                          "fontSize": 14,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                "c:508Xp": {
+                  "height": "fit_content(0)",
+                  "padding": [
+                    16,
+                    32,
+                    40,
+                    32
+                  ],
+                  "enabled": false
+                }
+              }
+            },
+            {
+              "type": "text",
+              "id": "lB7Hw",
+              "name": "Footer",
+              "fill": "$c:--muted-foreground",
+              "textGrowth": "fixed-width",
+              "width": "fill_container",
+              "content": "A mock OpenID Provider for development and tests. Never enter real credentials.",
+              "textAlign": "center",
+              "fontFamily": "$c:--font-primary",
+              "fontSize": 12,
+              "fontWeight": "normal"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "Ip37m",
+      "x": 14720,
+      "y": 2160,
+      "name": "Error",
+      "clip": true,
+      "width": 1440,
+      "height": 960,
+      "fill": "$c:--background",
+      "layout": "vertical",
+      "padding": [
+        48,
+        0
+      ],
+      "alignItems": "center",
+      "children": [
+        {
+          "type": "frame",
+          "id": "b0gRk3",
+          "name": "Column",
+          "width": 560,
+          "layout": "vertical",
+          "gap": 24,
+          "children": [
+            {
+              "type": "frame",
+              "id": "F65Kt",
+              "name": "Top row",
+              "width": "fill_container",
+              "justifyContent": "space_between",
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "ewNQy",
+                  "name": "Brand",
+                  "gap": 8,
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon",
+                      "id": "yEnv0",
+                      "name": "Key icon",
+                      "width": 20,
+                      "height": 20,
+                      "icon": "key-round",
+                      "library": "lucide",
+                      "fill": "$c:--primary"
+                    },
+                    {
+                      "type": "text",
+                      "id": "d5SnwL",
+                      "name": "Brand name",
+                      "fill": "$c:--foreground",
+                      "content": "fauxidc",
+                      "fontFamily": "$c:--font-primary",
+                      "fontSize": 18,
+                      "fontWeight": "600"
+                    }
+                  ]
+                },
+                {
+                  "id": "bQzay",
+                  "type": "ref",
+                  "ref": "c:2bkgE",
+                  "name": "Label Mock server · not for production",
+                  "descendants": {
+                    "c:1qRIv": {
+                      "content": "Mock server · not for production"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "id": "W46QHs",
+              "type": "ref",
+              "ref": "c:ZqeIe",
+              "name": "Error card",
+              "width": "fill_container",
+              "descendants": {
+                "c:SaWqo": {
+                  "height": "fit_content",
+                  "padding": [
+                    40,
+                    32,
+                    16,
+                    32
+                  ],
+                  "gap": 12,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "TIktl",
+                      "name": "Status icon",
+                      "width": 48,
+                      "height": 48,
+                      "fill": "$c:--color-error",
+                      "cornerRadius": "$c:--radius-pill",
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "LvjBy",
+                          "name": "Icon",
+                          "width": 24,
+                          "height": 24,
+                          "icon": "triangle-alert",
+                          "library": "lucide",
+                          "fill": "$c:--color-error-foreground"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "bwq1J",
+                      "name": "Title",
+                      "fill": "$c:--foreground",
+                      "content": "Error",
+                      "fontFamily": "$c:--font-primary",
+                      "fontSize": 24,
+                      "fontWeight": "600"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "q5c28",
+                      "name": "Labels",
+                      "gap": 8,
+                      "children": [
+                        {
+                          "id": "yiaup",
+                          "type": "ref",
+                          "ref": "c:Tn1Ii",
+                          "name": "Label Issuer auth0",
+                          "descendants": {
+                            "c:1qRIv": {
+                              "content": "Issuer auth0"
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                },
+                "c:KD4A5": {
+                  "height": "fit_content",
+                  "padding": [
+                    0,
+                    32,
+                    40,
+                    32
+                  ],
+                  "gap": 16,
+                  "justifyContent": "start",
+                  "children": [
+                    {
+                      "id": "XSbVx",
+                      "type": "ref",
+                      "ref": "c:YLlSf",
+                      "name": "Error alert",
+                      "width": "fill_container",
+                      "descendants": {
+                        "c:tH8a1": {
+                          "icon": "circle-alert"
+                        },
+                        "c:Q9Aqm": {
+                          "content": "redirect_uri not registered for client example-spa"
+                        },
+                        "c:SmO4x": {
+                          "enabled": false
+                        }
+                      }
+                    },
+                    {
+                      "type": "text",
+                      "id": "kXRhh",
+                      "name": "Text",
+                      "fill": "$c:--muted-foreground",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "fauxidc cannot continue with this request. Fix the request and try again.",
+                      "lineHeight": 1.5,
+                      "fontFamily": "$c:--font-primary",
+                      "fontSize": 14,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                "c:508Xp": {
+                  "height": "fit_content(0)",
+                  "padding": [
+                    16,
+                    32,
+                    40,
+                    32
+                  ],
+                  "enabled": false
+                }
+              }
+            },
+            {
+              "type": "text",
+              "id": "M739WM",
+              "name": "Footer",
+              "fill": "$c:--muted-foreground",
+              "textGrowth": "fixed-width",
+              "width": "fill_container",
+              "content": "A mock OpenID Provider for development and tests. Never enter real credentials.",
+              "textAlign": "center",
+              "fontFamily": "$c:--font-primary",
+              "fontSize": 12,
+              "fontWeight": "normal"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "BCeRg",
+      "x": 16280,
+      "y": 2160,
+      "name": "Continue",
+      "clip": true,
+      "width": 1440,
+      "height": 960,
+      "fill": "$c:--background",
+      "layout": "vertical",
+      "padding": [
+        48,
+        0
+      ],
+      "alignItems": "center",
+      "children": [
+        {
+          "type": "frame",
+          "id": "n68NA5",
+          "name": "Column",
+          "width": 560,
+          "layout": "vertical",
+          "gap": 24,
+          "children": [
+            {
+              "type": "frame",
+              "id": "wV4UQ",
+              "name": "Top row",
+              "width": "fill_container",
+              "justifyContent": "space_between",
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "WWDtH",
+                  "name": "Brand",
+                  "gap": 8,
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon",
+                      "id": "pjRwy",
+                      "name": "Key icon",
+                      "width": 20,
+                      "height": 20,
+                      "icon": "key-round",
+                      "library": "lucide",
+                      "fill": "$c:--primary"
+                    },
+                    {
+                      "type": "text",
+                      "id": "c0IY0",
+                      "name": "Brand name",
+                      "fill": "$c:--foreground",
+                      "content": "fauxidc",
+                      "fontFamily": "$c:--font-primary",
+                      "fontSize": 18,
+                      "fontWeight": "600"
+                    }
+                  ]
+                },
+                {
+                  "id": "i4EaHR",
+                  "type": "ref",
+                  "ref": "c:2bkgE",
+                  "name": "Label Mock server · not for production",
+                  "descendants": {
+                    "c:1qRIv": {
+                      "content": "Mock server · not for production"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "id": "F5nAf",
+              "type": "ref",
+              "ref": "c:ZqeIe",
+              "name": "Continue card",
+              "width": "fill_container",
+              "descendants": {
+                "c:SaWqo": {
+                  "height": "fit_content",
+                  "padding": [
+                    40,
+                    32,
+                    16,
+                    32
+                  ],
+                  "gap": 12,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "qsPNK",
+                      "name": "Title",
+                      "fill": "$c:--foreground",
+                      "content": "Continue to the application",
+                      "fontFamily": "$c:--font-primary",
+                      "fontSize": 24,
+                      "fontWeight": "600"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "SP959",
+                      "name": "Labels",
+                      "gap": 8,
+                      "children": [
+                        {
+                          "id": "pHJ6d",
+                          "type": "ref",
+                          "ref": "c:Tn1Ii",
+                          "name": "Label Issuer auth0",
+                          "descendants": {
+                            "c:1qRIv": {
+                              "content": "Issuer auth0"
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                },
+                "c:KD4A5": {
+                  "height": "fit_content",
+                  "padding": [
+                    0,
+                    32,
+                    16,
+                    32
+                  ],
+                  "gap": 16,
+                  "justifyContent": "start",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "cUXgT",
+                      "name": "Text",
+                      "fill": "$c:--muted-foreground",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "This page sends the response to the application. If nothing happens, click Continue.",
+                      "lineHeight": 1.5,
+                      "fontFamily": "$c:--font-primary",
+                      "fontSize": 14,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                "c:508Xp": {
+                  "height": "fit_content",
+                  "padding": [
+                    16,
+                    32,
+                    40,
+                    32
+                  ],
+                  "children": [
+                    {
+                      "id": "p5got",
+                      "type": "ref",
+                      "ref": "c:xBc88",
+                      "name": "Continue",
+                      "descendants": {
+                        "c:zF167": {
+                          "icon": "arrow-right"
+                        },
+                        "c:FT3cO": {
+                          "content": "Continue"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "type": "text",
+              "id": "B8XpsW",
+              "name": "Footer",
+              "fill": "$c:--muted-foreground",
+              "textGrowth": "fixed-width",
+              "width": "fill_container",
+              "content": "A mock OpenID Provider for development and tests. Never enter real credentials.",
+              "textAlign": "center",
+              "fontFamily": "$c:--font-primary",
+              "fontSize": 12,
+              "fontWeight": "normal"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "CzrLU",
+      "x": 11600,
+      "y": 3440,
+      "name": "Sign in - Dark",
+      "theme": {
+        "c:Mode": "Dark"
+      },
+      "clip": true,
+      "width": 1440,
+      "height": 960,
+      "fill": "$c:--background",
+      "layout": "vertical",
+      "padding": [
+        48,
+        0
+      ],
+      "alignItems": "center",
+      "children": [
+        {
+          "type": "frame",
+          "id": "mhowU",
+          "name": "Column",
+          "width": 560,
+          "layout": "vertical",
+          "gap": 24,
+          "children": [
+            {
+              "type": "frame",
+              "id": "gpdHD",
+              "name": "Top row",
+              "width": "fill_container",
+              "justifyContent": "space_between",
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "M4dJj5",
+                  "name": "Brand",
+                  "gap": 8,
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon",
+                      "id": "tb96Q",
+                      "name": "Key icon",
+                      "width": 20,
+                      "height": 20,
+                      "icon": "key-round",
+                      "library": "lucide",
+                      "fill": "$c:--primary"
+                    },
+                    {
+                      "type": "text",
+                      "id": "IeDu6",
+                      "name": "Brand name",
+                      "fill": "$c:--foreground",
+                      "content": "fauxidc",
+                      "fontFamily": "$c:--font-primary",
+                      "fontSize": 18,
+                      "fontWeight": "600"
+                    }
+                  ]
+                },
+                {
+                  "id": "ePGUr",
+                  "type": "ref",
+                  "ref": "c:2bkgE",
+                  "name": "Label Mock server · not for production",
+                  "descendants": {
+                    "c:1qRIv": {
+                      "content": "Mock server · not for production"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "id": "u1xxd",
+              "type": "ref",
+              "ref": "c:ZqeIe",
+              "name": "Sign in card",
+              "width": "fill_container",
+              "descendants": {
+                "c:SaWqo": {
+                  "height": "fit_content",
+                  "padding": [
+                    32,
+                    32,
+                    16,
+                    32
+                  ],
+                  "gap": 12,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "HXyBh",
+                      "name": "Title",
+                      "fill": "$c:--foreground",
+                      "content": "Sign in",
+                      "fontFamily": "$c:--font-primary",
+                      "fontSize": 24,
+                      "fontWeight": "600"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "SzSxW",
+                      "name": "Labels",
+                      "gap": 8,
+                      "children": [
+                        {
+                          "id": "l0Uzc",
+                          "type": "ref",
+                          "ref": "c:7JOF0",
+                          "name": "Label Client example-spa",
+                          "descendants": {
+                            "c:1qRIv": {
+                              "content": "Client example-spa"
+                            }
+                          }
+                        },
+                        {
+                          "id": "DquHl",
+                          "type": "ref",
+                          "ref": "c:Tn1Ii",
+                          "name": "Label Issuer auth0",
+                          "descendants": {
+                            "c:1qRIv": {
+                              "content": "Issuer auth0"
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                },
+                "c:KD4A5": {
+                  "height": "fit_content",
+                  "padding": [
+                    0,
+                    32
+                  ],
+                  "gap": 16,
+                  "justifyContent": "start",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "QgmzF",
+                      "name": "User field",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 8,
+                      "children": [
+                        {
+                          "id": "Em8jy",
+                          "type": "ref",
+                          "ref": "c:9mQMg",
+                          "name": "User",
+                          "width": "fill_container",
+                          "descendants": {
+                            "c:yBLtW": {
+                              "content": "User"
+                            },
+                            "c:8mNGM": {
+                              "content": "Alice Example"
+                            }
+                          }
+                        },
+                        {
+                          "type": "text",
+                          "id": "fzDYM",
+                          "name": "Help",
+                          "fill": "$c:--muted-foreground",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "No password. Pick Custom… to type a subject and claims.",
+                          "fontFamily": "$c:--font-primary",
+                          "fontSize": 13,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "z2nWdt",
+                      "name": "Custom user",
+                      "width": "fill_container",
+                      "fill": "$c:--tile",
+                      "cornerRadius": 24,
+                      "stroke": "$c:--border",
+                      "strokeWidth": 1,
+                      "strokeAlignment": "inner",
+                      "layout": "vertical",
+                      "gap": 16,
+                      "padding": 20,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "TNojA",
+                          "name": "Group title",
+                          "fill": "$c:--muted-foreground",
+                          "content": "CUSTOM USER",
+                          "fontFamily": "$c:--font-primary",
+                          "fontSize": 11,
+                          "fontWeight": "600",
+                          "letterSpacing": 1
+                        },
+                        {
+                          "id": "vbEdB",
+                          "type": "ref",
+                          "ref": "c:uEeaR",
+                          "name": "Subject",
+                          "width": "fill_container",
+                          "descendants": {
+                            "c:EVJFg": {
+                              "content": "Subject"
+                            },
+                            "c:FcSY0": {
+                              "fill": "$c:--background"
+                            },
+                            "c:SdDrF": {
+                              "content": "carol"
+                            }
+                          }
+                        },
+                        {
+                          "id": "ITOKj",
+                          "type": "ref",
+                          "ref": "c:5QESV",
+                          "name": "Claims",
+                          "width": "fill_container",
+                          "descendants": {
+                            "c:J6cRM": {
+                              "content": "Claims (JSON, optional)"
+                            },
+                            "c:t0VwL": {
+                              "cornerRadius": "$c:--radius-xs",
+                              "padding": 16,
+                              "fill": "$c:--background"
+                            },
+                            "c:7Lfkv": {
+                              "content": "{\"email\": \"carol@example.test\"}",
+                              "fontFamily": "Roboto Mono",
+                              "fontSize": 12
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "h9miG",
+                      "name": "Override claims",
+                      "width": "fill_container",
+                      "cornerRadius": "$c:--radius-pill",
+                      "stroke": "$c:--border",
+                      "strokeWidth": 1,
+                      "strokeAlignment": "inner",
+                      "padding": [
+                        14,
+                        20
+                      ],
+                      "justifyContent": "space_between",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "rHGMD",
+                          "name": "Label",
+                          "gap": 6,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "qGTIe",
+                              "name": "Text",
+                              "fill": "$c:--foreground",
+                              "content": "Override claims",
+                              "fontFamily": "$c:--font-primary",
+                              "fontSize": 14,
+                              "fontWeight": "500"
+                            },
+                            {
+                              "type": "text",
+                              "id": "foWLo",
+                              "name": "Optional",
+                              "fill": "$c:--muted-foreground",
+                              "content": "· optional",
+                              "fontFamily": "$c:--font-primary",
+                              "fontSize": 14,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "icon",
+                          "id": "GoBxw",
+                          "name": "Chevron",
+                          "width": 16,
+                          "height": 16,
+                          "icon": "chevron-right",
+                          "library": "lucide",
+                          "fill": "$c:--muted-foreground"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "rectangle",
+                      "id": "CcBxd",
+                      "name": "Divider",
+                      "fill": "$c:--border",
+                      "width": "fill_container",
+                      "height": 1
+                    }
+                  ]
+                },
+                "c:508Xp": {
+                  "height": "fit_content",
+                  "padding": [
+                    16,
+                    32,
+                    32,
+                    32
+                  ],
+                  "justifyContent": "space_between",
+                  "children": [
+                    {
+                      "id": "NoJg6",
+                      "type": "ref",
+                      "ref": "c:RPa0G",
+                      "name": "Remember me",
+                      "descendants": {
+                        "c:mJz5e": {
+                          "content": "Remember me and skip this page"
+                        }
+                      }
+                    },
+                    {
+                      "id": "kuUUy",
+                      "type": "ref",
+                      "ref": "c:xBc88",
+                      "name": "Sign in",
+                      "descendants": {
+                        "c:zF167": {
+                          "icon": "log-in"
+                        },
+                        "c:FT3cO": {
+                          "content": "Sign in"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "type": "text",
+              "id": "FYCJ0",
+              "name": "Footer",
+              "fill": "$c:--muted-foreground",
+              "textGrowth": "fixed-width",
+              "width": "fill_container",
+              "content": "A mock OpenID Provider for development and tests. Never enter real credentials.",
+              "textAlign": "center",
+              "fontFamily": "$c:--font-primary",
+              "fontSize": 12,
+              "fontWeight": "normal"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "nZOtx",
+      "x": 13160,
+      "y": 3440,
+      "name": "Signed out - Dark",
+      "theme": {
+        "c:Mode": "Dark"
+      },
+      "clip": true,
+      "width": 1440,
+      "height": 960,
+      "fill": "$c:--background",
+      "layout": "vertical",
+      "padding": [
+        48,
+        0
+      ],
+      "alignItems": "center",
+      "children": [
+        {
+          "type": "frame",
+          "id": "JaoJx",
+          "name": "Column",
+          "width": 560,
+          "layout": "vertical",
+          "gap": 24,
+          "children": [
+            {
+              "type": "frame",
+              "id": "t7YjH",
+              "name": "Top row",
+              "width": "fill_container",
+              "justifyContent": "space_between",
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "pXLcn",
+                  "name": "Brand",
+                  "gap": 8,
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon",
+                      "id": "PpzRr",
+                      "name": "Key icon",
+                      "width": 20,
+                      "height": 20,
+                      "icon": "key-round",
+                      "library": "lucide",
+                      "fill": "$c:--primary"
+                    },
+                    {
+                      "type": "text",
+                      "id": "dV7jy",
+                      "name": "Brand name",
+                      "fill": "$c:--foreground",
+                      "content": "fauxidc",
+                      "fontFamily": "$c:--font-primary",
+                      "fontSize": 18,
+                      "fontWeight": "600"
+                    }
+                  ]
+                },
+                {
+                  "id": "XIs3m",
+                  "type": "ref",
+                  "ref": "c:2bkgE",
+                  "name": "Label Mock server · not for production",
+                  "descendants": {
+                    "c:1qRIv": {
+                      "content": "Mock server · not for production"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "id": "xtPsi",
+              "type": "ref",
+              "ref": "c:ZqeIe",
+              "name": "Signed out card",
+              "width": "fill_container",
+              "descendants": {
+                "c:SaWqo": {
+                  "height": "fit_content",
+                  "padding": [
+                    40,
+                    32,
+                    16,
+                    32
+                  ],
+                  "gap": 12,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "DvCCg",
+                      "name": "Status icon",
+                      "width": 48,
+                      "height": 48,
+                      "fill": "$c:--color-success",
+                      "cornerRadius": "$c:--radius-pill",
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "RScq5",
+                          "name": "Icon",
+                          "width": 24,
+                          "height": 24,
+                          "icon": "check",
+                          "library": "lucide",
+                          "fill": "$c:--color-success-foreground"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "iJfKJ",
+                      "name": "Title",
+                      "fill": "$c:--foreground",
+                      "content": "Signed out",
+                      "fontFamily": "$c:--font-primary",
+                      "fontSize": 24,
+                      "fontWeight": "600"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "jwfae",
+                      "name": "Labels",
+                      "gap": 8,
+                      "children": [
+                        {
+                          "id": "ZObWB",
+                          "type": "ref",
+                          "ref": "c:7JOF0",
+                          "name": "Label Client example-spa",
+                          "descendants": {
+                            "c:1qRIv": {
+                              "content": "Client example-spa"
+                            }
+                          }
+                        },
+                        {
+                          "id": "oWmIW",
+                          "type": "ref",
+                          "ref": "c:Tn1Ii",
+                          "name": "Label Issuer auth0",
+                          "descendants": {
+                            "c:1qRIv": {
+                              "content": "Issuer auth0"
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                },
+                "c:KD4A5": {
+                  "height": "fit_content",
+                  "padding": [
+                    0,
+                    32,
+                    40,
+                    32
+                  ],
+                  "gap": 16,
+                  "justifyContent": "start",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "p5z8Nv",
+                      "name": "Message",
+                      "width": "fill_container",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "hJ8vC",
+                          "name": "Text",
+                          "fill": "$c:--muted-foreground",
+                          "content": "You are signed out. You can close this page, or go to the ",
+                          "fontFamily": "$c:--font-primary",
+                          "fontSize": 14,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "J6uXDG",
+                          "name": "Link",
+                          "fill": "$c:--primary",
+                          "content": "dashboard",
+                          "fontFamily": "$c:--font-primary",
+                          "fontSize": 14,
+                          "fontWeight": "500"
+                        },
+                        {
+                          "type": "text",
+                          "id": "cVHZM",
+                          "name": "Dot",
+                          "fill": "$c:--muted-foreground",
+                          "content": ".",
+                          "fontFamily": "$c:--font-primary",
+                          "fontSize": 14,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                "c:508Xp": {
+                  "height": "fit_content(0)",
+                  "padding": [
+                    16,
+                    32,
+                    40,
+                    32
+                  ],
+                  "enabled": false
+                }
+              }
+            },
+            {
+              "type": "text",
+              "id": "KCZYg",
+              "name": "Footer",
+              "fill": "$c:--muted-foreground",
+              "textGrowth": "fixed-width",
+              "width": "fill_container",
+              "content": "A mock OpenID Provider for development and tests. Never enter real credentials.",
+              "textAlign": "center",
+              "fontFamily": "$c:--font-primary",
+              "fontSize": 12,
+              "fontWeight": "normal"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "Ygi95",
+      "x": 14720,
+      "y": 3440,
+      "name": "Error - Dark",
+      "theme": {
+        "c:Mode": "Dark"
+      },
+      "clip": true,
+      "width": 1440,
+      "height": 960,
+      "fill": "$c:--background",
+      "layout": "vertical",
+      "padding": [
+        48,
+        0
+      ],
+      "alignItems": "center",
+      "children": [
+        {
+          "type": "frame",
+          "id": "Ywthi",
+          "name": "Column",
+          "width": 560,
+          "layout": "vertical",
+          "gap": 24,
+          "children": [
+            {
+              "type": "frame",
+              "id": "DlacP",
+              "name": "Top row",
+              "width": "fill_container",
+              "justifyContent": "space_between",
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "XNUqm",
+                  "name": "Brand",
+                  "gap": 8,
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon",
+                      "id": "aKxUk",
+                      "name": "Key icon",
+                      "width": 20,
+                      "height": 20,
+                      "icon": "key-round",
+                      "library": "lucide",
+                      "fill": "$c:--primary"
+                    },
+                    {
+                      "type": "text",
+                      "id": "DKL8h",
+                      "name": "Brand name",
+                      "fill": "$c:--foreground",
+                      "content": "fauxidc",
+                      "fontFamily": "$c:--font-primary",
+                      "fontSize": 18,
+                      "fontWeight": "600"
+                    }
+                  ]
+                },
+                {
+                  "id": "d0xctS",
+                  "type": "ref",
+                  "ref": "c:2bkgE",
+                  "name": "Label Mock server · not for production",
+                  "descendants": {
+                    "c:1qRIv": {
+                      "content": "Mock server · not for production"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "id": "l3C5iM",
+              "type": "ref",
+              "ref": "c:ZqeIe",
+              "name": "Error card",
+              "width": "fill_container",
+              "descendants": {
+                "c:SaWqo": {
+                  "height": "fit_content",
+                  "padding": [
+                    40,
+                    32,
+                    16,
+                    32
+                  ],
+                  "gap": 12,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "oI2BJ",
+                      "name": "Status icon",
+                      "width": 48,
+                      "height": 48,
+                      "fill": "$c:--color-error",
+                      "cornerRadius": "$c:--radius-pill",
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "n1OUKx",
+                          "name": "Icon",
+                          "width": 24,
+                          "height": 24,
+                          "icon": "triangle-alert",
+                          "library": "lucide",
+                          "fill": "$c:--color-error-foreground"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "f3LN4K",
+                      "name": "Title",
+                      "fill": "$c:--foreground",
+                      "content": "Error",
+                      "fontFamily": "$c:--font-primary",
+                      "fontSize": 24,
+                      "fontWeight": "600"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "gfSPy",
+                      "name": "Labels",
+                      "gap": 8,
+                      "children": [
+                        {
+                          "id": "g1bkXr",
+                          "type": "ref",
+                          "ref": "c:Tn1Ii",
+                          "name": "Label Issuer auth0",
+                          "descendants": {
+                            "c:1qRIv": {
+                              "content": "Issuer auth0"
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                },
+                "c:KD4A5": {
+                  "height": "fit_content",
+                  "padding": [
+                    0,
+                    32,
+                    40,
+                    32
+                  ],
+                  "gap": 16,
+                  "justifyContent": "start",
+                  "children": [
+                    {
+                      "id": "FS4qI",
+                      "type": "ref",
+                      "ref": "c:YLlSf",
+                      "name": "Error alert",
+                      "width": "fill_container",
+                      "descendants": {
+                        "c:tH8a1": {
+                          "icon": "circle-alert"
+                        },
+                        "c:Q9Aqm": {
+                          "content": "redirect_uri not registered for client example-spa"
+                        },
+                        "c:SmO4x": {
+                          "enabled": false
+                        }
+                      }
+                    },
+                    {
+                      "type": "text",
+                      "id": "F30qki",
+                      "name": "Text",
+                      "fill": "$c:--muted-foreground",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "fauxidc cannot continue with this request. Fix the request and try again.",
+                      "lineHeight": 1.5,
+                      "fontFamily": "$c:--font-primary",
+                      "fontSize": 14,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                "c:508Xp": {
+                  "height": "fit_content(0)",
+                  "padding": [
+                    16,
+                    32,
+                    40,
+                    32
+                  ],
+                  "enabled": false
+                }
+              }
+            },
+            {
+              "type": "text",
+              "id": "Af66h",
+              "name": "Footer",
+              "fill": "$c:--muted-foreground",
+              "textGrowth": "fixed-width",
+              "width": "fill_container",
+              "content": "A mock OpenID Provider for development and tests. Never enter real credentials.",
+              "textAlign": "center",
+              "fontFamily": "$c:--font-primary",
+              "fontSize": 12,
+              "fontWeight": "normal"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "XBXaw",
+      "x": 16280,
+      "y": 3440,
+      "name": "Continue - Dark",
+      "theme": {
+        "c:Mode": "Dark"
+      },
+      "clip": true,
+      "width": 1440,
+      "height": 960,
+      "fill": "$c:--background",
+      "layout": "vertical",
+      "padding": [
+        48,
+        0
+      ],
+      "alignItems": "center",
+      "children": [
+        {
+          "type": "frame",
+          "id": "QtrN0",
+          "name": "Column",
+          "width": 560,
+          "layout": "vertical",
+          "gap": 24,
+          "children": [
+            {
+              "type": "frame",
+              "id": "Q4WV3S",
+              "name": "Top row",
+              "width": "fill_container",
+              "justifyContent": "space_between",
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "RM52R",
+                  "name": "Brand",
+                  "gap": 8,
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon",
+                      "id": "bbP3p",
+                      "name": "Key icon",
+                      "width": 20,
+                      "height": 20,
+                      "icon": "key-round",
+                      "library": "lucide",
+                      "fill": "$c:--primary"
+                    },
+                    {
+                      "type": "text",
+                      "id": "ZKDA4",
+                      "name": "Brand name",
+                      "fill": "$c:--foreground",
+                      "content": "fauxidc",
+                      "fontFamily": "$c:--font-primary",
+                      "fontSize": 18,
+                      "fontWeight": "600"
+                    }
+                  ]
+                },
+                {
+                  "id": "IFZ0b",
+                  "type": "ref",
+                  "ref": "c:2bkgE",
+                  "name": "Label Mock server · not for production",
+                  "descendants": {
+                    "c:1qRIv": {
+                      "content": "Mock server · not for production"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "id": "xKDXz",
+              "type": "ref",
+              "ref": "c:ZqeIe",
+              "name": "Continue card",
+              "width": "fill_container",
+              "descendants": {
+                "c:SaWqo": {
+                  "height": "fit_content",
+                  "padding": [
+                    40,
+                    32,
+                    16,
+                    32
+                  ],
+                  "gap": 12,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "IFsvv",
+                      "name": "Title",
+                      "fill": "$c:--foreground",
+                      "content": "Continue to the application",
+                      "fontFamily": "$c:--font-primary",
+                      "fontSize": 24,
+                      "fontWeight": "600"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "p29lRT",
+                      "name": "Labels",
+                      "gap": 8,
+                      "children": [
+                        {
+                          "id": "Ft3pg",
+                          "type": "ref",
+                          "ref": "c:Tn1Ii",
+                          "name": "Label Issuer auth0",
+                          "descendants": {
+                            "c:1qRIv": {
+                              "content": "Issuer auth0"
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                },
+                "c:KD4A5": {
+                  "height": "fit_content",
+                  "padding": [
+                    0,
+                    32,
+                    16,
+                    32
+                  ],
+                  "gap": 16,
+                  "justifyContent": "start",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "DzrD9",
+                      "name": "Text",
+                      "fill": "$c:--muted-foreground",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "This page sends the response to the application. If nothing happens, click Continue.",
+                      "lineHeight": 1.5,
+                      "fontFamily": "$c:--font-primary",
+                      "fontSize": 14,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                "c:508Xp": {
+                  "height": "fit_content",
+                  "padding": [
+                    16,
+                    32,
+                    40,
+                    32
+                  ],
+                  "children": [
+                    {
+                      "id": "H14Kiz",
+                      "type": "ref",
+                      "ref": "c:xBc88",
+                      "name": "Continue",
+                      "descendants": {
+                        "c:zF167": {
+                          "icon": "arrow-right"
+                        },
+                        "c:FT3cO": {
+                          "content": "Continue"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "type": "text",
+              "id": "AScCM",
+              "name": "Footer",
+              "fill": "$c:--muted-foreground",
+              "textGrowth": "fixed-width",
+              "width": "fill_container",
+              "content": "A mock OpenID Provider for development and tests. Never enter real credentials.",
+              "textAlign": "center",
+              "fontFamily": "$c:--font-primary",
+              "fontSize": 12,
+              "fontWeight": "normal"
+            }
+          ]
+        }
+      ]
     }
   ],
   "variables": {

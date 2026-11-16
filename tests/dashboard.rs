@@ -26,7 +26,10 @@ async fn dashboard_page_has_html_headers_and_no_framing() {
     assert_eq!(h["content-security-policy"], "frame-ancestors 'none'");
     assert!(b.contains("<title>Dashboard · fauxidc</title>"));
     assert!(b.contains("src=\"/_mock/static/dashboard.js\""));
+    assert!(b.contains("href=\"/_mock/static/halo.css\""));
     assert!(b.contains("href=\"/_mock/static/dashboard.css\""));
+    // The halo base comes first; the dashboard shell builds on it.
+    assert!(b.find("halo.css") < b.find("dashboard.css"));
 }
 
 #[tokio::test]
@@ -189,18 +192,24 @@ async fn signed_out_page_links_the_dashboard() {
 
 #[tokio::test]
 async fn dashboard_stylesheet_has_both_themes_and_no_external_urls() {
-    let (s, h, css) = send(&app(AUTH0), get("/_mock/static/dashboard.css")).await;
+    let (s, h, halo) = send(&app(AUTH0), get("/_mock/static/halo.css")).await;
     assert_eq!(s, 200);
     assert_eq!(h["content-type"], "text/css");
-    assert!(css.contains("@media (prefers-color-scheme: dark)"));
-    assert!(css.contains("--overlay:"));
-    for bad in ["http://", "https://", "url(//", "@import"] {
-        assert!(!css.contains(bad), "{bad}");
+    assert!(halo.contains("@media (prefers-color-scheme: dark)"));
+    assert!(halo.contains("--overlay:"));
+    let (s, _, shell) = send(&app(AUTH0), get("/_mock/static/dashboard.css")).await;
+    assert_eq!(s, 200);
+    // One copy of the tokens: the dashboard shell only uses them.
+    assert!(!shell.contains("--primary:"));
+    for css in [&halo, &shell] {
+        for bad in ["http://", "https://", "url(//", "@import"] {
+            assert!(!css.contains(bad), "{bad}");
+        }
     }
 }
 
-/// The sidebar has a Debugger item. Its view links to the debugger page of each Issuer
-/// (the page is not copied or framed).
+/// The sidebar has a Debugger item. Its view has an Issuer select and a frame for the
+/// debugger page of the chosen Issuer (the page is framed, not copied).
 #[tokio::test]
 async fn dashboard_sidebar_has_the_debugger() {
     let (_, _, b) = send(&app(TWO_ISSUERS), get("/_mock/")).await;
@@ -208,15 +217,19 @@ async fn dashboard_sidebar_has_the_debugger() {
         "class=\"nav-item\" href=\"#debugger\" data-view=\"debugger\"",
         "<option value=\"debugger\">Debugger</option>",
         "<section id=\"debugger\" class=\"view\">",
-        "data-debugger-row=\"auth0\"",
-        "data-debugger-row=\"okta\"",
+        "<select id=\"debugger-issuer\" class=\"select\">",
+        "<option value=\"auth0\" data-debugger-href=\"/auth0/debugger\">auth0</option>",
+        "<option value=\"okta\" data-debugger-href=\"/oauth2/default/v1/debug\">okta</option>",
+        "<iframe id=\"debugger-frame\" name=\"debugger-frame\"",
+        ">Open in new tab</a>",
     ] {
         assert!(b.contains(needle), "{needle}");
     }
-    assert!(!b.contains("<iframe"));
-    // One Open debugger link per Issuer, to the configured debugger path.
-    assert_eq!(b.matches(">Open debugger</a>").count(), 2);
-    assert!(b.contains("href=\"/oauth2/default/v1/debug\" data-open-debugger"));
+    // The frame gets its src from the script, with ?embed=1.
+    assert!(!b.contains("?embed=1"));
+    let (_, _, js) = send(&app(AUTH0), get("/_mock/static/dashboard.js")).await;
+    assert!(js.contains("?embed=1"));
+    assert!(js.contains("#debugger/${encodeURIComponent(id)}"));
 }
 
 /// The icon of a sidebar item comes after its label, as in the halo Sidebar Item.

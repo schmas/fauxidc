@@ -147,12 +147,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - name: Rebuild the page styles
-        run: scripts/build-css.sh
-      - name: Fail when the committed CSS differs
-        run: git diff --exit-code -- assets/static/fauxidc.css
-      - name: Check the CSS size (under 60 KB)
-        run: test "$(wc -c < assets/static/fauxidc.css)" -lt 61440
+      - name: Check the page styles (size, no network, frozen old files)
+        run: scripts/check-css.sh
 
   spa-e2e:
     runs-on: ubuntu-latest

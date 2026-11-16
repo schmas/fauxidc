@@ -8,7 +8,7 @@ use std::sync::Arc;
 use axum::{
     extract::{Path, State},
     http::{HeaderValue, StatusCode, header},
-    response::{IntoResponse, Response},
+    response::{Html, IntoResponse, Response},
 };
 use minijinja::{AutoEscape, Environment};
 use rust_embed::RustEmbed;
@@ -19,6 +19,29 @@ use crate::state::AppState;
 
 /// The URL prefix of the static files.
 pub const STATIC_BASE: &str = "/_mock/static";
+
+/// Adds the framing headers of the HTML pages of an Issuer (login, error, `form_post`,
+/// signed out and debugger) to `res`: `X-Frame-Options: SAMEORIGIN` and
+/// `Content-Security-Policy: frame-ancestors 'self'`. Only a page of this origin (the
+/// dashboard Debugger frame) can show them in a frame. A page of another origin cannot.
+pub(crate) fn frame_same_origin(res: &mut Response) {
+    let h = res.headers_mut();
+    h.insert(
+        header::X_FRAME_OPTIONS,
+        HeaderValue::from_static("SAMEORIGIN"),
+    );
+    h.insert(
+        header::CONTENT_SECURITY_POLICY,
+        HeaderValue::from_static("frame-ancestors 'self'"),
+    );
+}
+
+/// An HTML page of an Issuer with `status` and the framing headers of [`frame_same_origin`].
+pub(crate) fn issuer_page(status: StatusCode, html: String) -> Response {
+    let mut res = (status, Html(html)).into_response();
+    frame_same_origin(&mut res);
+    res
+}
 
 /// The current template context version.
 pub const CONTEXT_VERSION: u32 = 2;
@@ -151,6 +174,9 @@ pub struct DebuggerContext {
     /// `action` + `?forget=1`.
     pub change_href: String,
     pub static_base: String,
+    /// `true` when the page shows inside the dashboard (`?embed=1`): no brand row and no
+    /// footer. Then `action`, `start_href` and `change_href` carry `embed=1` too.
+    pub embed: bool,
 }
 
 /// One Issuer on the dashboard. The hrefs are paths on this server.
@@ -377,14 +403,14 @@ mod tests {
         );
         assert!(html.contains("name=\"state\" value=\"a&quot;b&lt;c\""));
         assert!(html.contains("<option value=\"bob\" selected>bob</option>"));
-        assert!(html.contains("href=\"/_mock/static/fauxidc.css\""));
+        assert!(html.contains("href=\"/_mock/static/halo.css\""));
         assert!(html.contains("<option value=\"alice\">Alice Admin</option>"));
         assert!(html.contains("value=\"__custom__\""));
         assert!(html.contains(
-            "<span class=\"text-base-content/70\">Client</span><span class=\"truncate font-mono\">example-app</span>"
+            "<span class=\"label label-pair\"><span>Client</span><span>example-app</span></span>"
         ));
         assert!(html.contains(
-            "<span class=\"text-base-content/70\">Issuer</span><span class=\"truncate font-mono\">auth0</span>"
+            "<span class=\"label label-pair\"><span>Issuer</span><span>auth0</span></span>"
         ));
         assert!(html.contains("bad &lt;input&gt;"));
         assert!(html.contains("name=\"remember\""));
@@ -429,6 +455,7 @@ mod tests {
             signed_in_as: Some("Alice <Admin>".into()),
             change_href: "/auth0/debugger?forget=1&x=\"".into(),
             static_base: STATIC_BASE.into(),
+            embed: false,
         }
     }
 
@@ -488,7 +515,7 @@ mod tests {
         );
         assert!(!html.contains("<script>x"));
         assert!(html.contains("<button type=\"submit\""));
-        assert!(html.contains("href=\"/_mock/static/fauxidc.css\""));
+        assert!(html.contains("href=\"/_mock/static/halo.css\""));
     }
 
     #[test]

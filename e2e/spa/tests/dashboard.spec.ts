@@ -109,7 +109,12 @@ test("mints a token and sets and clears an Injected failure", async ({ page }) =
   await page.locator("#token-form select[name=user]").selectOption("alice");
   await page.locator("#token-form button[type=submit]").click();
   await expect(page.locator("#token-out")).toContainText("access_token");
-  await expect(page.locator("#token-out")).toContainText("Decode the id_token in the debugger");
+  await page.getByRole("button", { name: "Decode the id_token in the debugger" }).click();
+  // The token posts into the frame of the Debugger view.
+  await expect(page).toHaveURL(`${MOCK}/_mock/#debugger/auth0`);
+  const frame = page.frameLocator("#debugger-frame");
+  await expect(frame.locator(".label-success").first()).toHaveText("signature valid");
+  await expect(frame.locator("h2", { hasText: "Decoded" })).toBeVisible();
   await open(page, "failures");
 
   await page.locator("#fail-form select[name=issuer]").selectOption("auth0");
@@ -153,7 +158,7 @@ test("Sign out shows the signed-out page with a link back", async ({ page }) => 
   await expect(page).toHaveURL(`${MOCK}/_mock/`);
 });
 
-test("the sidebar marks one item and the Debugger item opens the debugger page", async ({ page }) => {
+test("the sidebar marks one item and each item shows its view", async ({ page }) => {
   await open(page);
   const items = page.locator(".sidebar .nav-item");
   for (const view of await items.evaluateAll((all) => all.map((a) => (a as HTMLElement).dataset.view!))) {
@@ -167,12 +172,72 @@ test("the sidebar marks one item and the Debugger item opens the debugger page",
     );
     expect(painted).toBe(1);
   }
-  await page.locator('.nav-item[data-view="debugger"]').click();
-  const link = page.locator('[data-debugger-row="auth0"]').getByRole("link", { name: "Open debugger" });
-  await expect(link).toHaveAttribute("href", "/auth0/debugger");
-  await link.click();
-  await expect(page).toHaveURL(`${MOCK}/auth0/debugger`);
+});
+
+/** Runs "Run login flow" in the Debugger frame and signs in `user` on the login page in the frame. */
+async function loginInFrame(page: Page, user: string) {
+  const frame = page.frameLocator("#debugger-frame");
+  await frame.getByRole("link", { name: "Run login flow" }).click();
+  await expect(frame.locator("h1")).toHaveText("Sign in");
+  await frame.locator("select[name=user]").selectOption(user);
+  await frame.getByRole("button", { name: "Sign in" }).click();
+  // The callback page in the frame: the decoded tokens of the flow, without the page chrome.
+  await expect(frame.locator("h2", { hasText: "id_token" })).toBeVisible();
+  await expect(frame.locator("h2", { hasText: "access_token" })).toBeVisible();
+  await expect(frame.locator(".label-success").first()).toHaveText("signature valid");
+  await expect(frame.locator(".page-top")).toHaveCount(0);
+  await expect(frame.locator(".page-foot")).toHaveCount(0);
+  return frame;
+}
+
+test("the Debugger view runs the full login flow in the frame for two Issuers", async ({ page }) => {
+  await open(page, "debugger");
+  await expect(page).toHaveURL(`${MOCK}/_mock/#debugger/auth0`);
+  const select = page.locator("#debugger-issuer");
+  await expect(select).toHaveValue("auth0");
+  const frameEl = page.locator("#debugger-frame");
+  await expect(frameEl).toHaveAttribute("src", "/auth0/debugger?embed=1");
+  await expect(page.getByRole("link", { name: "Open in new tab" })).toHaveAttribute("href", "/auth0/debugger");
+
+  let frame = await loginInFrame(page, "alice");
+  await expect(frame.locator("pre code").nth(1)).toContainText('"sub": "auth0|alice"');
+  // The dashboard stays on the page; only the frame navigated.
+  await expect(page).toHaveURL(`${MOCK}/_mock/#debugger/auth0`);
+
+  // A second Issuer with other paths (okta: /oauth2/default/v1/authorize).
+  await select.selectOption("okta");
+  await expect(page).toHaveURL(`${MOCK}/_mock/#debugger/okta`);
+  await expect(frameEl).toHaveAttribute("src", "/oauth2/default/debugger?embed=1");
+  await expect(page.getByRole("link", { name: "Open in new tab" })).toHaveAttribute(
+    "href",
+    "/oauth2/default/debugger",
+  );
+  frame = await loginInFrame(page, "bob");
+  await expect(frame.locator("pre code").nth(1)).toContainText("00ubob");
+
+  // The fragment selects the Issuer on a new load.
+  await page.goto(`${MOCK}/_mock/#debugger/okta`);
+  await expect(page.locator("#debugger")).toBeVisible();
+  await expect(select).toHaveValue("okta");
+  await expect(page.frameLocator("#debugger-frame").locator(".label-pair")).toContainText("okta");
+});
+
+test("the debugger pages allow only same-origin frames; the dashboard allows none", async ({ request }) => {
+  const dash = await request.get(`${MOCK}/_mock/`);
+  expect(dash.headers()["x-frame-options"]).toBe("DENY");
+  expect(dash.headers()["content-security-policy"]).toBe("frame-ancestors 'none'");
+  for (const path of ["/auth0/debugger", "/auth0/debugger?embed=1", "/auth0/authorize?client_id=nobody&response_type=code"]) {
+    const res = await request.get(`${MOCK}${path}`, { maxRedirects: 0 });
+    expect(res.headers()["x-frame-options"], path).toBe("SAMEORIGIN");
+    expect(res.headers()["content-security-policy"], path).toBe("frame-ancestors 'self'");
+  }
+});
+
+test("the standalone debugger page keeps its brand row and footer", async ({ page }) => {
+  await page.goto(`${MOCK}/auth0/debugger`);
   await expect(page).toHaveTitle(/Debugger/);
+  await expect(page.locator(".page-top")).toBeVisible();
+  await expect(page.locator(".page-foot")).toBeVisible();
 });
 
 test("the dashboard does not widen the page at 375 px", async ({ page }) => {

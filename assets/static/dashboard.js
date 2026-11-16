@@ -108,8 +108,25 @@
   const VIEWS = [...document.querySelectorAll(".view")].map((v) => v.id);
   const loaded = new Set();
 
+  /** The view and its argument in the URL fragment: `#debugger/auth0` is view `debugger`, argument `auth0`. */
+  function route() {
+    const hash = location.hash.slice(1);
+    const at = hash.indexOf("/");
+    const name = at < 0 ? hash : hash.slice(0, at);
+    let arg = "";
+    if (at >= 0) {
+      try {
+        arg = decodeURIComponent(hash.slice(at + 1));
+      } catch {
+        // A broken escape: no argument.
+      }
+    }
+    return VIEWS.includes(name) ? { name, arg } : { name: VIEWS[0], arg: "" };
+  }
+
   function showView() {
-    const name = VIEWS.includes(location.hash.slice(1)) ? location.hash.slice(1) : VIEWS[0];
+    const { name, arg } = route();
+    if (name === "debugger") showDebugger(arg);
     for (const id of VIEWS) document.getElementById(id).hidden = id !== name;
     for (const a of document.querySelectorAll(".nav-item")) {
       if (a.dataset.view === name) a.setAttribute("aria-current", "page");
@@ -121,6 +138,60 @@
       const load = LOADERS[name];
       if (load) load();
     }
+  }
+
+  // Debugger ---------------------------------------------------------------------------
+  // The debugger page of the chosen Issuer runs in a same-origin frame with ?embed=1.
+  // The page is the same one that {issuer}/debugger serves; the frame only hides its brand row.
+
+  const debuggerSelect = $("#debugger-issuer");
+  const debuggerFrame = $("#debugger-frame");
+  const debuggerOpen = $("#debugger-open");
+  let debuggerIssuer = null;
+
+  /** The debugger path of Issuer `id`, or null for an unknown Issuer. */
+  function debuggerHref(id) {
+    const option = [...debuggerSelect.options].find((o) => o.value === id);
+    return option ? option.dataset.debuggerHref : null;
+  }
+
+  /** Shows the debugger of Issuer `id` (else the selected one) and keeps it in the URL fragment.
+   * `load` false: the caller fills the frame itself (a form with target="debugger-frame"). */
+  function showDebugger(id, load = true) {
+    if (!debuggerSelect || !debuggerSelect.options.length) return;
+    if (!debuggerHref(id)) id = debuggerIssuer || debuggerSelect.value;
+    debuggerSelect.value = id;
+    const href = debuggerHref(id);
+    debuggerOpen.href = href;
+    const hash = `#debugger/${encodeURIComponent(id)}`;
+    if (location.hash !== hash) history.replaceState(null, "", hash);
+    if (debuggerIssuer === id) return;
+    debuggerIssuer = id;
+    if (load) debuggerFrame.src = `${href}?embed=1`;
+  }
+
+  /** The frame takes the height of its page, and at least the rest of the screen (CSS). */
+  function fitDebuggerFrame() {
+    try {
+      const doc = debuggerFrame.contentDocument;
+      if (!doc || !doc.body) return;
+      // The body height, not the document height: the document is never smaller than the frame.
+      const resize = () => {
+        debuggerFrame.style.height = `${Math.ceil(doc.body.getBoundingClientRect().height)}px`;
+      };
+      debuggerFrame.style.height = "";
+      new ResizeObserver(resize).observe(doc.body);
+      resize();
+    } catch {
+      // Another origin (a misconfigured issuer_url host): keep the CSS height.
+    }
+  }
+
+  if (debuggerFrame) debuggerFrame.addEventListener("load", fitDebuggerFrame);
+  if (debuggerSelect) {
+    debuggerSelect.addEventListener("change", () => {
+      location.hash = `debugger/${encodeURIComponent(debuggerSelect.value)}`;
+    });
   }
 
   // Users and Clients -----------------------------------------------------------------
@@ -369,14 +440,21 @@
       `Expires in ${tokens.expires_in} s. Decode it in the debugger to check the signature.`,
       tokens,
     );
-    const link = $(`[data-issuer-row="${CSS.escape(issuer)}"] a[data-debugger]`);
+    const href = debuggerHref(issuer);
     const token = tokens.id_token || tokens.access_token;
-    if (link && token) {
+    if (href && token) {
       // The debugger page decodes a posted token and checks it with the keys of the Issuer.
+      // The form posts into the frame of the Debugger view.
       const decode = el("form", "row");
       decode.method = "post";
-      decode.action = link.getAttribute("href");
-      decode.target = "_blank";
+      decode.action = `${href}?embed=1`;
+      decode.target = "debugger-frame";
+      decode.addEventListener("submit", () => {
+        history.pushState(null, "", `#debugger/${encodeURIComponent(issuer)}`);
+        debuggerIssuer = null;
+        showDebugger(issuer, false);
+        showView();
+      });
       const input = el("input");
       input.type = "hidden";
       input.name = "token";

@@ -246,7 +246,7 @@ Open `http://localhost:9000/_mock/` (or `/`) in a browser for the [dashboard](do
 ## Templates
 
 You can replace the login page, the error page, the signed-out page, the debugger page, the `form_post` page and the dashboard with your own templates.
-The built-in pages link one embedded stylesheet, `/_mock/static/fauxidc.css`, and need no network.
+The built-in pages link one embedded stylesheet, `/_mock/static/halo.css` (plain CSS, light and dark), and need no network.
 
 For a Custom user from one username, set a claims template on the Issuer. The "Custom…" entry
 (here "Other…") then shows one `username` field instead of the subject and JSON fields:
@@ -267,6 +267,7 @@ email_verified = true
 Each Issuer serves a debugger page at `{issuer}/debugger`.
 Paste a JWT to decode it and check its signature, `exp` and `iss`.
 Or click "Run login flow" to run the code flow with PKCE and see the decoded tokens.
+The dashboard Debugger view (`/_mock/#debugger/<issuer id>`) shows the same page in a frame, with an Issuer select.
 The flow uses the built-in public Client `debugger`. A configured Client with
 `client_id = "debugger"` must list `{issuer}/debugger/callback` in `redirect_uris`.
 See [docs/features.md](docs/features.md#debugger).

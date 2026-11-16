@@ -317,8 +317,8 @@ At a narrow width, a select box replaces the sidebar.
 | Issuers: Sign out | A link to `{issuer}/endsession`. It clears the Session and the "Remember me" (Auto-select) cookie of this browser, so the next `/authorize` shows the login page. | `/endsession` |
 | Keys | Shows the algorithm, the active `kid` and the key count from JWKS. Rotates the key, with or without `retire`. | `rotate-key` |
 | Users, Clients | Lists, shows, adds, changes and deletes entries in a JSON editor dialog. | `/_mock/users`, `/_mock/clients` |
-| Mint a token | Mints tokens for a User or a Custom user. A button opens the `id_token` in the debugger. | `POST /_mock/{issuer-id}/token` |
-| Debugger | Lists each Issuer with a link to its debugger page (`{issuer}/debugger`). The link opens the debugger page itself; the dashboard does not copy or frame it. | `/debugger` |
+| Mint a token | Mints tokens for a User or a Custom user. A button decodes the `id_token` in the Debugger view. | `POST /_mock/{issuer-id}/token` |
+| Debugger | Shows the debugger page of the chosen Issuer (`{issuer}/debugger?embed=1`) in a frame, with an Issuer select and an "Open in new tab" link. The URL fragment keeps the Issuer, for example `#debugger/default`. The login flow of "Run login flow" runs in the frame. | `/debugger` |
 | Injected failures | Sets a failure for one endpoint, or clears all failures of an Issuer. | `fail-next` |
 | Request log | Shows the log with the Issuer and path filters, and clears it. | `/_mock/requests` |
 | Config | Shows the running config as JSON with sources or as TOML, and reloads the config files. | `/_mock/config`, `POST /_mock/reload` |
@@ -332,7 +332,11 @@ At a narrow width, a select box replaces the sidebar.
 - The Remember me cookie lives in the browser, on the Issuer path. Only a browser visit to `/endsession` clears it. `DELETE /_mock/state` and the CLI cannot.
 - The signed-out page of `/endsession` links back to the dashboard.
 - The page needs JavaScript (`/_mock/static/dashboard.js`, embedded, no framework). The Issuer links work without it.
-- The page has its own stylesheet, `/_mock/static/dashboard.css`. Light and dark follow the browser `prefers-color-scheme` setting.
-  The design is in [fauxidc-design.pen](fauxidc-design.pen) (pen.dev).
+- The page links `/_mock/static/halo.css`, the stylesheet of every built-in page, and `/_mock/static/dashboard.css`, its shell.
+  Light and dark follow the browser `prefers-color-scheme` setting. The design is in [fauxidc-design.pen](fauxidc-design.pen) (pen.dev).
 - The answer has `Cache-Control: no-store`, `X-Frame-Options: DENY` and `Content-Security-Policy: frame-ancestors 'none'`, so another site cannot put the page in a frame.
-- `server.templates_dir` can replace `dashboard.html` and `server.static_dir` can replace `dashboard.js` and `dashboard.css`. See [templates.md](templates.md#dashboardhtml).
+- The Debugger view frames a page of the same origin. The debugger page, the login page, the error page and the other Issuer pages send
+  `X-Frame-Options: SAMEORIGIN` and `Content-Security-Policy: frame-ancestors 'self'`. A page of another origin cannot frame them.
+- The login flow in the frame goes to the endpoint URLs of the Issuer. If `public_base_url` names another origin than the dashboard URL,
+  the browser blocks the login page in the frame. Then use "Open in new tab".
+- `server.templates_dir` can replace `dashboard.html` and `server.static_dir` can replace `dashboard.js`, `dashboard.css` and `halo.css`. See [templates.md](templates.md#dashboardhtml).

@@ -5,79 +5,66 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
 <title>Debugger · fauxidc</title>
-<link rel="stylesheet" href="{{ static_base|href }}/fauxidc.css">
+<link rel="stylesheet" href="{{ static_base|href }}/halo.css">
 </head>
-<body class="bg-base-200 text-base-content antialiased">
-<div class="mx-auto flex min-h-dvh w-full max-w-4xl flex-col gap-4 px-4 py-6">
-<header class="flex shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-2">
-<span class="flex items-center gap-2 text-base font-semibold tracking-tight">
-<span aria-hidden="true" class="grid size-7 place-items-center rounded-lg bg-primary font-mono text-xs font-bold text-primary-content shadow-sm">fx</span>
-fauxidc
-</span>
-<span class="badge badge-warning badge-soft badge-sm gap-1.5 font-medium"><span aria-hidden="true" class="size-1.5 rounded-full bg-current"></span>Mock server · not for production</span>
+<body>
+<div class="page page-wide{% if embed %} page-embed{% endif %}">
+{% if not embed %}<header class="page-top">
+<span class="brand"><svg class="ic" aria-hidden="true" viewBox="0 0 24 24"><path d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"/><circle cx="16.5" cy="7.5" r=".5"/></svg>fauxidc</span>
+<span class="label label-warning">Mock server · not for production</span>
 </header>
-<main class="flex flex-col gap-4">
-<section class="card border border-base-300 bg-base-100 shadow-xl shadow-base-content/5">
-<div class="card-body gap-3 px-6 py-5">
-<div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-<div class="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
-<h1 class="text-xl font-semibold tracking-tight">Debugger</h1>
-<span class="badge badge-ghost max-w-full gap-1.5"><span class="text-base-content/70">Issuer</span><span class="truncate font-mono">{{ issuer_id }}</span></span>
+{% endif %}<main class="stack">
+<section class="card">
+<div class="card-head">
+<div class="row">
+<h1>Debugger</h1>
+<span class="label label-pair"><span>Issuer</span><span>{{ issuer_id }}</span></span>
 </div>
-<a class="btn btn-sm" href="{{ start_href|href }}">Run login flow</a>
+<a class="btn btn-outline" href="{{ start_href|href }}">Run login flow</a>
 </div>
-{% if signed_in_as %}<p class="text-sm text-base-content/70">Signed in as {{ signed_in_as }} · <a class="font-medium text-primary underline-offset-4 hover:underline" href="{{ change_href|href }}">change</a></p>
-{% endif %}{% if error %}<div class="alert alert-error alert-soft items-start py-3 text-sm" role="alert">
-<svg aria-hidden="true" class="size-5 shrink-0" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0Zm-8-5a.75.75 0 0 1 .75.75v4.5a.75.75 0 0 1-1.5 0v-4.5A.75.75 0 0 1 10 5Zm0 10a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z" clip-rule="evenodd"/></svg>
-<span class="min-w-0 wrap-anywhere">{{ error }}</span>
+{% if signed_in_as %}<p class="muted">Signed in as {{ signed_in_as }} · <a href="{{ change_href|href }}">change</a></p>
+{% endif %}{% if error %}<div class="alert alert-error" role="alert">
+<svg class="ic" aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
+<span class="wrap">{{ error }}</span>
 </div>
-{% endif %}<form method="post" action="{{ action|href }}" class="flex flex-col gap-2">
-<label for="f-token" class="text-sm font-medium">JWT</label>
-<textarea id="f-token" name="token" rows="3" class="textarea min-h-0 w-full font-mono text-xs leading-relaxed break-all" placeholder="eyJhbGciOi…" spellcheck="false" aria-describedby="f-token-help">{{ token }}</textarea>
-<div class="flex flex-wrap items-center justify-between gap-3">
-<p id="f-token-help" class="text-xs text-base-content/70">Paste an ID token or access token. fauxidc checks the signature with this Issuer's keys.</p>
-<button type="submit" class="btn btn-primary btn-sm px-5">Decode</button>
+{% endif %}<form method="post" action="{{ action|href }}" class="stack">
+<div class="field">
+<label for="f-token">JWT</label>
+<textarea id="f-token" name="token" rows="3" class="textarea" placeholder="eyJhbGciOi…" spellcheck="false" aria-describedby="f-token-help">{{ token }}</textarea>
+</div>
+<div class="row row-between">
+<p id="f-token-help" class="muted small">Paste an ID token or access token. fauxidc checks the signature with this Issuer's keys.</p>
+<button type="submit" class="btn">Decode</button>
 </div>
 </form>
-</div>
 </section>
-{% macro jwt(name, d) %}<section class="card border border-base-300 bg-base-100 shadow-xl shadow-base-content/5">
-<div class="card-body gap-4 px-6 py-5">
-<div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-<h2 class="font-mono text-base font-semibold">{{ name }}</h2>
-<div class="flex flex-wrap gap-1.5">
-{% if d.signature_valid %}<span class="badge badge-success badge-soft badge-sm font-medium">signature valid</span>{% else %}<span class="badge badge-error badge-soft badge-sm font-medium">signature invalid</span>{% endif %}
-{% if d.issuer_note %}{% if "iss matches" in d.issuer_note %}<span class="badge badge-success badge-soft badge-sm font-medium">iss ok</span>{% else %}<span class="badge badge-warning badge-soft badge-sm font-medium">iss mismatch</span>{% endif %}{% endif %}
-{% if "expired" in d.expiry_note %}<span class="badge badge-error badge-soft badge-sm font-medium">expired</span>{% endif %}
+{% macro jwt(name, d) %}<section class="card">
+<div class="card-head">
+<h2 class="mono">{{ name }}</h2>
+<div class="row">
+{% if d.signature_valid %}<span class="label label-success">signature valid</span>{% else %}<span class="label label-error">signature invalid</span>{% endif %}
+{% if d.issuer_note %}{% if "iss matches" in d.issuer_note %}<span class="label label-success">iss ok</span>{% else %}<span class="label label-warning">iss mismatch</span>{% endif %}{% endif %}
+{% if "expired" in d.expiry_note %}<span class="label label-error">expired</span>{% endif %}
 </div>
 </div>
-<dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-xs">
-<dt class="text-base-content/70">Signature</dt><dd class="font-mono wrap-anywhere">{{ d.signature_note }}</dd>
-{% if d.issuer_note %}<dt class="text-base-content/70">Issuer</dt><dd class="font-mono wrap-anywhere">{{ d.issuer_note }}</dd>
-{% endif %}<dt class="text-base-content/70">Expiry</dt><dd class="font-mono wrap-anywhere">{{ d.expiry_note }}</dd>
-</dl>
-<div class="grid min-w-0 gap-4 md:grid-cols-5">
-<div class="flex min-w-0 flex-col gap-1.5 md:col-span-2">
-<h3 class="text-xs font-semibold tracking-wide text-base-content/70 uppercase">Header</h3>
-<pre class="max-h-[32rem] overflow-auto rounded-field border border-base-300 bg-base-200 p-3 font-mono text-xs leading-relaxed whitespace-pre-wrap wrap-anywhere"><code>{{ d.header }}</code></pre>
-</div>
-<div class="flex min-w-0 flex-col gap-1.5 md:col-span-3">
-<h3 class="text-xs font-semibold tracking-wide text-base-content/70 uppercase">Payload</h3>
-<pre class="max-h-[32rem] overflow-auto rounded-field border border-base-300 bg-base-200 p-3 font-mono text-xs leading-relaxed whitespace-pre-wrap wrap-anywhere"><code>{{ d.payload }}</code></pre>
-</div>
-</div>
+<div class="table-wrap"><table class="table-kv">
+<tr><th scope="row">Signature</th><td>{{ d.signature_note }}</td></tr>
+{% if d.issuer_note %}<tr><th scope="row">Issuer</th><td>{{ d.issuer_note }}</td></tr>
+{% endif %}<tr><th scope="row">Expiry</th><td>{{ d.expiry_note }}</td></tr>
+</table></div>
+<div class="code-grid">
+<div><h3>Header</h3><pre class="code"><code>{{ d.header }}</code></pre></div>
+<div><h3>Payload</h3><pre class="code"><code>{{ d.payload }}</code></pre></div>
 </div>
 </section>
 {% endmacro %}{% if decoded %}{{ jwt("Decoded", decoded) }}{% endif %}
 {% for pair in flow %}{{ jwt(pair[0], pair[1]) }}{% endfor %}
-{% if flow_raw %}<section class="card border border-base-300 bg-base-100 shadow-xl shadow-base-content/5">
-<div class="card-body gap-3 px-6 py-5">
-<h2 class="text-base font-semibold">Token response</h2>
-<pre class="max-h-[32rem] overflow-auto rounded-field border border-base-300 bg-base-200 p-3 font-mono text-xs leading-relaxed whitespace-pre-wrap wrap-anywhere"><code>{{ flow_raw }}</code></pre>
-</div>
+{% if flow_raw %}<section class="card">
+<h2>Token response</h2>
+<pre class="code"><code>{{ flow_raw }}</code></pre>
 </section>{% endif %}
 </main>
-<footer class="mt-auto text-center text-xs text-base-content/70">A mock OpenID Provider for development and tests. Never enter real credentials.</footer>
-</div>
+{% if not embed %}<footer class="page-foot">A mock OpenID Provider for development and tests. Never enter real credentials.</footer>
+{% endif %}</div>
 </body>
 </html>

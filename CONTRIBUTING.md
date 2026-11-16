@@ -18,10 +18,14 @@ cargo test
 
 ## Page styles
 
-The built-in pages use `assets/static/fauxidc.css`, compiled with Tailwind CSS and daisyUI from `assets/css/fauxidc.css`.
-After you change a file in `assets/templates/` or `assets/css/`, run `scripts/build-css.sh` and commit the new `assets/static/fauxidc.css` in the same commit.
-The script downloads the pinned tools into `target/css-tools/` (needs `curl` and `shasum`). `cargo build` does not need it.
-The CI job `css` fails when the committed file differs from a fresh build.
+Every built-in page links `assets/static/halo.css`. The dashboard also links `assets/static/dashboard.css`.
+Both files are plain CSS. They have no build step, and `cargo build` embeds them as they are.
+The design is `docs/fauxidc-design.pen`. Light and dark follow `prefers-color-scheme`.
+
+`assets/static/fauxidc.css` and `assets/static/login.css` are old stylesheets. No built-in page links them.
+They stay served for old custom templates, and they are frozen.
+Run `scripts/check-css.sh` to check the size limits, the frozen files and that no stylesheet loads from the network.
+The CI job `css` runs the same script.
 
 ## Rules
 
