@@ -19,7 +19,7 @@ Targets:
 Non-goals:
 
 - Production use. A fauxidc Issuer must never be trusted in production.
-- Provider management APIs (Auth0 Management API, Okta Users API). fauxidc does not copy their routes or bodies. Its own Test API can list and change the Users of the config file (5.9); that is a fauxidc API, not a provider API.
+- Provider management APIs (Auth0 Management API, Okta Users API). fauxidc does not copy their routes or bodies. Its own Test API can list and change the Users and Clients of the config file (5.9); that is a fauxidc API, not a provider API.
 - RFC 7591 dynamic client registration, RFC 9126 PAR, RFC 9449 DPoP, RFC 8628 device flow, front-channel and back-channel logout.
 - Implicit grant and password grant. If users ask, the password grant can be added later behind `enable_password_grant`.
 
@@ -193,7 +193,7 @@ Our own merge, about 200 lines. Parse each source to `toml::Value`, deep-merge, 
 
 ### 5.9 Config writes
 
-The Test API (`/_mock/users`) and `fauxidc users` change Users in the config file (ADR 0008):
+The Test API (`/_mock/users`, `/_mock/clients`) and `fauxidc users`, `fauxidc clients` change Users and Clients in the config file (ADR 0008):
 
 - The write target is the last config file (5.1, source 2). With no file, a write fails: 409, or exit code 1.
 - A write to an entry fails if any value of the entry comes from another source (an earlier file, inline config or an env var). The error names the source.
@@ -201,6 +201,8 @@ The Test API (`/_mock/users`) and `fauxidc users` change Users in the config fil
 - The write is atomic: a temporary file in the same directory, then a rename.
 - On the server, the change applies at once, without the file poller. If it does not apply, the old file text is written back.
 - The CLI needs no running server. A running server applies the change with its hot reload.
+- Clients are named by their config key, not by `client_id`. Reads show `client_secret` as `"***"`. A write adds only the fields that differ from the default.
+- `GET /_mock/clients` also lists the Lenient-registered Clients with `"lenient": true`. They are in memory only, so a write to one gives 409.
 
 ## 6. Clients and checks
 
@@ -331,6 +333,7 @@ CORS (M2) on `/token`, `/userinfo` and `/revoke`: allowed origins come from the 
 
 - `fauxidc` (serve), `fauxidc config [--check]`, `fauxidc healthcheck [--url]`.
 - `fauxidc users list|get|create|update|delete`: read and change the Users of the last config file (5.9). Exit 2 on invalid input or config, 1 on a conflict.
+- `fauxidc clients list|get|create|update|delete`: the same for Clients. `create` and `update` read the Client from `--from <file|->` (JSON or TOML). `update --merge` merges it.
 - Global flags: `--config`, `--port`, `--bind`, `--log-format`, `--issuer-from-host`.
 - `clap` derive.
 

@@ -56,6 +56,60 @@ pub enum Command {
     /// 1 on a conflict.
     #[command(subcommand)]
     Users(UsersCommand),
+    /// List, show and change the Clients of the config file
+    ///
+    /// A Client is named by its config key ([client.<key>]), not by its `client_id`. Reads mask
+    /// `client_secret`. Changes go to the last config file and keep its comments. They need no
+    /// running server: a running server applies the change with its hot reload. A Client that an
+    /// earlier file, inline config or an env var sets cannot change. Exit code 2 on invalid input
+    /// or config, 1 on a conflict.
+    #[command(subcommand)]
+    Clients(ClientsCommand),
+}
+
+/// `fauxidc clients ...`
+#[derive(Subcommand, Debug)]
+pub enum ClientsCommand {
+    /// Print all Clients
+    List {
+        /// Print JSON
+        #[arg(long)]
+        json: bool,
+    },
+    /// Print one Client
+    Get {
+        /// The Client key: lowercase letters, digits and underscores
+        client_key: String,
+        /// Print JSON
+        #[arg(long)]
+        json: bool,
+    },
+    /// Add a Client to the last config file
+    Create {
+        /// The Client key: lowercase letters, digits and underscores
+        client_key: String,
+        /// Read the Client from a JSON or TOML file, or `-` for stdin. The same shape as
+        /// [client.<key>]
+        #[arg(long, value_name = "FILE")]
+        from: PathBuf,
+    },
+    /// Replace a Client in the last config file, or merge into it with --merge
+    Update {
+        /// The Client key: lowercase letters, digits and underscores
+        client_key: String,
+        /// Read the Client, or the changes with --merge, from a JSON or TOML file, or `-` for
+        /// stdin
+        #[arg(long, value_name = "FILE")]
+        from: PathBuf,
+        /// Merge into the Client (JSON Merge Patch, RFC 7396) instead of replacing it
+        #[arg(long)]
+        merge: bool,
+    },
+    /// Remove a Client from the last config file
+    Delete {
+        /// The Client key
+        client_key: String,
+    },
 }
 
 /// `fauxidc users ...`
@@ -204,6 +258,24 @@ mod tests {
         assert_eq!(user_id, "carol");
         assert_eq!(fields.label.as_deref(), Some("Carol"));
         assert_eq!(fields.issuer_claims, ["a={}", "b={}"]);
+    }
+
+    #[test]
+    fn clients_commands_parse() {
+        let cli = Cli::parse_from([
+            "fauxidc", "clients", "update", "web", "--from", "-", "--merge",
+        ]);
+        let Some(Command::Clients(ClientsCommand::Update {
+            client_key,
+            from,
+            merge: true,
+        })) = cli.command
+        else {
+            panic!("not clients update --merge");
+        };
+        assert_eq!(client_key, "web");
+        assert_eq!(from, PathBuf::from("-"));
+        assert!(Cli::try_parse_from(["fauxidc", "clients", "create", "web"]).is_err());
     }
 
     #[test]

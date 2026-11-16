@@ -54,17 +54,29 @@ async fn run(cli: Cli) -> anyhow::Result<ExitCode> {
     }
     let inputs = LoadInputs::from_process(cli.config.clone(), cli.overrides())
         .context("cannot read the working directory")?;
-    if let Some(Command::Users(command)) = &cli.command {
-        let mut stdout = std::io::stdout().lock();
-        return Ok(
-            match fauxidc::users_cli::run(command, &inputs, &mut std::io::stdin(), &mut stdout) {
-                Ok(()) => ExitCode::SUCCESS,
-                Err(failure) => {
-                    eprintln!("error: {}", failure.message);
-                    ExitCode::from(failure.code)
-                }
-            },
-        );
+    let edit_command = match &cli.command {
+        Some(Command::Users(command)) => Some(fauxidc::users_cli::run(
+            command,
+            &inputs,
+            &mut std::io::stdin(),
+            &mut std::io::stdout().lock(),
+        )),
+        Some(Command::Clients(command)) => Some(fauxidc::clients_cli::run(
+            command,
+            &inputs,
+            &mut std::io::stdin(),
+            &mut std::io::stdout().lock(),
+        )),
+        _ => None,
+    };
+    if let Some(result) = edit_command {
+        return Ok(match result {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(failure) => {
+                eprintln!("error: {}", failure.message);
+                ExitCode::from(failure.code)
+            }
+        });
     }
     // Taken before the load: a file saved during the load is reloaded at the first poll.
     let loaded_at = SystemTime::now();
@@ -92,7 +104,7 @@ async fn run(cli: Cli) -> anyhow::Result<ExitCode> {
             Ok(ExitCode::SUCCESS)
         }
         (None, Ok(loaded)) => serve(loaded, &inputs, loaded_at).await,
-        (Some(Command::Users(_)), Ok(_)) => Ok(ExitCode::SUCCESS),
+        (Some(Command::Users(_) | Command::Clients(_)), Ok(_)) => Ok(ExitCode::SUCCESS),
     }
 }
 

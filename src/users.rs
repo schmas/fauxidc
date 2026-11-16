@@ -113,7 +113,8 @@ pub fn merge_patch(user: &UserConfig, patch: &serde_json::Value) -> Result<UserC
     serde_json::from_value(value).map_err(|e| EditError::BadInput(format!("invalid user: {e}")))
 }
 
-fn json_merge_patch(target: &mut serde_json::Value, patch: &serde_json::Value) {
+/// Applies a JSON Merge Patch (RFC 7396) to a JSON value.
+pub(crate) fn json_merge_patch(target: &mut serde_json::Value, patch: &serde_json::Value) {
     let serde_json::Value::Object(patch) = patch else {
         *target = patch.clone();
         return;

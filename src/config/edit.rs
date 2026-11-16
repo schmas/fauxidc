@@ -1,7 +1,7 @@
 //! Edits of one entry of the config file: a User (`[user.<id>]`) or a Client
 //! (`[client.<key>]`).
 //!
-//! The Test API and the `fauxidc users` commands share this code (ADR 0008):
+//! The Test API and the `fauxidc users` and `fauxidc clients` commands share this code (ADR 0008):
 //!
 //! 1. Load the merged config. The write target is the last config file.
 //! 2. Refuse an entry that a source other than the target file sets (an earlier file, inline
@@ -96,6 +96,12 @@ pub enum EditError {
         origin: Source,
         target: PathBuf,
     },
+    /// The entry is a Client that Lenient mode registered in memory. No config file holds it.
+    #[error(
+        "Client {id} is a Lenient-registered Client in memory and cannot change: \
+         create a Client with this client_id instead"
+    )]
+    Lenient { id: String },
     /// The target file could not be parsed for editing.
     #[error("cannot edit {}: {message}", .path.display())]
     Parse { path: PathBuf, message: String },

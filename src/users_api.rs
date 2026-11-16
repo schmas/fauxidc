@@ -11,82 +11,14 @@ use axum::{
     http::{HeaderMap, HeaderValue, StatusCode, header},
     response::{IntoResponse, Response},
 };
-use serde_json::json;
 
-use crate::config::UserConfig;
-use crate::config::edit::{Edit, EditError};
-use crate::config::{LoadInputs, Loaded};
-use crate::reload::WriteError;
+use crate::config::{Loaded, UserConfig};
+use crate::config_api::{bad_body, write};
 use crate::state::AppState;
-use crate::test_api::same_origin_or_none;
 use crate::users::{self, NewUser};
 
-fn error(status: StatusCode, code: &str, description: impl Into<String>) -> Response {
-    (
-        status,
-        [(header::CACHE_CONTROL, HeaderValue::from_static("no-store"))],
-        Json(json!({ "error": code, "error_description": description.into() })),
-    )
-        .into_response()
-}
-
 fn not_found(id: &str) -> Response {
-    error(
-        StatusCode::NOT_FOUND,
-        "not_found",
-        format!("unknown user: {id}"),
-    )
-}
-
-fn bad_body(rejection: &JsonRejection) -> Response {
-    error(
-        StatusCode::BAD_REQUEST,
-        "invalid_request",
-        format!("invalid body: {rejection}"),
-    )
-}
-
-fn write_error(e: &WriteError) -> Response {
-    let (status, code) = match e {
-        WriteError::Edit(edit) => match edit {
-            EditError::InvalidId(_) | EditError::BadInput(_) | EditError::Invalid(_) => {
-                (StatusCode::BAD_REQUEST, "invalid_request")
-            }
-            EditError::NotFound { .. } => (StatusCode::NOT_FOUND, "not_found"),
-            EditError::NoFile | EditError::Exists { .. } | EditError::Conflict { .. } => {
-                (StatusCode::CONFLICT, "conflict")
-            }
-            EditError::Parse { .. } => (StatusCode::INTERNAL_SERVER_ERROR, "server_error"),
-        },
-        WriteError::Io { .. } | WriteError::Reload(_) => {
-            (StatusCode::INTERNAL_SERVER_ERROR, "server_error")
-        }
-        WriteError::Stopped => (StatusCode::SERVICE_UNAVAILABLE, "temporarily_unavailable"),
-    };
-    error(status, code, e.to_string())
-}
-
-/// Checks the origin, writes the edit of `prepare`, applies it, then answers with `respond`.
-fn write(
-    state: &AppState,
-    headers: &HeaderMap,
-    prepare: impl FnOnce(&LoadInputs) -> Result<Edit, EditError>,
-    respond: impl FnOnce(&Loaded) -> Response,
-) -> Response {
-    if !same_origin_or_none(state, headers) {
-        return error(
-            StatusCode::FORBIDDEN,
-            "access_denied",
-            "cross-origin Test API request",
-        );
-    }
-    let Some(writer) = state.config_writer.get() else {
-        return write_error(&WriteError::Edit(EditError::NoFile));
-    };
-    match writer.write(prepare) {
-        Ok(loaded) => respond(&loaded),
-        Err(e) => write_error(&e),
-    }
+    crate::config_api::not_found("user", id)
 }
 
 fn view(loaded: &Loaded, id: &str) -> Response {
