@@ -13,7 +13,7 @@ pub use layers::{env_layer, file_layer, file_layer_text, flag_layer, inline_laye
 pub use load::{CliOverrides, LoadInputs, Loaded, load, load_str, load_with_file_text};
 pub use merge::deep_merge;
 pub use schema::{SCHEMA_URL, schema_json};
-pub use show::{Entry, MASK, entries, masked, render};
+pub use show::{Entry, MASK, entries, mask_client, masked, render};
 pub use source::{KeyPath, Layer, Source, SourceMap};
 pub use validate::validate;
 

@@ -162,7 +162,8 @@ Writes change the last config file and apply the new config at once. The next `/
 
 The path uses the config key (`[client.<key>]`), not the `client_id`. The `client_id` is the key when it is not set.
 A Client has the same shape as `[client.<key>]`. A read adds `key` and `lenient`, sets `client_id`, shows every default,
-and shows `client_secret` as `"***"`, the same as `fauxidc config`:
+and masks the secrets the same as `fauxidc config`: `client_secret` and the private members of a JWK in `jwks`
+(`d`, `p`, `q`, `dp`, `dq`, `qi`, `oth`, `k`) are `"***"`:
 
 ```json
 {
@@ -197,7 +198,8 @@ curl -s -X DELETE localhost:9000/_mock/clients/backend
 ```
 
 - The file gets only the fields that differ from the default. It gets `client_id` only when it differs from the key.
-- `PUT` replaces the whole Client. Send `client_secret` again, or the Client becomes public. `PATCH` keeps the fields that it does not name.
+- `PUT` replaces the whole Client. Send `client_secret` again, or the Client becomes public. Send the real `jwks`, not the masked one from a read.
+  `PATCH` keeps the fields that it does not name, also the secrets.
 - Lenient-registered Clients are in memory only. `GET` lists them with `"lenient": true` and their `client_id` as `key`.
   A `PUT`, `PATCH` or `DELETE` on one gives 409 `conflict`. To keep one, `POST` a Client with the same `client_id`: the configured Client wins.
 - The write rules of the Users routes apply: the target file, 409 for a value from another source, 400 for invalid input, 403 for another origin.
@@ -214,7 +216,7 @@ fauxidc clients update backend --from backend.toml       # replace
 fauxidc clients delete backend
 ```
 
-The `--from` file has the fields of `[client.<key>]`, without the header. `get` and `list` mask `client_secret`.
+The `--from` file has the fields of `[client.<key>]`, without the header. `get` and `list` mask `client_secret` and the private JWK members in `jwks`.
 The commands do not see the Lenient-registered Clients of a running server.
 Exit codes: 0 on success, 2 on invalid input or config, 1 on a conflict, an unknown Client or a write error.
 

@@ -202,7 +202,7 @@ The Test API (`/_mock/users`, `/_mock/clients`) and `fauxidc users`, `fauxidc cl
 - The write is atomic: a temporary file in the same directory, then a rename.
 - On the server, the change applies at once, without the file poller. If it does not apply, the old file text is written back.
 - The CLI needs no running server. A running server applies the change with its hot reload.
-- Clients are named by their config key, not by `client_id`. Reads show `client_secret` as `"***"`. A write adds only the fields that differ from the default.
+- Clients are named by their config key, not by `client_id`. Reads mask the secrets as in 5.7: `client_secret` and the private JWK members in `jwks` are `"***"`. A write adds only the fields that differ from the default.
 - `GET /_mock/clients` also lists the Lenient-registered Clients with `"lenient": true`. They are in memory only, so a write to one gives 409.
 
 ## 6. Clients and checks

@@ -1,9 +1,10 @@
 //! The Test API for Clients: `/_mock/clients` and `/_mock/clients/{client_key}`.
 //!
 //! The path uses the config key (`[client.<key>]`), not the `client_id`. Reads show the running
-//! config and the Lenient-registered Clients, with `client_secret` masked. Writes change the last
-//! config file and apply it at once (ADR 0008). A Lenient-registered Client is read-only. The
-//! routes have no authentication, the same as the rest of the Test API.
+//! config and the Lenient-registered Clients, with `client_secret` and the private JWK members
+//! of `jwks` masked. Writes change the last config file and apply it at once (ADR 0008). A
+//! Lenient-registered Client is read-only. The routes have no authentication, the same as the
+//! rest of the Test API.
 
 use std::sync::{Arc, PoisonError};
 

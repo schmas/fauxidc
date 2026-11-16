@@ -1,11 +1,12 @@
 //! Renders the merged configuration with the source of each value.
 //!
 //! `fauxidc config` and `GET /_mock/config` use the same masking ([`masked`]) and the same
-//! leaves ([`entries`]).
+//! leaves ([`entries`]). The Clients output (`fauxidc clients`, `/_mock/clients`) masks each
+//! Client with [`mask_client`].
 
 use std::fmt::Write as _;
 
-use super::{Config, KeyPath, Loaded, Source, SourceMap};
+use super::{ClientConfig, Config, KeyPath, Loaded, Source, SourceMap};
 
 /// Keys whose tables print as one inline table and are not walked.
 const CLAIM_KEYS: [&str; 4] = ["claims", "default_claims", "id_claims", "access_claims"];
@@ -37,42 +38,40 @@ pub fn render(loaded: &Loaded) -> String {
     out
 }
 
-/// The config as a TOML value with every secret replaced by `"***"`: each `client_secret`,
-/// and the private members of a JWK in a Client `jwks` (`d`, `p`, `q`, `dp`, `dq`, `qi`,
-/// `oth`, `k`).
+/// The config as a TOML value with every secret replaced by `"***"`: each Client masked by
+/// [`mask_client`].
 #[must_use]
 pub fn masked(config: &Config) -> toml::Value {
+    let mut config = config.clone();
+    config.client.values_mut().for_each(mask_client);
     // Config always serializes to a table. The fallback keeps this total.
-    let mut root =
-        toml::Value::try_from(config).unwrap_or_else(|_| toml::Value::Table(toml::Table::new()));
-    if let Some(clients) = root.get_mut("client").and_then(toml::Value::as_table_mut) {
-        for (_, client) in clients.iter_mut() {
-            let Some(client) = client.as_table_mut() else {
-                continue;
-            };
-            if let Some(secret) = client.get_mut("client_secret") {
-                *secret = toml::Value::String(MASK.to_owned());
-            }
-            if let Some(jwks) = client.get_mut("jwks") {
-                mask_private_jwk_members(jwks);
-            }
-        }
-    }
-    root
+    toml::Value::try_from(&config).unwrap_or_else(|_| toml::Value::Table(toml::Table::new()))
 }
 
-fn mask_private_jwk_members(value: &mut toml::Value) {
+/// Replaces the secrets of a Client by `"***"`: its `client_secret`, and the private members
+/// of a JWK in its `jwks` (`d`, `p`, `q`, `dp`, `dq`, `qi`, `oth`, `k`). `fauxidc config`,
+/// `fauxidc clients` and the Test API use it.
+pub fn mask_client(client: &mut ClientConfig) {
+    if client.client_secret.is_some() {
+        client.client_secret = Some(MASK.to_owned());
+    }
+    if let Some(jwks) = &mut client.jwks {
+        jwks.values_mut().for_each(mask_private_jwk_members);
+    }
+}
+
+fn mask_private_jwk_members(value: &mut serde_json::Value) {
     match value {
-        toml::Value::Table(table) => {
-            for (key, child) in table.iter_mut() {
+        serde_json::Value::Object(map) => {
+            for (key, child) in map.iter_mut() {
                 if PRIVATE_JWK_MEMBERS.contains(&key.as_str()) {
-                    *child = toml::Value::String(MASK.to_owned());
+                    *child = serde_json::Value::String(MASK.to_owned());
                 } else {
                     mask_private_jwk_members(child);
                 }
             }
         }
-        toml::Value::Array(items) => items.iter_mut().for_each(mask_private_jwk_members),
+        serde_json::Value::Array(items) => items.iter_mut().for_each(mask_private_jwk_members),
         _ => {}
     }
 }
