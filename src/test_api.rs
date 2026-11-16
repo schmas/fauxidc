@@ -69,7 +69,7 @@ pub struct RotateQuery {
 
 /// `true` when `headers` has no `Origin`, or `Origin` equals "<scheme>://<Host>" of this
 /// request. The scheme is `https` when `server.tls` is on, else `http` (plan Ruling 4).
-fn same_origin_or_none(state: &AppState, headers: &HeaderMap) -> bool {
+pub(crate) fn same_origin_or_none(state: &AppState, headers: &HeaderMap) -> bool {
     let Some(origin) = headers.get(header::ORIGIN) else {
         return true;
     };

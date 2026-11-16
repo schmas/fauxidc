@@ -229,6 +229,7 @@ The Test API lives under `/_mock/` and has no authentication.
 | `POST /_mock/{issuer-id}/token` | Mint tokens for a User or a Custom user. |
 | `POST /_mock/{issuer-id}/rotate-key` | Give the Issuer a new signing key. |
 | `POST` / `DELETE /_mock/{issuer-id}/fail-next` | Add or remove Injected failures. |
+| `GET` / `POST /_mock/users`, `GET` / `PUT` / `PATCH` / `DELETE /_mock/users/{user-id}` | List and change the Users of the config file. `fauxidc users` does the same without a server. |
 | `GET` / `DELETE /_mock/requests` | Read or clear the Request log. |
 | `GET /_mock/health` | Health check. |
 

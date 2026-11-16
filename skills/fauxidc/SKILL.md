@@ -133,6 +133,17 @@ curl -s -X DELETE http://localhost:9000/_mock/app/fail-next   # remove all entri
 - `delay_ms` (at most 60000) without `status` only delays the request.
 - The failed response is `{"error": <error>, "error_description": "injected failure"}`.
 
+## Add or change a User
+
+`/_mock/users` lists the Users. `POST`, `PUT`, `PATCH` (JSON Merge Patch) and `DELETE` change the last config file and apply at once.
+
+```sh
+curl -s http://localhost:9000/_mock/users -H 'content-type: application/json' -d '{"id": "carol", "claims": {"email": "carol@example.com"}}'
+```
+
+- Without a server or `curl`: `fauxidc users list|get|create|update [--merge]|delete`, for example `fauxidc users create carol --claims '{"email": "carol@example.com"}'`.
+- 409 (exit 1): no config file is loaded, the id exists, or an env var, inline config or an earlier file sets the User.
+
 ## Read the Request log
 
 fauxidc keeps the last `server.request_log_size` requests (default 500) in memory. `/_mock/*` requests are not logged.

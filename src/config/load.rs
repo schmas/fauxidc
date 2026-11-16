@@ -1,11 +1,12 @@
 //! Loading and merging of all configuration layers.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use super::layers::ENV_PREFIX;
 use super::types::{Config, LogFormat};
 use super::{
-    Layer, Source, SourceMap, deep_merge, env_layer, file_layer, flag_layer, inline_layer, validate,
+    Layer, Source, SourceMap, deep_merge, env_layer, file_layer, file_layer_text, flag_layer,
+    inline_layer, validate,
 };
 use crate::error::{ConfigError, ConfigErrors};
 
@@ -66,6 +67,25 @@ const ISSUER_FROM_HOST_VAR: &str = "FAUXIDC_ISSUER_FROM_HOST";
 /// The order is base, files, inline, env, flags. Errors from all layers are
 /// collected before the function returns.
 pub fn load(inputs: &LoadInputs) -> Result<Loaded, ConfigErrors> {
+    load_with(inputs, None)
+}
+
+/// Like [`load`], but takes the text of the config file `path` from `text`, not from the disk.
+///
+/// A config write checks its new file text with it before the file changes. If `path` is not
+/// one of the resolved config files, `text` is not used.
+pub fn load_with_file_text(
+    inputs: &LoadInputs,
+    path: &Path,
+    text: &str,
+) -> Result<Loaded, ConfigErrors> {
+    load_with(inputs, Some((path, text)))
+}
+
+fn load_with(
+    inputs: &LoadInputs,
+    file_text: Option<(&Path, &str)>,
+) -> Result<Loaded, ConfigErrors> {
     let env_value = |name: &str| {
         inputs
             .env
@@ -90,7 +110,11 @@ pub fn load(inputs: &LoadInputs) -> Result<Loaded, ConfigErrors> {
         }
     }
     for file in &files {
-        match file_layer(file) {
+        let layer = match file_text {
+            Some((path, text)) if path == file => file_layer_text(file, text),
+            _ => file_layer(file),
+        };
+        match layer {
             Ok(layer) => deep_merge(&mut merged, layer),
             Err(error) => errors.push(error),
         }

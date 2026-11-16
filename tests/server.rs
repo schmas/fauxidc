@@ -8,9 +8,7 @@ async fn start_serves_discovery_on_a_random_port() {
     cfg.server.port = 0;
     let srv = fauxidc::Server::start_with(
         cfg,
-        fauxidc::StartOptions {
-            key_pem: Some(KEY.to_pem().into()),
-        },
+        fauxidc::StartOptions::with_key_pem(KEY.to_pem().to_string()),
     )
     .await
     .unwrap();
@@ -80,9 +78,7 @@ async fn non_loopback_bind_logs_a_warning() {
     cfg.server.port = 0;
     let srv = fauxidc::Server::start_with(
         cfg,
-        fauxidc::StartOptions {
-            key_pem: Some(KEY.to_pem().into()),
-        },
+        fauxidc::StartOptions::with_key_pem(KEY.to_pem().to_string()),
     )
     .await
     .unwrap();

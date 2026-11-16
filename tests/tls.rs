@@ -45,14 +45,9 @@ mod with_tls {
     }
 
     async fn start(cfg: Config) -> RunningServer {
-        Server::start_with(
-            cfg,
-            StartOptions {
-                key_pem: Some(KEY.to_pem().into()),
-            },
-        )
-        .await
-        .unwrap()
+        Server::start_with(cfg, StartOptions::with_key_pem(KEY.to_pem().to_string()))
+            .await
+            .unwrap()
     }
 
     fn connector() -> TlsConnector {

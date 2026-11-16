@@ -284,3 +284,73 @@ fn schema_conflicts_with_check() {
         .unwrap();
     assert_eq!(out.status.code(), Some(2));
 }
+
+#[test]
+fn users_commands_edit_the_last_config_file() {
+    let file = write_tmp(
+        "# keep me\n[issuer.a]\nissuer_url = \"http://localhost:9000/a\"\n\n\
+         [user.alice]\nlabel = \"Alice\"\n",
+    );
+    let path = file.to_str().unwrap();
+    let out = fauxidc_cmd(&[
+        "users",
+        "create",
+        "carol",
+        "--label",
+        "Carol",
+        "--claims",
+        r#"{"email": "carol@example.com"}"#,
+        "--config",
+        path,
+    ])
+    .output()
+    .unwrap();
+    assert!(out.status.success(), "{out:?}");
+    let text = std::fs::read_to_string(&file).unwrap();
+    assert!(text.starts_with("# keep me\n"), "{text}");
+
+    let out = fauxidc_cmd(&["users", "list", "--json", "--config", path])
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "{out:?}");
+    let users: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(users[1]["id"], "carol");
+    assert_eq!(users[1]["claims"]["email"], "carol@example.com");
+
+    let mut child = fauxidc_cmd(&[
+        "users", "update", "carol", "--merge", "--from", "-", "--config", path,
+    ])
+    .stdin(Stdio::piped())
+    .stdout(Stdio::piped())
+    .spawn()
+    .unwrap();
+    {
+        use std::io::Write as _;
+        let mut stdin = child.stdin.take().unwrap();
+        stdin.write_all(br#"{"label": "Carol E."}"#).unwrap();
+    }
+    assert!(child.wait().unwrap().success());
+    let out = fauxidc_cmd(&["users", "get", "carol", "--config", path])
+        .output()
+        .unwrap();
+    assert_eq!(
+        String::from_utf8(out.stdout).unwrap(),
+        "[user.carol]\nlabel = \"Carol E.\"\nclaims = { email = \"carol@example.com\" }\n"
+    );
+
+    let code = |args: &[&str]| fauxidc_cmd(args).output().unwrap().status.code();
+    assert_eq!(
+        code(&["users", "create", "carol", "--config", path]),
+        Some(1)
+    );
+    assert_eq!(code(&["users", "create", "Bad", "--config", path]), Some(2));
+    assert_eq!(
+        code(&["users", "delete", "alice"]),
+        Some(1),
+        "no config file"
+    );
+    assert_eq!(
+        code(&["users", "delete", "carol", "--config", path]),
+        Some(0)
+    );
+}

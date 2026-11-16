@@ -48,6 +48,72 @@ pub enum Command {
         #[arg(long)]
         url: Option<String>,
     },
+    /// List, show and change the Users of the config file
+    ///
+    /// Changes go to the last config file and keep its comments. They need no running server:
+    /// a running server applies the change with its hot reload. A User that an earlier file,
+    /// inline config or an env var sets cannot change. Exit code 2 on invalid input or config,
+    /// 1 on a conflict.
+    #[command(subcommand)]
+    Users(UsersCommand),
+}
+
+/// `fauxidc users ...`
+#[derive(Subcommand, Debug)]
+pub enum UsersCommand {
+    /// Print all Users
+    List {
+        /// Print JSON
+        #[arg(long)]
+        json: bool,
+    },
+    /// Print one User
+    Get {
+        /// The User id: lowercase letters, digits and underscores
+        user_id: String,
+        /// Print JSON
+        #[arg(long)]
+        json: bool,
+    },
+    /// Add a User to the last config file
+    Create {
+        /// The User id: lowercase letters, digits and underscores
+        user_id: String,
+        #[command(flatten)]
+        fields: UserFields,
+    },
+    /// Replace a User in the last config file, or merge into it with --merge
+    Update {
+        /// The User id: lowercase letters, digits and underscores
+        user_id: String,
+        #[command(flatten)]
+        fields: UserFields,
+        /// Merge into the User (JSON Merge Patch, RFC 7396) instead of replacing it
+        #[arg(long)]
+        merge: bool,
+    },
+    /// Remove a User from the last config file
+    Delete {
+        /// The User id
+        user_id: String,
+    },
+}
+
+/// The fields of a User. `--from` is read first; the other flags change its values.
+#[derive(clap::Args, Debug, Default, Clone)]
+pub struct UserFields {
+    /// The label on the login page
+    #[arg(long)]
+    pub label: Option<String>,
+    /// Claims as a JSON object, for example '{"email": "carol@example.com"}'
+    #[arg(long, value_name = "JSON")]
+    pub claims: Option<String>,
+    /// Claims for one Issuer, for example auth0='{"org": "o-1"}' (repeatable)
+    #[arg(long, value_name = "ISSUER_ID=JSON")]
+    pub issuer_claims: Vec<String>,
+    /// Read the User from a JSON or TOML file, or `-` for stdin. The same shape as [user.<id>]
+    #[arg(long, value_name = "FILE")]
+    pub from: Option<PathBuf>,
 }
 
 impl Cli {
@@ -107,6 +173,37 @@ mod tests {
         let cli = Cli::parse_from(["fauxidc", "--issuer-from-host"]);
         assert!(cli.overrides().issuer_from_host);
         assert!(!Cli::parse_from(["fauxidc"]).overrides().issuer_from_host);
+    }
+
+    #[test]
+    fn users_commands_parse() {
+        let cli = Cli::parse_from([
+            "fauxidc",
+            "users",
+            "update",
+            "carol",
+            "--label",
+            "Carol",
+            "--issuer-claims",
+            "a={}",
+            "--issuer-claims",
+            "b={}",
+            "--merge",
+            "--config",
+            "a.toml",
+        ]);
+        assert_eq!(cli.config, vec![PathBuf::from("a.toml")]);
+        let Some(Command::Users(UsersCommand::Update {
+            user_id,
+            fields,
+            merge: true,
+        })) = cli.command
+        else {
+            panic!("not users update --merge");
+        };
+        assert_eq!(user_id, "carol");
+        assert_eq!(fields.label.as_deref(), Some("Carol"));
+        assert_eq!(fields.issuer_claims, ["a={}", "b={}"]);
     }
 
     #[test]

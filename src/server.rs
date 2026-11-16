@@ -8,11 +8,11 @@ use tokio::net::TcpListener;
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
 
-use crate::config::{Config, SourceMap, validate};
+use crate::config::{Config, LoadInputs, SourceMap, validate};
 use crate::error::StartError;
 use crate::keys::{KeyHandle, KeySource};
 use crate::logging::is_loopback_bind;
-use crate::reload::{ReloadHandle, live_router};
+use crate::reload::{ConfigWriter, ReloadHandle, live_router};
 use crate::state::AppState;
 
 /// Options for [`Server::start_with`].
@@ -20,6 +20,19 @@ use crate::state::AppState;
 pub struct StartOptions {
     /// Signing key PEM. Wins over `server.key_file`.
     pub key_pem: Option<String>,
+    /// The inputs `config` was loaded from. With them, the Test API can write Users to the last
+    /// config file (ADR 0008). Without them, a write answers 409.
+    pub load_inputs: Option<LoadInputs>,
+}
+
+impl StartOptions {
+    /// Options with only a signing key PEM.
+    pub fn with_key_pem(pem: impl Into<String>) -> Self {
+        StartOptions {
+            key_pem: Some(pem.into()),
+            ..StartOptions::default()
+        }
+    }
 }
 
 /// Entry point for running the server inside another process, for example in tests.
@@ -83,7 +96,11 @@ impl Server {
             );
         }
         let state = Arc::new(AppState::new(config, keys, server_key_from_file)?);
+        let writer = state.config_writer.clone();
         let (router, reload) = live_router(state);
+        if let Some(inputs) = opts.load_inputs {
+            let _ = writer.set(ConfigWriter::new(inputs, reload.downgrade()));
+        }
         let (tx, rx) = oneshot::channel::<()>();
         #[cfg(feature = "tls")]
         let task = match tls {

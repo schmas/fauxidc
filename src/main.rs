@@ -54,6 +54,18 @@ async fn run(cli: Cli) -> anyhow::Result<ExitCode> {
     }
     let inputs = LoadInputs::from_process(cli.config.clone(), cli.overrides())
         .context("cannot read the working directory")?;
+    if let Some(Command::Users(command)) = &cli.command {
+        let mut stdout = std::io::stdout().lock();
+        return Ok(
+            match fauxidc::users_cli::run(command, &inputs, &mut std::io::stdin(), &mut stdout) {
+                Ok(()) => ExitCode::SUCCESS,
+                Err(failure) => {
+                    eprintln!("error: {}", failure.message);
+                    ExitCode::from(failure.code)
+                }
+            },
+        );
+    }
     // Taken before the load: a file saved during the load is reloaded at the first poll.
     let loaded_at = SystemTime::now();
     match (cli.command, config::load(&inputs)) {
@@ -80,6 +92,7 @@ async fn run(cli: Cli) -> anyhow::Result<ExitCode> {
             Ok(ExitCode::SUCCESS)
         }
         (None, Ok(loaded)) => serve(loaded, &inputs, loaded_at).await,
+        (Some(Command::Users(_)), Ok(_)) => Ok(ExitCode::SUCCESS),
     }
 }
 
@@ -107,6 +120,7 @@ async fn serve(
     }
     let options = StartOptions {
         key_pem: env("FAUXIDC_KEY_PEM"),
+        load_inputs: Some(inputs.clone()),
     };
     let files = loaded.files;
     // Install the stop handlers before the server logs `listening`: a signal that follows the

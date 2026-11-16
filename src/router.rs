@@ -31,6 +31,7 @@ use crate::templates;
 use crate::test_api;
 use crate::token_endpoint;
 use crate::userinfo;
+use crate::users_api;
 
 /// Builds the router for all configured issuers.
 pub fn build_router(state: Arc<AppState>) -> Router {
@@ -77,6 +78,20 @@ pub fn build_router(state: Arc<AppState>) -> Router {
             "/_mock/{issuer_id}/fail-next",
             post(failures::fail_next)
                 .delete(failures::clear)
+                .with_state(state.clone()),
+        )
+        .route(
+            "/_mock/users",
+            get(users_api::list)
+                .post(users_api::create)
+                .with_state(state.clone()),
+        )
+        .route(
+            "/_mock/users/{user_id}",
+            get(users_api::get)
+                .put(users_api::replace)
+                .patch(users_api::merge)
+                .delete(users_api::remove)
                 .with_state(state.clone()),
         )
         .route(

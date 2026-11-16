@@ -10,6 +10,12 @@ so never run fauxidc in production. See [SECURITY.md](../SECURITY.md).
 | `POST /_mock/{issuer-id}/rotate-key` | [Rotate the signing key](#rotate-the-signing-key) of an Issuer. |
 | `POST /_mock/{issuer-id}/fail-next` | [Inject failures](#injected-failures) into an endpoint. |
 | `DELETE /_mock/{issuer-id}/fail-next` | Remove the Injected failures of an Issuer. |
+| `GET /_mock/users` | List the [Users](#users). |
+| `GET /_mock/users/{user-id}` | Show one User. |
+| `POST /_mock/users` | Add a User to the config file. |
+| `PUT /_mock/users/{user-id}` | Replace a User in the config file. |
+| `PATCH /_mock/users/{user-id}` | Merge changes into a User (JSON Merge Patch). |
+| `DELETE /_mock/users/{user-id}` | Remove a User from the config file. |
 | `GET /_mock/requests` | Read the [Request log](#request-log). |
 | `DELETE /_mock/requests` | Clear the Request log. |
 
@@ -80,6 +86,65 @@ Entries live in memory and survive a hot reload. An unknown Issuer id gives 404.
 curl -X POST localhost:9000/_mock/auth0/fail-next -H 'content-type: application/json' -d '{"endpoint":"token","status":503,"count":2}'
 curl -X DELETE localhost:9000/_mock/auth0/fail-next
 ```
+
+## Users
+
+The Users routes read and change the `[user.<id>]` tables of the config.
+Reads show the running config. Writes change the last config file and apply the new config at once.
+The change stays after a restart, and the login page, `/userinfo` and the Test API token route use it in the next request.
+
+A User has the same shape as `[user.<id>]`:
+
+```json
+{
+  "id": "carol",
+  "label": "Carol Example",
+  "claims": {"email": "carol@example.com", "roles": ["viewer"]},
+  "issuer": {"auth0": {"claims": {"org_id": "org-1"}}}
+}
+```
+
+| Route | Body | Answer |
+| --- | --- | --- |
+| `GET /_mock/users` | | 200 with all Users, by id. |
+| `GET /_mock/users/{user-id}` | | 200 with the User, or 404. |
+| `POST /_mock/users` | A User with `id` | 201 with the User and a `Location` header. 409 if the id exists. |
+| `PUT /_mock/users/{user-id}` | A User without `id` | 200 with the new User. 404 if it does not exist. |
+| `PATCH /_mock/users/{user-id}` | A JSON Merge Patch (RFC 7396) | 200 with the new User. `null` removes a field or a claim. 404 if it does not exist. |
+| `DELETE /_mock/users/{user-id}` | | 204. 404 if it does not exist. |
+
+```sh
+curl -s localhost:9000/_mock/users -H 'content-type: application/json' \
+  -d '{"id": "carol", "label": "Carol", "claims": {"email": "carol@example.com"}}'
+curl -s -X PATCH localhost:9000/_mock/users/carol -H 'content-type: application/json' \
+  -d '{"claims": {"roles": ["admin"]}}'
+curl -s -X DELETE localhost:9000/_mock/users/carol
+```
+
+Rules for writes:
+
+- The write target is the last config file: the last `--config`, else the last `FAUXIDC_CONFIG` file, else `./fauxidc.toml`.
+  With no config file (Zero config, inline config or env vars only), a write gives 409 `conflict`.
+- A User with a value from an earlier file, inline config or a `FAUXIDC__*` env var cannot change: 409 `conflict` names the source.
+- Ids must match `[a-z0-9_]+`. Unknown fields, `null` values in a new User and an invalid config give 400 `invalid_request`. The file does not change.
+- Comments and formatting of the file stay. A comment inside a replaced or removed User is lost.
+- A request with an `Origin` header of another origin gives 403 `access_denied`.
+- A Session of a removed User fails at its next use. Issued tokens stay valid until they expire.
+
+The `fauxidc users` commands do the same without a running server:
+
+```sh
+fauxidc users list [--json]
+fauxidc users get carol [--json]
+fauxidc users create carol --label Carol --claims '{"email": "carol@example.com"}' --issuer-claims auth0='{"org_id": "org-1"}'
+fauxidc users update carol --claims '{"roles": ["admin"]}' --merge
+fauxidc users update carol --from carol.toml      # replace; JSON or TOML, `-` reads stdin
+fauxidc users delete carol
+```
+
+They read the same config sources as the server (`--config`, `FAUXIDC_CONFIG`, `./fauxidc.toml`) and follow the same rules.
+`update` without `--merge` replaces the User. A running server applies the change with its hot reload.
+Exit codes: 0 on success, 2 on invalid input or config, 1 on a conflict, an unknown User or a write error.
 
 ## Request log
 
