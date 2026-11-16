@@ -16,6 +16,12 @@ so never run fauxidc in production. See [SECURITY.md](../SECURITY.md).
 | `PUT /_mock/users/{user-id}` | Replace a User in the config file. |
 | `PATCH /_mock/users/{user-id}` | Merge changes into a User (JSON Merge Patch). |
 | `DELETE /_mock/users/{user-id}` | Remove a User from the config file. |
+| `GET /_mock/clients` | List the [Clients](#clients), with secrets masked. |
+| `GET /_mock/clients/{client-key}` | Show one Client. |
+| `POST /_mock/clients` | Add a Client to the config file. |
+| `PUT /_mock/clients/{client-key}` | Replace a Client in the config file. |
+| `PATCH /_mock/clients/{client-key}` | Merge changes into a Client (JSON Merge Patch). |
+| `DELETE /_mock/clients/{client-key}` | Remove a Client from the config file. |
 | `DELETE /_mock/state` | [Reset the runtime state](#reset-the-runtime-state) of all Issuers or one Issuer. |
 | `GET /_mock/requests` | Read the [Request log](#request-log). |
 | `DELETE /_mock/requests` | Clear the Request log. |
@@ -146,6 +152,69 @@ fauxidc users delete carol
 They read the same config sources as the server (`--config`, `FAUXIDC_CONFIG`, `./fauxidc.toml`) and follow the same rules.
 `update` without `--merge` replaces the User. A running server applies the change with its hot reload.
 Exit codes: 0 on success, 2 on invalid input or config, 1 on a conflict, an unknown User or a write error.
+
+## Clients
+
+The Clients routes read and change the `[client.<key>]` tables of the config. They follow the same rules as the [Users](#users) routes.
+Writes change the last config file and apply the new config at once. The next `/authorize` or `/token` request uses the change.
+
+The path uses the config key (`[client.<key>]`), not the `client_id`. The `client_id` is the key when it is not set.
+A Client has the same shape as `[client.<key>]`. A read adds `key` and `lenient`, sets `client_id`, shows every default,
+and shows `client_secret` as `"***"`, the same as `fauxidc config`:
+
+```json
+{
+  "key": "backend",
+  "lenient": false,
+  "issuer": "*",
+  "client_id": "backend",
+  "client_secret": "***",
+  "grant_types": ["client_credentials"],
+  "scopes": ["api"],
+  "audience": "https://api.example.test"
+}
+```
+
+The example leaves out some default fields.
+
+| Route | Body | Answer |
+| --- | --- | --- |
+| `GET /_mock/clients` | | 200 with the configured Clients by key, then the Lenient-registered Clients. |
+| `GET /_mock/clients/{client-key}` | | 200 with the Client, or 404. |
+| `POST /_mock/clients` | A Client with `key` | 201 with the Client and a `Location` header. 409 if the key exists. |
+| `PUT /_mock/clients/{client-key}` | A Client without `key` | 200 with the new Client. 404 if it does not exist. |
+| `PATCH /_mock/clients/{client-key}` | A JSON Merge Patch (RFC 7396) | 200 with the new Client. `null` sets a field back to its default. 404 if it does not exist. |
+| `DELETE /_mock/clients/{client-key}` | | 204. 404 if it does not exist. |
+
+```sh
+curl -s localhost:9000/_mock/clients -H 'content-type: application/json' \
+  -d '{"key": "backend", "client_secret": "local", "grant_types": ["client_credentials"], "scopes": ["api"]}'
+curl -s -X PATCH localhost:9000/_mock/clients/backend -H 'content-type: application/json' \
+  -d '{"audience": "https://api.example.test"}'
+curl -s -X DELETE localhost:9000/_mock/clients/backend
+```
+
+- The file gets only the fields that differ from the default. It gets `client_id` only when it differs from the key.
+- `PUT` replaces the whole Client. Send `client_secret` again, or the Client becomes public. `PATCH` keeps the fields that it does not name.
+- Lenient-registered Clients are in memory only. `GET` lists them with `"lenient": true` and their `client_id` as `key`.
+  A `PUT`, `PATCH` or `DELETE` on one gives 409 `conflict`. To keep one, `POST` a Client with the same `client_id`: the configured Client wins.
+- The write rules of the Users routes apply: the target file, 409 for a value from another source, 400 for invalid input, 403 for another origin.
+- In Strict mode, a token request of a removed Client fails, also for an issued code or refresh token. Issued access tokens stay valid until they expire.
+
+The `fauxidc clients` commands do the same without a running server. A Client has many fields, so `create` and `update` read it from `--from`:
+
+```sh
+fauxidc clients list [--json]
+fauxidc clients get backend [--json]
+fauxidc clients create backend --from backend.toml       # JSON or TOML, `-` reads stdin
+echo '{"scopes": ["api", "admin"]}' | fauxidc clients update backend --from - --merge
+fauxidc clients update backend --from backend.toml       # replace
+fauxidc clients delete backend
+```
+
+The `--from` file has the fields of `[client.<key>]`, without the header. `get` and `list` mask `client_secret`.
+The commands do not see the Lenient-registered Clients of a running server.
+Exit codes: 0 on success, 2 on invalid input or config, 1 on a conflict, an unknown Client or a write error.
 
 ## Reset the runtime state
 

@@ -24,14 +24,14 @@ impl From<EditError> for Failure {
     }
 }
 
-fn usage(message: impl Into<String>) -> Failure {
+pub(crate) fn usage(message: impl Into<String>) -> Failure {
     Failure {
         code: 2,
         message: message.into(),
     }
 }
 
-fn io(e: &std::io::Error) -> Failure {
+pub(crate) fn io(e: &std::io::Error) -> Failure {
     Failure {
         code: 1,
         message: e.to_string(),
@@ -73,7 +73,7 @@ pub fn run(
         UsersCommand::Create { user_id, fields } => {
             let user = build_user(fields, stdin)?;
             let edit = users::create(inputs, user_id, &user)?;
-            write(out, &edit, "created", user_id)
+            write_edit(out, &edit, "created user", user_id)
         }
         UsersCommand::Update {
             user_id,
@@ -90,24 +90,33 @@ pub fn run(
             } else {
                 users::replace(inputs, user_id, &build_user(fields, stdin)?)?
             };
-            write(out, &edit, "updated", user_id)
+            write_edit(out, &edit, "updated user", user_id)
         }
         UsersCommand::Delete { user_id } => {
             let edit = users::remove(inputs, user_id)?;
-            write(out, &edit, "deleted", user_id)
+            write_edit(out, &edit, "deleted user", user_id)
         }
     }
 }
 
-fn write(out: &mut dyn Write, edit: &Edit, done: &str, id: &str) -> Result<(), Failure> {
+/// Writes `edit` and prints `<done> <id> in <file>`, for example `created user carol in a.toml`.
+pub(crate) fn write_edit(
+    out: &mut dyn Write,
+    edit: &Edit,
+    done: &str,
+    id: &str,
+) -> Result<(), Failure> {
     edit.write().map_err(|e| Failure {
         code: 1,
         message: format!("cannot write {}: {e}", edit.path.display()),
     })?;
-    writeln!(out, "{done} user {id} in {}", edit.path.display()).map_err(|e| io(&e))
+    writeln!(out, "{done} {id} in {}", edit.path.display()).map_err(|e| io(&e))
 }
 
-fn print_json(out: &mut dyn Write, value: &impl serde::Serialize) -> Result<(), Failure> {
+pub(crate) fn print_json(
+    out: &mut dyn Write,
+    value: &impl serde::Serialize,
+) -> Result<(), Failure> {
     let text = serde_json::to_string_pretty(value).map_err(|e| usage(e.to_string()))?;
     writeln!(out, "{text}").map_err(|e| io(&e))
 }
@@ -144,9 +153,15 @@ fn is_empty(fields: &UserFields) -> bool {
 }
 
 fn read_from(fields: &UserFields, stdin: &mut dyn Read) -> Result<Option<String>, Failure> {
-    let Some(path) = &fields.from else {
-        return Ok(None);
-    };
+    fields
+        .from
+        .as_deref()
+        .map(|path| read_file(path, stdin))
+        .transpose()
+}
+
+/// The text of `path`, or of `stdin` when `path` is `-`.
+pub(crate) fn read_file(path: &std::path::Path, stdin: &mut dyn Read) -> Result<String, Failure> {
     let mut text = String::new();
     if path.as_os_str() == "-" {
         stdin.read_to_string(&mut text).map_err(|e| io(&e))?;
@@ -156,7 +171,7 @@ fn read_from(fields: &UserFields, stdin: &mut dyn Read) -> Result<Option<String>
             message: format!("cannot read {}: {e}", path.display()),
         })?;
     }
-    Ok(Some(text))
+    Ok(text)
 }
 
 fn claims_arg(name: &str, text: &str) -> Result<Claims, Failure> {

@@ -354,3 +354,79 @@ fn users_commands_edit_the_last_config_file() {
         Some(0)
     );
 }
+
+#[test]
+fn clients_commands_edit_the_last_config_file() {
+    let file = write_tmp(
+        "# keep me\n[issuer.a]\nissuer_url = \"http://localhost:9000/a\"\n\n\
+         [client.web]\nclient_secret = \"local\"\n",
+    );
+    let path = file.to_str().unwrap();
+    let body = write_tmp("client_secret = \"s\"\ngrant_types = [\"client_credentials\"]\n");
+    let out = fauxidc_cmd(&[
+        "clients",
+        "create",
+        "svc",
+        "--from",
+        body.to_str().unwrap(),
+        "--config",
+        path,
+    ])
+    .output()
+    .unwrap();
+    assert!(out.status.success(), "{out:?}");
+    let text = std::fs::read_to_string(&file).unwrap();
+    assert!(text.starts_with("# keep me\n"), "{text}");
+
+    let out = fauxidc_cmd(&["clients", "list", "--json", "--config", path])
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "{out:?}");
+    let clients: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(clients[0]["key"], "svc");
+    assert_eq!(clients[0]["client_secret"], "***");
+    assert_eq!(clients[1]["key"], "web");
+
+    let mut child = fauxidc_cmd(&[
+        "clients", "update", "svc", "--merge", "--from", "-", "--config", path,
+    ])
+    .stdin(Stdio::piped())
+    .stdout(Stdio::piped())
+    .spawn()
+    .unwrap();
+    {
+        use std::io::Write as _;
+        let mut stdin = child.stdin.take().unwrap();
+        stdin.write_all(br#"{"scopes": ["api"]}"#).unwrap();
+    }
+    assert!(child.wait().unwrap().success());
+    let out = fauxidc_cmd(&["clients", "get", "svc", "--config", path])
+        .output()
+        .unwrap();
+    assert_eq!(
+        String::from_utf8(out.stdout).unwrap(),
+        "[client.svc]\nclient_secret = \"***\"\ngrant_types = [\"client_credentials\"]\n\
+         scopes = [\"api\"]\n"
+    );
+
+    let from = body.to_str().unwrap();
+    let code = |args: &[&str]| fauxidc_cmd(args).output().unwrap().status.code();
+    assert_eq!(
+        code(&["clients", "create", "svc", "--from", from, "--config", path]),
+        Some(1)
+    );
+    assert_eq!(
+        code(&["clients", "create", "Bad", "--from", from, "--config", path]),
+        Some(2)
+    );
+    assert_eq!(code(&["clients", "create", "x", "--config", path]), Some(2));
+    assert_eq!(
+        code(&["clients", "delete", "web"]),
+        Some(1),
+        "no config file"
+    );
+    assert_eq!(
+        code(&["clients", "delete", "svc", "--config", path]),
+        Some(0)
+    );
+}

@@ -49,8 +49,7 @@ In a fauxidc checkout, use `cargo run -- --config <file>`.
 - Zero config: with no file, no inline config and no `FAUXIDC__*` env var, fauxidc starts with one Issuer `default`
   at `http://localhost:9000/default` in Lenient mode, one public Client `test`, and the Users `alice` and `bob`.
 - A `FAUXIDC__*` env var (for example `FAUXIDC__SERVER__PORT=9100`) turns off Zero config. Give a config with an Issuer too.
-- Health: `curl -s http://localhost:9000/_mock/health` gives `{"key":"ready","status":"ok"}`. `fauxidc healthcheck` exits 0 when it is up.
-- The default port is 9000 and the default bind address is `127.0.0.1`.
+- The default port is 9000 and the default bind address is `127.0.0.1`. Health: `curl -s http://localhost:9000/_mock/health` gives `{"key":"ready","status":"ok"}`. `fauxidc healthcheck` exits 0 when it is up.
 
 ## Write a config
 
@@ -103,8 +102,7 @@ curl -s http://localhost:9000/_mock/app/token \
 ```
 
 - Send exactly one of `user` (a configured User id) and `sub` (a Custom user). `claims` overrides or sets claims.
-- `client_id` defaults to `test-api`. `scope` defaults to `openid profile email`.
-- A negative `expires_in` gives an expired token.
+- `client_id` defaults to `test-api`. `scope` defaults to `openid profile email`. A negative `expires_in` gives an expired token.
 - For fixed token times, set `server.fixed_time = "2020-01-21T00:00:00Z"` (RFC 3339). Then `iat` is always that time, and fauxidc checks codes and tokens with the same clock. Your app checks `exp` with its own clock, so a past time gives tokens that it rejects.
 - An unknown Issuer id gives 404. A bad body or an unknown field gives 400 `invalid_request`.
 - `POST /_mock/{issuer-id}/rotate-key` adds a new signing key. `?retire=true` also removes the old keys.
@@ -133,16 +131,18 @@ curl -s -X DELETE http://localhost:9000/_mock/app/fail-next   # remove all entri
 - `delay_ms` (at most 60000) without `status` only delays the request.
 - The failed response is `{"error": <error>, "error_description": "injected failure"}`.
 
-## Add or change a User
+## Add or change Users and Clients
 
-`/_mock/users` lists the Users. `POST`, `PUT`, `PATCH` (JSON Merge Patch) and `DELETE` change the last config file and apply at once.
+`/_mock/users` and `/_mock/clients` list the Users and Clients. `POST`, `PUT`, `PATCH` (JSON Merge Patch) and `DELETE` change the last config file and apply at once.
 
 ```sh
 curl -s http://localhost:9000/_mock/users -H 'content-type: application/json' -d '{"id": "carol", "claims": {"email": "carol@example.com"}}'
+curl -s http://localhost:9000/_mock/clients -H 'content-type: application/json' -d '{"key": "worker", "client_secret": "local", "grant_types": ["client_credentials"]}'
 ```
 
-- Without a server or `curl`: `fauxidc users list|get|create|update [--merge]|delete`, for example `fauxidc users create carol --claims '{"email": "carol@example.com"}'`.
-- 409 (exit 1): no config file is loaded, the id exists, or an env var, inline config or an earlier file sets the User.
+- Without a server: `fauxidc users list|get|create|update [--merge]|delete` (for example `fauxidc users create carol --claims '{"email": "carol@example.com"}'`), and `fauxidc clients ...` with `--from <file|->` for the Client body.
+- A Client path uses the config key, not the `client_id`. Reads show `client_secret` as `"***"`. Lenient-registered Clients show `"lenient": true` and are read-only (409).
+- 409 (exit 1): no config file is loaded, the id exists, or an env var, inline config or an earlier file sets the entry.
 
 ## Read the Request log
 
