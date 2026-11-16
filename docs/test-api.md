@@ -2,9 +2,11 @@
 
 The Test API lives under `/_mock/`. It has no authentication. Anyone who can reach the server can mint tokens,
 so never run fauxidc in production. See [SECURITY.md](../SECURITY.md).
+The [dashboard](#dashboard) at `/_mock/` gives a browser page for every route below.
 
 | Route | Purpose |
 | --- | --- |
+| `GET /_mock/` | The [dashboard](#dashboard). `GET /` and `GET /_mock` redirect to it. |
 | `GET /_mock/health` | Health check: 200 with `{"key":"ready","status":"ok"}`, or `"pending"` until every Issuer has its first key. `fauxidc healthcheck` calls it. |
 | `POST /_mock/{issuer-id}/token` | [Mint tokens](#mint-tokens) without a browser. |
 | `POST /_mock/{issuer-id}/rotate-key` | [Rotate the signing key](#rotate-the-signing-key) of an Issuer. |
@@ -301,3 +303,35 @@ Each entry has `id`, `time` (Unix seconds), `method`, `path`, `query`, `issuer`,
 
 The log stores headers and bodies raw. That includes `Authorization` headers and `client_secret` values.
 A request body over 1 MiB gets 413 while the log is on.
+
+## Dashboard
+
+`GET /_mock/` is an HTML page for the Test API. `GET /` (303) and `GET /_mock` (308) redirect to it.
+An Issuer route at `/` wins over the redirect. The dashboard has no authentication, the same as the Test API.
+A sidebar opens one section at a time. The URL fragment names the section, for example `/_mock/#token`.
+At a narrow width, a select box replaces the sidebar.
+
+| Section | What it does | Route |
+| --- | --- | --- |
+| Issuers | Shows each Issuer with its `iss`, its mode, and links to discovery, JWKS and the debugger. Resets the state of one Issuer. | `DELETE /_mock/state?issuer=` |
+| Issuers: Sign out | A link to `{issuer}/endsession`. It clears the Session and the "Remember me" (Auto-select) cookie of this browser, so the next `/authorize` shows the login page. | `/endsession` |
+| Keys | Shows the algorithm, the active `kid` and the key count from JWKS. Rotates the key, with or without `retire`. | `rotate-key` |
+| Users, Clients | Lists, shows, adds, changes and deletes entries in a JSON editor dialog. | `/_mock/users`, `/_mock/clients` |
+| Mint a token | Mints tokens for a User or a Custom user. A button opens the `id_token` in the debugger. | `POST /_mock/{issuer-id}/token` |
+| Injected failures | Sets a failure for one endpoint, or clears all failures of an Issuer. | `fail-next` |
+| Request log | Shows the log with the Issuer and path filters, and clears it. | `/_mock/requests` |
+| Config | Shows the running config as JSON with sources or as TOML, and reloads the config files. | `/_mock/config`, `POST /_mock/reload` |
+| Reset state | Resets the state of all Issuers or of one Issuer. | `DELETE /_mock/state` |
+
+- The page calls the JSON routes with `fetch`. It sends the same requests as `curl`, so the rules of each route apply.
+  Its requests come from the same origin, so the `Origin` check of the write routes lets them through.
+- An error shows the status and the `error_description` of the answer, for example the 409 of a value from another source, or the `errors` list of a 422 reload.
+- Edit sends only the changed fields as a JSON Merge Patch. A masked secret (`"***"`) is not sent unless you change it, so the secret stays.
+- Lenient-registered Clients are read-only. They show `Lenient · in memory`.
+- The Remember me cookie lives in the browser, on the Issuer path. Only a browser visit to `/endsession` clears it. `DELETE /_mock/state` and the CLI cannot.
+- The signed-out page of `/endsession` links back to the dashboard.
+- The page needs JavaScript (`/_mock/static/dashboard.js`, embedded, no framework). The Issuer links work without it.
+- The page has its own stylesheet, `/_mock/static/dashboard.css`. Light and dark follow the browser `prefers-color-scheme` setting.
+  The design is in [fauxidc-design.pen](fauxidc-design.pen) (pen.dev).
+- The answer has `Cache-Control: no-store`, `X-Frame-Options: DENY` and `Content-Security-Policy: frame-ancestors 'none'`, so another site cannot put the page in a frame.
+- `server.templates_dir` can replace `dashboard.html` and `server.static_dir` can replace `dashboard.js` and `dashboard.css`. See [templates.md](templates.md#dashboardhtml).

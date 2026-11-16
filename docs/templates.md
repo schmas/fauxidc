@@ -1,11 +1,11 @@
 # Templates
 
-fauxidc renders five pages with [minijinja](https://docs.rs/minijinja) (Jinja syntax, HTML autoescape on):
-`login.html`, `error.html`, `signed_out.html`, `debugger.html` and `form_post.html`. The embedded defaults live in `assets/templates/`.
+fauxidc renders six pages with [minijinja](https://docs.rs/minijinja) (Jinja syntax, HTML autoescape on):
+`login.html`, `error.html`, `signed_out.html`, `debugger.html`, `form_post.html` and `dashboard.html`. The embedded defaults live in `assets/templates/`.
 
 ## Overrides
 
-- `server.templates_dir`: a file named `login.html`, `error.html`, `signed_out.html`, `debugger.html` or `form_post.html` in this directory replaces the embedded one.
+- `server.templates_dir`: a file named `login.html`, `error.html`, `signed_out.html`, `debugger.html`, `form_post.html` or `dashboard.html` in this directory replaces the embedded one.
 - `issuer.<id>.login_template`: a file path. It replaces the login page for that issuer only.
 - `server.static_dir`: files here take precedence over the embedded static files, served at `/_mock/static/<path>`.
 
@@ -13,13 +13,15 @@ A missing `login_template` file or a template syntax error stops the server at s
 
 ## Styles
 
-The built-in pages link one stylesheet, `/_mock/static/fauxidc.css` (`{{ static_base|href }}/fauxidc.css` in a template).
+The built-in pages, except the dashboard, link one stylesheet, `/_mock/static/fauxidc.css` (`{{ static_base|href }}/fauxidc.css` in a template).
 It is compiled at dev time with Tailwind CSS v4 and daisyUI v5 and embedded in the binary. The page needs no network.
 Light and dark themes follow the browser `prefers-color-scheme` setting.
 
 A custom template (`templates_dir` or `login_template`) can link the same file and use the classes that the built-in templates use.
 The compiled file has only those classes: it is built from `assets/templates/`, so another Tailwind or daisyUI class has no style.
 For other styles, put your own file in `server.static_dir` and link it.
+
+The dashboard links its own stylesheet, `/_mock/static/dashboard.css`. It is plain CSS without a build step.
 
 `/_mock/static/login.css`, the stylesheet of the old built-in pages, is still served, so old templates that link it keep working.
 
@@ -154,3 +156,28 @@ A decoded JWT has these fields:
 | `signature_note` | string | `valid (kid <kid>, <alg>)`, or the reason the check failed. |
 | `expiry_note` | string | `exp <n>: expires in <s> s`, `exp <n>: expired <s> s ago`, or `no exp`. |
 | `issuer_note` | string | `iss matches this Issuer`, `iss <value> is not this Issuer (<issuer_url>)`, or `no iss`. An exact string comparison. |
+
+### `dashboard.html`
+
+`GET /_mock/` renders this page. It is a new, optional template. The built-in page loads `{{ static_base|href }}/dashboard.css`
+and `{{ static_base|href }}/dashboard.js`. The script finds its forms and buttons by `id` and `data-action`.
+A custom page that loads the script must keep them, or use its own script.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `context_version` | integer | Always `2`. |
+| `issuers` | list of Issuers | Each configured Issuer, by id. |
+| `request_log` | boolean | `false` when `server.request_log_size` is 0. |
+| `static_base` | string | URL prefix for static files, `/_mock/static`. |
+
+An Issuer has these fields. The hrefs are paths on this server.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `id` | string | Id of the Issuer. |
+| `issuer_url` | string | The `iss` of the Issuer for this request. |
+| `lenient` | boolean | `true` in Lenient mode. |
+| `discovery_href` | string | The discovery document. |
+| `jwks_href` | string | The JWKS endpoint. |
+| `debugger_href` | string | The debugger page. |
+| `endsession_href` | string | The `/endsession` endpoint. A browser visit signs out: it clears the Session and the Auto-select cookie. |

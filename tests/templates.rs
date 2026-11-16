@@ -226,7 +226,7 @@ fn template_files() -> Vec<(String, String)> {
             std::fs::read_to_string(&path).unwrap(),
         ));
     }
-    assert_eq!(out.len(), 5);
+    assert_eq!(out.len(), 6);
     out
 }
 
@@ -242,10 +242,13 @@ fn templates_have_no_external_urls() {
 #[test]
 fn templates_link_only_fauxidc_css() {
     for (name, text) in template_files() {
-        assert!(
-            text.contains("{{ static_base|href }}/fauxidc.css"),
-            "{name}"
-        );
+        // The dashboard has its own stylesheet (docs/fauxidc-design.pen).
+        let css = if name.ends_with("dashboard.html") {
+            "{{ static_base|href }}/dashboard.css"
+        } else {
+            "{{ static_base|href }}/fauxidc.css"
+        };
+        assert!(text.contains(css), "{name}");
         assert!(!text.contains("login.css"), "{name}");
     }
 }

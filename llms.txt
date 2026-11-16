@@ -7,7 +7,7 @@
 - [Start in 60 seconds](README.md#start-in-60-seconds): Docker, the release binary, the discovery URL and a first token
 - [Recipes](README.md#recipes): SPA with PKCE, backend with a client secret, machine-to-machine, tokens in tests, random host ports, provider outages, agents
 - [Configuration summary](README.md#configuration): config sources and the config command
-- [Test API summary](README.md#test-api): the `/_mock/` routes
+- [Test API summary](README.md#test-api): the `/_mock/` routes and the dashboard
 - [Templates summary](README.md#templates): custom pages and the Custom user template
 - [Debugger summary](README.md#debugger): decode a JWT or run a login flow
 - [TLS summary](README.md#tls): the optional `tls` feature
@@ -15,7 +15,7 @@
 - [Conformance](README.md#conformance): the OpenID conformance suite in CI
 - [Not supported](README.md#not-supported): non-goals and current limits
 - [Configuration reference](docs/configuration.md): sources, Zero config, Docker, examples, Strict and Lenient mode, signing keys
-- [Test API reference](docs/test-api.md): token minting, key rotation, Injected failures, Users, Clients, config view, state reset, config reload, Request log
+- [Test API reference](docs/test-api.md): token minting, key rotation, Injected failures, Users, Clients, config view, state reset, config reload, Request log, the dashboard at `/_mock/`
 - [Testcontainers guide](docs/testcontainers.md): `GenericContainer` setup, wait strategy, random host port, Spring Boot, tokens from Java
 - [Features reference](docs/features.md): Sessions, hot reload, debugger, TLS, token exchange, `private_key_jwt`
 - [Templates reference](docs/templates.md): the template context (version 2) and the stylesheet

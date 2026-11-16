@@ -17,6 +17,7 @@ use crate::clients_api;
 use crate::config::Endpoint;
 use crate::config_view;
 use crate::cors::client_cors_layer;
+use crate::dashboard;
 use crate::debugger;
 use crate::discovery;
 use crate::endsession;
@@ -132,11 +133,20 @@ pub fn build_router(state: Arc<AppState>) -> Router {
             "/_mock/health",
             get(health::health).with_state(state.clone()),
         )
+        .merge(dashboard_routes(&state))
         .layer(axum::middleware::from_fn_with_state(
             state,
             request_log::record,
         ))
         .layer(trace)
+}
+
+/// `/_mock/` (the dashboard), `/_mock` and the fallback that redirects `/` to the dashboard.
+fn dashboard_routes(state: &Arc<AppState>) -> Router {
+    Router::new()
+        .route("/_mock/", get(dashboard::page).with_state(state.clone()))
+        .route("/_mock", get(dashboard::to_dashboard))
+        .fallback(dashboard::fallback)
 }
 
 /// The routes of one Issuer, relative to its path.

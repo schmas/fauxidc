@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Dashboard · fauxidc</title>
+<link rel="stylesheet" href="{{ static_base|href }}/dashboard.css">
+<script src="{{ static_base|href }}/dashboard.js" defer></script>
+</head>
+<body>
+<svg hidden>
+<symbol id="i-server" viewBox="0 0 24 24"><rect width="20" height="8" x="2" y="2" rx="2"/><rect width="20" height="8" x="2" y="14" rx="2"/><path d="M6 6h.01M6 18h.01"/></symbol>
+<symbol id="i-key" viewBox="0 0 24 24"><path d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"/><circle cx="16.5" cy="7.5" r=".5"/></symbol>
+<symbol id="i-users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+<symbol id="i-app" viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M10 4v4M2 8h20M6 4v4"/></symbol>
+<symbol id="i-file" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4M10 13H8M16 17H8M16 13h-2"/></symbol>
+<symbol id="i-ticket" viewBox="0 0 24 24"><path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"/><path d="M13 5v2M13 17v2M13 11v2"/></symbol>
+<symbol id="i-zap" viewBox="0 0 24 24"><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/></symbol>
+<symbol id="i-list" viewBox="0 0 24 24"><path d="M3 12h.01M3 18h.01M3 6h.01M8 12h13M8 18h13M8 6h13"/></symbol>
+<symbol id="i-reset" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></symbol>
+<symbol id="i-rotate" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></symbol>
+<symbol id="i-refresh" viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></symbol>
+<symbol id="i-plus" viewBox="0 0 24 24"><path d="M5 12h14M12 5v14"/></symbol>
+<symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+<symbol id="i-pencil" viewBox="0 0 24 24"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></symbol>
+<symbol id="i-trash" viewBox="0 0 24 24"><path d="M3 6h18M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2M10 11v6M14 11v6"/></symbol>
+<symbol id="i-eye" viewBox="0 0 24 24"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/></symbol>
+<symbol id="i-logout" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></symbol>
+<symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
+<symbol id="i-link" viewBox="0 0 24 24"><path d="M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></symbol>
+<symbol id="i-chevron" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+<symbol id="i-warn" viewBox="0 0 24 24"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4M12 17h.01"/></symbol>
+<symbol id="i-alert" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></symbol>
+<symbol id="i-check" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></symbol>
+<symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></symbol>
+</svg>
+{% macro icon(name, cls="ic") %}<svg class="{{ cls }}" aria-hidden="true"><use href="#i-{{ name }}"/></svg>{% endmacro %}
+{% macro issuer_options(list, all="") %}{% if all %}<option value="">{{ all }}</option>{% endif %}{% for i in list %}<option value="{{ i.id }}">{{ i.id }}</option>{% endfor %}{% endmacro %}
+{% set nav = [["Overview", [["issuers", "Issuers", "server"], ["keys", "Keys", "key"]]], ["Config", [["users", "Users", "users"], ["clients", "Clients", "app"], ["config", "Config", "file"]]], ["Testing", [["token", "Tokens", "ticket"], ["failures", "Failures", "zap"], ["requests", "Request log", "list"], ["reset", "Reset state", "reset"]]]] %}
+<div class="app">
+<aside class="sidebar">
+<div class="sidebar-head"><span class="brand">{{ icon("key") }}fauxidc</span></div>
+<nav aria-label="Sections">
+{% for section in nav %}<div class="nav-title">{{ section[0] }}</div>
+{% for item in section[1] %}<a class="nav-item" href="#{{ item[0] }}" data-view="{{ item[0] }}"><span>{{ item[1] }}</span>{{ icon(item[2], "ic ic-lg") }}</a>
+{% endfor %}{% endfor %}</nav>
+<div class="sidebar-foot"><div class="foot-text"><strong>Mock server</strong><small>Not for production</small></div>{{ icon("warn", "ic ic-lg") }}</div>
+</aside>
+<div class="topbar">
+<div class="row"><span class="brand">{{ icon("key") }}fauxidc</span><span class="label label-warning">Mock server</span></div>
+<label class="field">Section<select id="nav-select" class="select">{% for section in nav %}{% for item in section[1] %}<option value="{{ item[0] }}">{{ item[1] }}</option>{% endfor %}{% endfor %}</select></label>
+</div>
+<main class="main">
+<noscript><div class="alert alert-warning">{{ icon("warn") }}<div>The dashboard needs JavaScript for every action. The Issuer links work without it.</div></div></noscript>
+
+<section id="issuers" class="view">
+<div class="page-head"><div><h1>Issuers</h1><p class="muted">Each Issuer, its iss and its endpoints. Sign out clears the Session and the Remember me cookie in this browser.</p></div>
+<div class="row"><button type="button" class="btn btn-outline" data-action="reload">{{ icon("refresh") }}Reload config</button></div></div>
+<div id="issuers-out" class="out" aria-live="polite"></div>
+<div class="table-wrap"><table>
+<thead><tr><th>Issuer</th><th>iss</th><th>Mode</th><th>Endpoints</th><th><span hidden>Actions</span></th></tr></thead>
+<tbody>{% for i in issuers %}<tr data-issuer-row="{{ i.id }}">
+<td class="mono">{{ i.id }}</td><td class="mono">{{ i.issuer_url }}</td>
+<td>{% if i.lenient %}<span class="label label-warning">Lenient</span>{% else %}<span class="label label-success">Strict</span>{% endif %}</td>
+<td class="links"><a href="{{ i.discovery_href|href }}">Discovery</a><a href="{{ i.jwks_href|href }}" data-jwks>JWKS</a><a href="{{ i.debugger_href|href }}" data-debugger>Debugger</a></td>
+<td class="actions"><div class="row"><a class="btn btn-outline" href="{{ i.endsession_href|href }}" title="Clears the Session and the Remember me cookie in this browser">{{ icon("logout") }}Sign out</a><button type="button" class="btn btn-ghost" data-action="reset-issuer" data-issuer="{{ i.id }}">{{ icon("reset") }}Reset state</button></div></td>
+</tr>
+{% endfor %}</tbody></table></div>
+<div class="alert">{{ icon("info") }}<div><strong>Sign out works in this browser only</strong><span>The Remember me cookie lives on the Issuer path. Sign out opens <code>{issuer}/endsession</code>, which clears it and the Session. <code>DELETE /_mock/state</code> and the CLI cannot clear it.</span></div></div>
+</section>
+
+<section id="keys" class="view">
+<div class="page-head"><div><h1>Keys</h1><p class="muted">Rotate the signing key of an Issuer. JWKS keeps the older keys unless you retire them. Rotated keys live in memory only.</p></div></div>
+<div id="keys-out" class="out" aria-live="polite"></div>
+<div class="table-wrap"><table>
+<thead><tr><th>Issuer</th><th>Algorithm</th><th>Active kid</th><th>Keys in JWKS</th><th><span hidden>Actions</span></th></tr></thead>
+<tbody>{% for i in issuers %}<tr data-key-row="{{ i.id }}" data-jwks-href="{{ i.jwks_href|href }}">
+<td class="mono">{{ i.id }}</td><td data-alg></td><td class="mono" data-kid></td><td data-count></td>
+<td class="actions"><div class="row"><button type="button" class="btn btn-outline" data-action="rotate" data-issuer="{{ i.id }}">{{ icon("rotate") }}Rotate key</button><button type="button" class="btn btn-ghost" data-action="retire" data-issuer="{{ i.id }}">{{ icon("key") }}Rotate and retire</button></div></td>
+</tr>
+{% endfor %}</tbody></table></div>
+</section>
+
+{% macro entities(id, title, noun, desc, columns) %}<section id="{{ id }}" class="view">
+<div class="page-head"><div><h1>{{ title }}</h1><p class="muted">{{ desc }}</p></div>
+<div class="row"><button type="button" class="btn btn-outline" data-action="list" data-kind="{{ id }}">{{ icon("refresh") }}Refresh</button><button type="button" class="btn" data-action="new" data-kind="{{ id }}">{{ icon("plus") }}Add {{ noun }}</button></div></div>
+<div id="{{ id }}-out" class="out" aria-live="polite"></div>
+<div class="table-wrap"><table>
+<thead><tr>{% for c in columns %}<th>{{ c }}</th>{% endfor %}<th><span hidden>Actions</span></th></tr></thead>
+<tbody id="{{ id }}-list"></tbody></table></div>
+</section>
+{% endmacro %}{{ entities("users", "Users", "User", "The [user.<id>] tables of the config. A change goes to the last config file and applies at once.", ["Id", "Label", "Email", "Claims"]) }}
+{{ entities("clients", "Clients", "Client", "The [client.<key>] tables of the config. Secrets show as ***. Lenient-registered Clients live in memory and are read-only.", ["Key", "client_id", "Grant types", "Secret", "Mode"]) }}
+
+<section id="config" class="view">
+<div class="page-head"><div><h1>Config</h1><p class="muted">The running config, the source of each value, and a reload of the config files. Secrets show as ***.</p></div>
+<div class="row"><button type="button" class="btn" data-action="reload">{{ icon("refresh") }}Reload config files</button></div></div>
+<div id="config-out" class="out" aria-live="polite"></div>
+<div class="tabs" role="tablist"><button type="button" class="tab" role="tab" aria-selected="true" data-action="config-json">JSON with sources</button><button type="button" class="tab" role="tab" aria-selected="false" data-action="config-toml">TOML</button></div>
+<pre id="config-view" class="code"></pre>
+</section>
+
+<section id="token" class="view">
+<div class="page-head"><div><h1>Mint a token</h1><p class="muted">Issue tokens without a browser, for a User or a Custom user. The response has the same shape as <code>/token</code>.</p></div></div>
+<div class="columns">
+<form id="token-form" class="stack">
+<label class="field">Issuer<select name="issuer" class="select" required>{{ issuer_options(issuers) }}</select></label>
+<label class="field">User<select name="user" class="select" data-users><option value="__custom__">Custom user (sub)</option></select></label>
+<label class="field"><span>Custom user sub <small>(only for Custom user)</small></span><input name="sub" class="input mono" placeholder="carol" autocomplete="off" spellcheck="false"></label>
+<label class="field">Client id<input name="client_id" class="input mono" placeholder="test-api" autocomplete="off" spellcheck="false"></label>
+<label class="field">Scope<input name="scope" class="input mono" placeholder="openid profile email" autocomplete="off" spellcheck="false"></label>
+<label class="field"><span>Audience <small>(optional)</small></span><input name="audience" class="input mono" autocomplete="off" spellcheck="false"></label>
+<label class="field">Expires in (seconds)<input name="expires_in" type="number" step="1" class="input mono" placeholder="3600"></label>
+<label class="field"><span>Claims <small>(JSON, optional)</small></span><textarea name="claims" rows="3" class="textarea" placeholder='{"email": "carol@example.test"}' spellcheck="false"></textarea></label>
+<div class="row"><button type="submit" class="btn">{{ icon("ticket") }}Mint token</button></div>
+</form>
+<div id="token-out" class="out" aria-live="polite"></div>
+</div>
+</section>
+
+<section id="failures" class="view">
+<div class="page-head"><div><h1>Injected failures</h1><p class="muted">Make the next requests to one endpoint fail or slow down. A new failure for the same endpoint replaces the old one.</p></div></div>
+<form id="fail-form" class="card">
+<div class="fields">
+<label class="field">Issuer<select name="issuer" class="select" required>{{ issuer_options(issuers) }}</select></label>
+<label class="field">Endpoint<select name="endpoint" class="select">{% for e in ["token", "authorize", "userinfo", "jwks", "endsession", "introspect", "revoke", "debugger", "discovery"] %}<option>{{ e }}</option>{% endfor %}</select></label>
+<label class="field">Status<input name="status" type="number" min="400" max="599" placeholder="500" class="input mono"></label>
+<label class="field">Error<input name="error" placeholder="server_error" class="input mono" autocomplete="off" spellcheck="false"></label>
+<label class="field">Count<input name="count" type="number" min="0" placeholder="1" class="input mono"></label>
+<label class="field">Delay (ms)<input name="delay_ms" type="number" min="0" max="60000" placeholder="0" class="input mono"></label>
+</div>
+<div class="row"><button type="submit" class="btn">{{ icon("zap") }}Set failure</button><button type="button" class="btn btn-outline" data-action="fail-clear">{{ icon("x") }}Clear the failures of this Issuer</button></div>
+</form>
+<div id="fail-out" class="out" aria-live="polite"></div>
+</section>
+
+<section id="requests" class="view">
+<div class="page-head"><div><h1>Request log</h1><p class="muted">The raw requests that fauxidc received, newest first. Headers and bodies are raw, secrets included. <code>/_mock/*</code> requests are not logged.</p></div>
+<div class="row"><button type="button" class="btn btn-outline" data-action="log-clear">{{ icon("trash") }}Clear the log</button></div></div>
+{% if not request_log %}<div class="alert alert-warning">{{ icon("warn") }}<div>The Request log is off (<code>server.request_log_size = 0</code>).</div></div>
+{% endif %}<form id="log-form" class="row row-end">
+<label class="field">Issuer<select name="issuer" class="select">{{ issuer_options(issuers, "All Issuers") }}</select></label>
+<label class="field"><span>Path <small>(exact, optional)</small></span><input name="path" class="input mono" placeholder="/generic/token" autocomplete="off" spellcheck="false"></label>
+<button type="submit" class="btn">{{ icon("search") }}Show</button>
+</form>
+<div id="log-out" class="out" aria-live="polite"></div>
+<div class="table-wrap"><table>
+<thead><tr><th><span hidden>Details</span></th><th>Status</th><th>Method</th><th>Path</th><th>Issuer</th><th>Time</th></tr></thead>
+<tbody id="log-list"></tbody></table></div>
+</section>
+
+<section id="reset" class="view">
+<div class="page-head"><div><h1>Reset state</h1><p class="muted">Clear the runtime state without a restart, for example between two tests. Config and signing keys do not change.</p></div></div>
+<form id="reset-form" class="card card-narrow">
+<label class="field"><span>Issuer <small>(?issuer=)</small></span><select name="issuer" class="select">{{ issuer_options(issuers, "All Issuers") }}</select></label>
+<p class="muted">All Issuers: codes, Sessions, used refresh tokens, revocations, client assertion jtis, Lenient-registered Clients, debugger flows, Injected failures, the JWKS cache and the Request log.</p>
+<p class="muted">One Issuer: only the data with that Issuer id. The jti lists, the revocations and the JWKS cache stay.</p>
+<div class="row"><button type="submit" class="btn btn-danger">{{ icon("reset") }}Reset state</button></div>
+</form>
+<div id="reset-out" class="out" aria-live="polite"></div>
+<div class="alert alert-warning">{{ icon("warn") }}<div><strong>The Remember me cookie is browser state</strong><span>A reset does not clear it. Use Sign out on the <a href="#issuers">Issuers</a> page; it opens <code>{issuer}/endsession</code> in this browser.</span></div></div>
+</section>
+</main>
+</div>
+
+<dialog id="editor" aria-labelledby="editor-title">
+<form id="editor-form">
+<div><h2 id="editor-title">Edit</h2><p class="muted" data-help></p></div>
+<div id="editor-out" class="out" aria-live="polite"></div>
+<label class="field"><span data-label>JSON</span><textarea id="editor-json" rows="14" class="textarea" spellcheck="false"></textarea></label>
+<div class="dialog-actions"><button type="submit" class="btn" data-save>Save</button><button type="button" class="btn btn-outline" data-action="cancel">Cancel</button></div>
+</form>
+</dialog>
+</body>
+</html>

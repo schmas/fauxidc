@@ -18,6 +18,7 @@ pub mod config_api;
 pub mod config_view;
 pub mod cookies;
 pub mod cors;
+pub mod dashboard;
 pub mod debugger;
 pub mod discovery;
 pub mod endsession;
