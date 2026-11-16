@@ -16,6 +16,7 @@ so never run fauxidc in production. See [SECURITY.md](../SECURITY.md).
 | `PUT /_mock/users/{user-id}` | Replace a User in the config file. |
 | `PATCH /_mock/users/{user-id}` | Merge changes into a User (JSON Merge Patch). |
 | `DELETE /_mock/users/{user-id}` | Remove a User from the config file. |
+| `DELETE /_mock/state` | [Reset the runtime state](#reset-the-runtime-state) of all Issuers or one Issuer. |
 | `GET /_mock/requests` | Read the [Request log](#request-log). |
 | `DELETE /_mock/requests` | Clear the Request log. |
 
@@ -145,6 +146,28 @@ fauxidc users delete carol
 They read the same config sources as the server (`--config`, `FAUXIDC_CONFIG`, `./fauxidc.toml`) and follow the same rules.
 `update` without `--merge` replaces the User. A running server applies the change with its hot reload.
 Exit codes: 0 on success, 2 on invalid input or config, 1 on a conflict, an unknown User or a write error.
+
+## Reset the runtime state
+
+`DELETE /_mock/state` clears the runtime state without a restart, for example between two tests that share one fauxidc process.
+It returns 204.
+
+It clears codes, Sessions, used refresh token `jti`s, the revocation list, used client assertion `jti`s,
+Lenient-registered Clients, debugger flows, Injected failures, the Client JWKS cache and the Request log.
+Config and signing keys do not change.
+
+`?issuer=<id>` clears only the data of one Issuer: codes, Sessions, Lenient-registered Clients, debugger flows,
+Injected failures and the Request log entries of that Issuer. The `jti` lists, the revocation list and the JWKS cache
+have no Issuer id, so they stay. An unknown Issuer id gives 404. An unknown query parameter gives 400.
+
+Refresh tokens and access tokens are signed JWTs, not stored state. They stay valid after a reset until they expire.
+A reset also forgets revocations and used refresh tokens, so a revoked or used refresh token works again.
+The "Remember me" (Auto-select) cookie lives in the browser. A reset does not clear it; open `{issuer}/endsession` in the browser.
+
+```sh
+curl -X DELETE localhost:9000/_mock/state
+curl -X DELETE 'localhost:9000/_mock/state?issuer=auth0'
+```
 
 ## Request log
 

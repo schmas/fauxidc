@@ -141,6 +141,42 @@ pub async fn rotate_key(
     }
 }
 
+/// The query of `DELETE /_mock/state`.
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ResetQuery {
+    /// Clear only the state of this Issuer.
+    pub issuer: Option<String>,
+}
+
+/// `DELETE /_mock/state[?issuer=<id>]`: clears the runtime state ([`Store::reset`]) and the
+/// Request log. Config and signing keys do not change. 204; 404 for an unknown Issuer id;
+/// 400 for an unknown query parameter.
+///
+/// [`Store::reset`]: crate::state::Store::reset
+pub async fn reset_state(
+    State(state): State<Arc<AppState>>,
+    query: Result<Query<ResetQuery>, QueryRejection>,
+) -> Response {
+    let Query(q) = match query {
+        Ok(q) => q,
+        Err(rejection) => {
+            return OAuthError::json("invalid_request", format!("invalid query: {rejection}"))
+                .into_response();
+        }
+    };
+    let issuer = q.issuer.as_deref();
+    if let Some(id) = issuer
+        && !state.config.issuer.contains_key(id)
+    {
+        return unknown_issuer(id);
+    }
+    state.store.reset(issuer);
+    state.request_log.clear_issuer(issuer);
+    tracing::info!(issuer = issuer.unwrap_or("*"), "runtime state reset");
+    StatusCode::NO_CONTENT.into_response()
+}
+
 /// `POST /_mock/{issuer_id}/token`.
 pub async fn issue(
     State(state): State<Arc<AppState>>,

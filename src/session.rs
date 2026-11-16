@@ -61,6 +61,14 @@ impl SessionStore {
     }
 
     /// Deletes the Session for this cookie value if it belongs to `issuer_id`.
+    /// Removes every Session, or only the Sessions of `issuer_id`.
+    pub fn clear(&self, issuer_id: Option<&str>) {
+        self.sessions
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .retain(|_, s| issuer_id.is_some_and(|id| s.issuer_id != id));
+    }
+
     pub fn remove(&self, issuer_id: &str, value: &str) {
         let mut sessions = self.sessions.lock().unwrap_or_else(PoisonError::into_inner);
         if sessions

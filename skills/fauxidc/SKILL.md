@@ -156,6 +156,7 @@ curl -s -X DELETE http://localhost:9000/_mock/requests
 Each entry has `id`, `time`, `method`, `path`, `query`, `issuer`, `headers`, `body` and `status`.
 Use it to see what the app under test really sent, for example a wrong `redirect_uri` or a missing `code_verifier`.
 The log holds raw secrets (`Authorization` headers, `client_secret` values).
+Between tests, `curl -s -X DELETE http://localhost:9000/_mock/state` clears codes, Sessions, revocations, Injected failures and the log (`?issuer=<id>` for one Issuer).
 
 ## Use /debugger
 

@@ -320,6 +320,7 @@ CORS (M2) on `/token`, `/userinfo` and `/revoke`: allowed origins come from the 
 ## 11. Runtime state
 
 - In memory: codes (single use, TTL), Sessions, used refresh token `jti`s, the revocation list, the Request log, Injected failures, Lenient-registered Clients. All of it resets on restart.
+- `DELETE /_mock/state` resets it without a restart: all of the above, used client assertion `jti`s, debugger flows and the Client JWKS cache. `?issuer=<id>` resets only the data that has that Issuer id. Config and keys do not change.
 - Durable across restarts: refresh tokens and access tokens, while the signing key stays the same.
 - Sessions (M3): one cookie per Issuer. `prompt=none` with a Session returns a code. Without one, it redirects with `login_required`. `prompt=login` always shows the page. `max_age` is checked against `auth_time`.
 - Hot reload (M3): the mock polls config file mtimes every 1 s, applies a change when two polls in a row see the same new file state, and also reloads on SIGHUP. Env and inline config change only at restart. If the new config is invalid, the mock keeps the old one and logs the error. In-flight codes, Sessions and refresh tokens stay valid. A Session for a removed User fails at its next use. A key change needs a restart, and the mock logs a warning.

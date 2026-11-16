@@ -7,7 +7,7 @@ use axum::{
     extract::{Path, State},
     http::HeaderMap,
     response::{IntoResponse, Response},
-    routing::{MethodRouter, get, post},
+    routing::{MethodRouter, delete, get, post},
 };
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::trace::{DefaultOnResponse, TraceLayer};
@@ -93,6 +93,10 @@ pub fn build_router(state: Arc<AppState>) -> Router {
                 .patch(users_api::merge)
                 .delete(users_api::remove)
                 .with_state(state.clone()),
+        )
+        .route(
+            "/_mock/state",
+            delete(test_api::reset_state).with_state(state.clone()),
         )
         .route(
             "/_mock/requests",
