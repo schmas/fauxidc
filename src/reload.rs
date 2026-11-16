@@ -5,7 +5,7 @@
 //! with. See ADR 0004.
 
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::{Arc, Mutex, PoisonError, Weak};
 use std::time::{Duration, SystemTime};
 
 use arc_swap::ArcSwap;
@@ -16,7 +16,8 @@ use axum::{
 };
 use tower::ServiceExt;
 
-use crate::config::{Config, LoadInputs, SourceMap, load, validate};
+use crate::config::edit::{Edit, EditError};
+use crate::config::{Config, LoadInputs, Loaded, SourceMap, load, validate};
 use crate::error::{ConfigErrors, StartError};
 use crate::keys::restart_warning;
 use crate::router::build_router;
@@ -105,6 +106,93 @@ impl ReloadHandle {
             .last_loaded
             .lock()
             .unwrap_or_else(PoisonError::into_inner) = Some(config);
+    }
+}
+
+impl ReloadHandle {
+    /// A handle that does not keep the server state alive. [`AppState`] holds it through
+    /// [`ConfigWriter`], so a strong handle would be a reference cycle.
+    pub fn downgrade(&self) -> WeakReloadHandle {
+        WeakReloadHandle(Arc::downgrade(&self.live))
+    }
+}
+
+/// A [`ReloadHandle`] that does not keep the server alive.
+#[derive(Clone)]
+pub struct WeakReloadHandle(Weak<Live>);
+
+impl WeakReloadHandle {
+    /// The handle, while the server runs.
+    pub fn upgrade(&self) -> Option<ReloadHandle> {
+        self.0.upgrade().map(|live| ReloadHandle { live })
+    }
+}
+
+/// Why a config write failed.
+#[derive(Debug, thiserror::Error)]
+pub enum WriteError {
+    /// The edit was refused. The file did not change.
+    #[error(transparent)]
+    Edit(#[from] EditError),
+    /// The file could not be written. It did not change.
+    #[error("cannot write {}: {error}", .path.display())]
+    Io {
+        path: PathBuf,
+        error: std::io::Error,
+    },
+    /// The new config did not apply. The old file text is back.
+    #[error("the change did not apply; the file is unchanged: {0}")]
+    Reload(ReloadError),
+    /// The server stopped.
+    #[error("the server is stopping")]
+    Stopped,
+}
+
+/// Writes config file edits for the Test API, then applies them at once (ADR 0008).
+///
+/// Writes run one at a time. Env and inline values come from `inputs`, the startup snapshot,
+/// the same as for a reload.
+pub struct ConfigWriter {
+    inputs: LoadInputs,
+    handle: WeakReloadHandle,
+    writing: Mutex<()>,
+}
+
+impl ConfigWriter {
+    pub fn new(inputs: LoadInputs, handle: WeakReloadHandle) -> Self {
+        ConfigWriter {
+            inputs,
+            handle,
+            writing: Mutex::new(()),
+        }
+    }
+
+    /// Prepares an edit with `prepare`, writes it and applies the new config. If the apply
+    /// fails, the old file text is written back. Returns the new config.
+    pub fn write(
+        &self,
+        prepare: impl FnOnce(&LoadInputs) -> Result<Edit, EditError>,
+    ) -> Result<Loaded, WriteError> {
+        let _writing = self.writing.lock().unwrap_or_else(PoisonError::into_inner);
+        let handle = self.handle.upgrade().ok_or(WriteError::Stopped)?;
+        let edit = prepare(&self.inputs)?;
+        edit.write().map_err(|error| WriteError::Io {
+            path: edit.path.clone(),
+            error,
+        })?;
+        match handle.apply(edit.loaded.config.clone()) {
+            Ok(_) => {
+                handle.set_last_loaded(edit.loaded.config.clone());
+                tracing::info!(file = %edit.path.display(), "config file written");
+                Ok(edit.loaded)
+            }
+            Err(error) => {
+                if let Err(e) = edit.restore() {
+                    tracing::error!(file = %edit.path.display(), "cannot restore the config file: {e}");
+                }
+                Err(WriteError::Reload(error))
+            }
+        }
     }
 }
 

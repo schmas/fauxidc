@@ -1,5 +1,6 @@
 pub mod types;
 pub use types::*;
+pub mod edit;
 pub mod layers;
 pub mod load;
 pub mod merge;
@@ -8,8 +9,8 @@ pub mod show;
 pub mod source;
 pub mod validate;
 
-pub use layers::{env_layer, file_layer, flag_layer, inline_layer};
-pub use load::{CliOverrides, LoadInputs, Loaded, load, load_str};
+pub use layers::{env_layer, file_layer, file_layer_text, flag_layer, inline_layer};
+pub use load::{CliOverrides, LoadInputs, Loaded, load, load_str, load_with_file_text};
 pub use merge::deep_merge;
 pub use schema::{SCHEMA_URL, schema_json};
 pub use show::render;

@@ -174,14 +174,9 @@ async fn m3_exit() {
     let mut config = loaded.config.clone();
     config.server.bind = "127.0.0.1".into();
     config.server.port = 0;
-    let server = Server::start_with(
-        config,
-        StartOptions {
-            key_pem: Some(KEY.to_pem().into()),
-        },
-    )
-    .await
-    .unwrap();
+    let server = Server::start_with(config, StartOptions::with_key_pem(KEY.to_pem().to_string()))
+        .await
+        .unwrap();
     let addr = server.local_addr();
     let _watcher = watch_files(
         server.reload_handle(),

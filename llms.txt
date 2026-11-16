@@ -15,7 +15,7 @@
 - [Conformance](README.md#conformance): the OpenID conformance suite in CI
 - [Not supported](README.md#not-supported): non-goals and current limits
 - [Configuration reference](docs/configuration.md): sources, Zero config, Docker, examples, Strict and Lenient mode, signing keys
-- [Test API reference](docs/test-api.md): token minting, key rotation, Injected failures, Request log
+- [Test API reference](docs/test-api.md): token minting, key rotation, Injected failures, Users, Request log
 - [Testcontainers guide](docs/testcontainers.md): `GenericContainer` setup, wait strategy, random host port, Spring Boot, tokens from Java
 - [Features reference](docs/features.md): Sessions, hot reload, debugger, TLS, token exchange, `private_key_jwt`
 - [Templates reference](docs/templates.md): the template context (version 2) and the stylesheet

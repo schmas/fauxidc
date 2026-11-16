@@ -47,9 +47,7 @@ async fn code_flow_with_pkce_and_nonce() {
     cfg.server.port = 0;
     let srv = fauxidc::Server::start_with(
         cfg,
-        fauxidc::StartOptions {
-            key_pem: Some(KEY.to_pem().into()),
-        },
+        fauxidc::StartOptions::with_key_pem(KEY.to_pem().to_string()),
     )
     .await
     .unwrap();

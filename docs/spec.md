@@ -19,7 +19,7 @@ Targets:
 Non-goals:
 
 - Production use. A fauxidc Issuer must never be trusted in production.
-- Provider management APIs (Auth0 Management API, Okta Users API).
+- Provider management APIs (Auth0 Management API, Okta Users API). fauxidc does not copy their routes or bodies. Its own Test API can list and change the Users of the config file (5.9); that is a fauxidc API, not a provider API.
 - RFC 7591 dynamic client registration, RFC 9126 PAR, RFC 9449 DPoP, RFC 8628 device flow, front-channel and back-channel logout.
 - Implicit grant and password grant. If users ask, the password grant can be added later behind `enable_password_grant`.
 
@@ -191,6 +191,17 @@ If no file, no inline config and no `FAUXIDC__*` vars are given:
 
 Our own merge, about 200 lines. Parse each source to `toml::Value`, deep-merge, keep a source map, then deserialize with `deny_unknown_fields`. `figment` (no release since 2024-05) and `config` (lowercases keys, no per-value source) do not meet 5.3 and 5.7. ADR required (section 13).
 
+### 5.9 Config writes
+
+The Test API (`/_mock/users`) and `fauxidc users` change Users in the config file (ADR 0008):
+
+- The write target is the last config file (5.1, source 2). With no file, a write fails: 409, or exit code 1.
+- A write to an entry fails if any value of the entry comes from another source (an earlier file, inline config or an env var). The error names the source.
+- The file keeps its comments and formatting (`toml_edit`). The new config is loaded and checked before the file changes. On an error the file does not change.
+- The write is atomic: a temporary file in the same directory, then a rename.
+- On the server, the change applies at once, without the file poller. If it does not apply, the old file text is written back.
+- The CLI needs no running server. A running server applies the change with its hot reload.
+
 ## 6. Clients and checks
 
 ### 6.1 Strict mode (default)
@@ -318,6 +329,7 @@ CORS (M2) on `/token`, `/userinfo` and `/revoke`: allowed origins come from the 
 ### 12.1 CLI
 
 - `fauxidc` (serve), `fauxidc config [--check]`, `fauxidc healthcheck [--url]`.
+- `fauxidc users list|get|create|update|delete`: read and change the Users of the last config file (5.9). Exit 2 on invalid input or config, 1 on a conflict.
 - Global flags: `--config`, `--port`, `--bind`, `--log-format`, `--issuer-from-host`.
 - `clap` derive.
 

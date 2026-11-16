@@ -1,7 +1,7 @@
 //! Shared application state and the per-issuer request context.
 
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::{Arc, Mutex, OnceLock, PoisonError};
 
 use axum::http::HeaderMap;
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
@@ -15,6 +15,7 @@ use crate::failures::Injected;
 use crate::issuer::{effective_issuer, endpoint_base};
 use crate::jwks_fetch::CACHE_TTL_SECS;
 use crate::keys::{KeyHandle, KeySet, Keyring};
+use crate::reload::ConfigWriter;
 use crate::reload::restart_only_changes;
 use crate::request_log::RequestLog;
 use crate::session::SessionStore;
@@ -292,6 +293,9 @@ pub struct AppState {
     pub request_log: Arc<RequestLog>,
     /// The clock of `server.fixed_time` (ADR 0007). A reload builds it again.
     pub clock: Clock,
+    /// Writes config file edits for the Test API (ADR 0008). Shared by all versions. Empty when
+    /// the server was started without its load inputs (the library API).
+    pub config_writer: Arc<OnceLock<ConfigWriter>>,
 }
 
 /// The clock of `config`. An invalid `server.fixed_time` is a config error.
@@ -333,6 +337,7 @@ impl AppState {
             templates,
             request_log,
             clock,
+            config_writer: Arc::new(OnceLock::new()),
         })
     }
 
@@ -364,6 +369,7 @@ impl AppState {
                 templates,
                 request_log: self.request_log.clone(),
                 clock,
+                config_writer: self.config_writer.clone(),
             },
             warnings,
         ))

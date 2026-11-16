@@ -45,5 +45,8 @@ pub mod token_endpoint;
 pub mod token_exchange;
 pub mod tokens;
 pub mod userinfo;
+pub mod users;
+pub mod users_api;
+pub mod users_cli;
 
 pub use server::{RunningServer, Server, StartOptions};

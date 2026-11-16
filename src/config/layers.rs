@@ -14,6 +14,20 @@ use crate::error::{ConfigError, ConfigErrors};
 /// The file is checked against [`Config`] for unknown keys and wrong types.
 /// Each leaf records the line of its key.
 pub fn file_layer(path: &Path) -> Result<Layer, ConfigError> {
+    let text = std::fs::read_to_string(path).map_err(|e| ConfigError {
+        origin: Source::File {
+            path: path.to_path_buf(),
+            line: None,
+        },
+        message: format!("cannot read file: {e}"),
+    })?;
+    file_layer_text(path, &text)
+}
+
+/// Like [`file_layer`], but takes the file text from `text` and does not read `path`.
+///
+/// A config write checks its new file text with it before the file changes.
+pub fn file_layer_text(path: &Path, text: &str) -> Result<Layer, ConfigError> {
     let origin = |line| Source::File {
         path: path.to_path_buf(),
         line,
@@ -22,14 +36,13 @@ pub fn file_layer(path: &Path) -> Result<Layer, ConfigError> {
         origin: origin(None),
         message,
     };
-    let text = std::fs::read_to_string(path).map_err(|e| fail(format!("cannot read file: {e}")))?;
-    toml::from_str::<Config>(&text).map_err(|e| fail(e.to_string()))?;
-    let table = toml::from_str::<toml::Table>(&text).map_err(|e| fail(e.to_string()))?;
-    let spans = DeTable::parse(&text).map_err(|e| fail(e.to_string()))?;
+    toml::from_str::<Config>(text).map_err(|e| fail(e.to_string()))?;
+    let table = toml::from_str::<toml::Table>(text).map_err(|e| fail(e.to_string()))?;
+    let spans = DeTable::parse(text).map_err(|e| fail(e.to_string()))?;
 
     let mut layer = Layer::from_table(table, origin(None));
     let mut lines = Vec::new();
-    collect_lines(spans.get_ref(), &text, &mut Vec::new(), &mut lines);
+    collect_lines(spans.get_ref(), text, &mut Vec::new(), &mut lines);
     for (key_path, line) in lines {
         layer.sources.insert(key_path, origin(Some(line)));
     }
