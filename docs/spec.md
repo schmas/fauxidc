@@ -305,6 +305,7 @@ Paths are below the Issuer path unless they start with `/_mock`.
 | `GET /_mock/requests?issuer=&path=`, `DELETE /_mock/requests` | Request log. Ring buffer of `request_log_size`, raw bodies. | M2 |
 | `POST /_mock/{issuer-id}/rotate-key` | Key rotation. A foreign `Origin` header gives 403 `access_denied` (M4). | M3, M4 |
 | `POST /_mock/{issuer-id}/fail-next` | Injected failure: `{endpoint, status, error, count, delay_ms}`. | M3 |
+| `POST /_mock/reload` | Reloads the config files at once (section 11). 200 `{changed, warnings}`, 422 `invalid_config` with `errors`, 409 with no config file. A foreign `Origin` header gives 403. | after M4 |
 
 CORS (M2) on `/token`, `/userinfo` and `/revoke`: allowed origins come from the Client `web_origins`. If `web_origins` is not set, the origins of its redirect URIs are allowed.
 
@@ -326,6 +327,7 @@ CORS (M2) on `/token`, `/userinfo` and `/revoke`: allowed origins come from the 
 - Durable across restarts: refresh tokens and access tokens, while the signing key stays the same.
 - Sessions (M3): one cookie per Issuer. `prompt=none` with a Session returns a code. Without one, it redirects with `login_required`. `prompt=login` always shows the page. `max_age` is checked against `auth_time`.
 - Hot reload (M3): the mock polls config file mtimes every 1 s, applies a change when two polls in a row see the same new file state, and also reloads on SIGHUP. Env and inline config change only at restart. If the new config is invalid, the mock keeps the old one and logs the error. In-flight codes, Sessions and refresh tokens stay valid. A Session for a removed User fails at its next use. A key change needs a restart, and the mock logs a warning.
+- `POST /_mock/reload` (after M4) reloads the config files at once, without the poll delay. It returns the restart warnings, or 422 with the config errors and the old config stays. It reloads files only.
 
 ## 12. Operations
 

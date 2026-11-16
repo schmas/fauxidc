@@ -196,6 +196,34 @@ impl ConfigWriter {
     }
 }
 
+/// Why a Test API reload (`POST /_mock/reload`) did not apply. The old config stays.
+#[derive(Debug, thiserror::Error)]
+pub enum RequestedReloadError {
+    /// No config file is loaded (Zero config, inline config or env vars only).
+    #[error("no config file is loaded; env and inline config change only at restart")]
+    NoFile,
+    /// The new config is invalid, or it did not apply.
+    #[error(transparent)]
+    Reload(#[from] ReloadError),
+    /// The server stopped.
+    #[error("the server is stopping")]
+    Stopped,
+}
+
+impl ConfigWriter {
+    /// Loads the config files again and applies them at once, like [`reload_from`]. It runs
+    /// one at a time with the writes. Env and inline config come from the startup snapshot.
+    pub fn reload(&self) -> Result<Reloaded, RequestedReloadError> {
+        let _writing = self.writing.lock().unwrap_or_else(PoisonError::into_inner);
+        let handle = self.handle.upgrade().ok_or(RequestedReloadError::Stopped)?;
+        let loaded = load(&self.inputs).map_err(ReloadError::Config)?;
+        if loaded.files.is_empty() {
+            return Err(RequestedReloadError::NoFile);
+        }
+        Ok(reload_config(&handle, loaded.config)?)
+    }
+}
+
 /// The router to serve and its handle. The served router forwards every request to the
 /// current inner router.
 pub fn live_router(state: Arc<AppState>) -> (Router, ReloadHandle) {
@@ -224,6 +252,15 @@ async fn forward(State(live): State<Arc<Live>>, req: Request) -> Response {
 /// How often [`watch_files`] polls the config files.
 pub const POLL_INTERVAL: Duration = Duration::from_secs(1);
 
+/// The result of a reload that did not fail.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct Reloaded {
+    /// `false` when the loaded config equals the last loaded config. Nothing was applied.
+    pub changed: bool,
+    /// The restart warnings of the apply, for example a changed key.
+    pub warnings: Vec<String>,
+}
+
 /// `config::load(inputs)` then `handle.apply`. Every error is logged at ERROR with its source
 /// text and the old config stays. Returns whether the config changed.
 ///
@@ -233,31 +270,44 @@ pub const POLL_INTERVAL: Duration = Duration::from_secs(1);
 /// new load `last_loaded`: after an apply error (for example a missing template file), the next
 /// reload or SIGHUP tries the same config again.
 pub fn reload_from(handle: &ReloadHandle, inputs: &LoadInputs) -> bool {
-    let config = match load(inputs) {
-        Ok(loaded) => loaded.config,
-        Err(errors) => {
-            tracing::error!("config reload failed; keeping the old config\n{errors}");
-            return false;
+    match try_reload_from(handle, inputs) {
+        Ok(reloaded) => reloaded.changed,
+        Err(error) => {
+            tracing::error!("config reload failed; keeping the old config\n{error}");
+            false
         }
-    };
+    }
+}
+
+/// Like [`reload_from`], but returns the error and the warnings and logs no error.
+pub fn try_reload_from(
+    handle: &ReloadHandle,
+    inputs: &LoadInputs,
+) -> Result<Reloaded, ReloadError> {
+    let loaded = load(inputs).map_err(ReloadError::Config)?;
+    reload_config(handle, loaded.config)
+}
+
+/// The step of [`try_reload_from`] after the load: compare with the last loaded config, then
+/// apply.
+fn reload_config(handle: &ReloadHandle, config: Config) -> Result<Reloaded, ReloadError> {
     let unchanged = match handle.last_loaded() {
         Some(last) => last == config,
         None => config == *handle.current().config,
     };
     if unchanged {
         tracing::info!("config unchanged");
-        return false;
+        return Ok(Reloaded {
+            changed: false,
+            warnings: Vec::new(),
+        });
     }
-    match handle.apply(config.clone()) {
-        Ok(_) => {
-            handle.set_last_loaded(config);
-            true
-        }
-        Err(error) => {
-            tracing::error!("config reload failed; keeping the old config\n{error}");
-            false
-        }
-    }
+    let warnings = handle.apply(config.clone())?;
+    handle.set_last_loaded(config);
+    Ok(Reloaded {
+        changed: true,
+        warnings,
+    })
 }
 
 /// What the poller compares: the modification time and length, or `None` when the file is

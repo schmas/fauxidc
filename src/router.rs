@@ -114,6 +114,10 @@ pub fn build_router(state: Arc<AppState>) -> Router {
             delete(test_api::reset_state).with_state(state.clone()),
         )
         .route(
+            "/_mock/reload",
+            post(test_api::reload).with_state(state.clone()),
+        )
+        .route(
             "/_mock/requests",
             get(request_log::list)
                 .delete(request_log::clear)

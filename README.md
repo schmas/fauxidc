@@ -235,6 +235,7 @@ The Test API lives under `/_mock/` and has no authentication.
 | `GET` / `POST /_mock/users`, `GET` / `PUT` / `PATCH` / `DELETE /_mock/users/{user-id}` | List and change the Users of the config file. `fauxidc users` does the same without a server. |
 | `GET` / `POST /_mock/clients`, `GET` / `PUT` / `PATCH` / `DELETE /_mock/clients/{client-key}` | List and change the Clients of the config file, with secrets masked. `fauxidc clients` does the same without a server. |
 | `DELETE /_mock/state` | Clear the runtime state (codes, Sessions, revocations, Injected failures, Request log) without a restart. |
+| `POST /_mock/reload` | Reload the config files at once. It returns the config errors or the restart warnings. |
 | `GET` / `DELETE /_mock/requests` | Read or clear the Request log. |
 | `GET /_mock/health` | Health check. |
 
@@ -279,6 +280,7 @@ See [docs/features.md](docs/features.md#tls).
 fauxidc polls the config files every second and also reloads on SIGHUP.
 A change applies only after two polls in a row see the same new file state, so it applies 1 to 2 s after the save.
 If a change fails to load, fauxidc keeps the old config and logs the error.
+A test that edits a config file can call `POST /_mock/reload` to apply it at once and see the errors.
 SIGHUP reloads the config, so closing the terminal does not stop a foreground fauxidc; stop it with Ctrl-C or SIGTERM.
 Some `server` keys need a restart. See [docs/features.md](docs/features.md#hot-reload).
 
