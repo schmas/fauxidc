@@ -2,7 +2,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { expect, test, type Page } from "@playwright/test";
 
 // The built-in login page in username mode: Issuer `custom` from custom-user.toml has
-// `custom_user`, so "Other…" shows one username field. Uses the server that
+// `custom_user`, so the Custom user form shows one username field. Uses the server that
 // playwright.config.ts starts.
 
 const MOCK = "http://localhost:9000";
@@ -45,22 +45,23 @@ async function layout(page: Page) {
   });
 }
 
-test("the username field shows only when Other… is selected", async ({ page }) => {
+test("the username field is the default view and the switch shows the dropdown", async ({ page }) => {
   await openLogin(page);
-  await expect(page.locator("select[name=user] option[value=__custom__]")).toHaveText("Other…");
   const custom = page.locator("#custom-user");
-  await expect(custom).toBeHidden();
-  await page.selectOption("select[name=user]", "__custom__");
   await expect(custom).toBeVisible();
   await expect(page.locator("input[name=username]")).toBeVisible();
   await expect(page.locator("[name=custom_sub], [name=custom_claims]")).toHaveCount(0);
-  await page.selectOption("select[name=user]", "alice");
+  await expect(page.locator("#user-list")).toBeHidden();
+  await page.locator("#f-show-users").check();
   await expect(custom).toBeHidden();
+  await expect(page.locator("#user-list")).toBeVisible();
+  await expect(page.locator("select[name=user] option[value=__custom__]")).toHaveCount(0);
+  await page.locator("#f-show-users").uncheck();
+  await expect(custom).toBeVisible();
 });
 
 test("an empty username marks only the username field", async ({ page }) => {
   await openLogin(page);
-  await page.selectOption("select[name=user]", "__custom__");
   await page.fill("input[name=username]", "   ");
   await page.click("button[type=submit]");
   await expect(page.locator("[role=alert]")).toContainText("Enter a username");
@@ -74,8 +75,7 @@ test.describe("without JavaScript", () => {
   test("the username flow works and builds the User", async ({ page, request }) => {
     const verifier = await openLogin(page);
     await expect(page.locator("#custom-user")).toBeVisible();
-    await expect(page.locator("#custom-user legend")).toContainText("only for Other…");
-    await page.selectOption("select[name=user]", "__custom__");
+    await expect(page.locator("#user-list")).toBeHidden();
     await page.fill("input[name=username]", "  Carol ");
     await page.click("button[type=submit]");
     await page.waitForURL((url) => url.href.startsWith(REDIRECT) && url.searchParams.has("code"));
@@ -102,7 +102,6 @@ for (const width of [375, 1280]) {
   test(`username mode has no horizontal scroll at ${width} px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 720 });
     await openLogin(page);
-    await page.selectOption("select[name=user]", "__custom__");
     let box = await layout(page);
     expect(box.scrollWidth).toBe(box.clientWidth);
     // With the error alert too.
@@ -120,7 +119,6 @@ for (const [width, height] of [
   test(`username mode has no page scroll at ${width}x${height}`, async ({ page }) => {
     await page.setViewportSize({ width, height });
     await openLogin(page);
-    await page.selectOption("select[name=user]", "__custom__");
     await page.click("button[type=submit]");
     await expect(page.locator("[role=alert]")).toContainText("Enter a username");
     await page.locator("details summary").click();

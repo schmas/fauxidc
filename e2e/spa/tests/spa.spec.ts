@@ -64,6 +64,8 @@ async function steps(spa: Spa, page: Page, request: APIRequestContext) {
   await expect(page.locator("#status")).toHaveText("logged-out");
   await page.click("#login");
   await expect(page.locator("h1")).toHaveText("Sign in");
+  // The page opens on the Custom user form; the switch shows the User dropdown (alice is first).
+  await page.locator("#f-show-users").check();
   await page.click("button[type=submit]");
   await expect(page.locator("#status")).toHaveText("logged-in:alice@example.com");
 
