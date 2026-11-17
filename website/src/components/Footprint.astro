@@ -1,0 +1,14 @@
+---
+// The measured numbers of docs/footprint.md (read by scripts/sync-docs.mjs at build time).
+// Without numbers, this component shows nothing.
+import data from '../generated/site-data.json';
+
+const f = data.footprint as { binary: string; target: string; image: string; idle: string } | null;
+---
+
+{f && (
+  <>
+    Measured: a {f.binary} release binary (<code>{f.target}</code>), a {f.image} container image
+    and {f.idle} of memory at idle.
+  </>
+)}
