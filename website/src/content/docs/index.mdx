@@ -141,7 +141,7 @@ Your app runs the real authorization code flow with PKCE. The user picks a User 
 <div class="fx-split fx-split-media">
 <div>
 
-```ini title=".env.development"
+```ini title="Your app config (example)"
 OIDC_ISSUER=http://localhost:9000/default
 OIDC_CLIENT_ID=test
 OIDC_SCOPE=openid profile email
@@ -178,15 +178,16 @@ Inject a failure into one endpoint, and test how your app handles a provider out
 <div>
 
 ```sh frame="terminal" title="Request" wrap
+TOKEN=$(curl -s http://localhost:9000/_mock/default/token \
+  -H 'content-type: application/json' -d '{"user": "alice"}' | jq -r .access_token)
 curl -s -X POST http://localhost:9000/_mock/default/fail-next \
   -H 'content-type: application/json' \
-  -d '{"endpoint": "token", "status": 503, "count": 1}'
-curl -s -i http://localhost:9000/default/token \
-  -d 'grant_type=client_credentials&client_id=test'
+  -d '{"endpoint": "userinfo", "status": 503, "count": 1}'
+curl -s -i http://localhost:9000/default/userinfo -H "authorization: Bearer $TOKEN"
 ```
 
 ```http title="Output" wrap
-{"delay_ms":0,"endpoint":"token","error":"server_error","remaining":1,"status":503}
+{"delay_ms":0,"endpoint":"userinfo","error":"server_error","remaining":1,"status":503}
 HTTP/1.1 503 Service Unavailable
 content-type: application/json
 cache-control: no-store
@@ -194,10 +195,12 @@ cache-control: no-store
 {"error":"server_error","error_description":"injected failure"}
 ```
 
+The failure is used up. The next call to `/userinfo` returns 200 with the claims of alice.
+
 </div>
 <div>
 
-<Media file="inject-failure.gif" width={800} height={500} caption="The dashboard sets a 503 failure on the token endpoint. The app shows the login error." />
+<Media file="inject-failure.gif" width={800} height={500} caption={'The dashboard sets a 503 failure on the token endpoint. The app logs in and shows "Login failed: POST /token returned 503".'} />
 
 </div>
 </div>
