@@ -163,7 +163,7 @@
     } else if (answer.source === "default") {
       row.append(label("Default"));
     } else {
-      row.append(label(answer.source));
+      row.append(label(answer.source || "unknown"));
       if (answer.origin) row.append(el("span", "small muted mono", answer.origin));
     }
     cell.replaceChildren(row);
@@ -171,7 +171,8 @@
 
   async function saveLogin(box) {
     const wanted = box.checked;
-    box.disabled = true;
+    $("#issuers-out").replaceChildren();
+    box.setAttribute("aria-busy", "true");
     try {
       const answer = await api("PUT", `/_mock/${encodeURIComponent(box.dataset.loginIssuer)}/login`, {
         show_user_list: wanted,
@@ -181,13 +182,19 @@
       box.checked = !wanted;
       throw e;
     } finally {
-      box.disabled = false;
+      box.removeAttribute("aria-busy");
     }
   }
 
   document.addEventListener("change", (event) => {
     const box = event.target.closest("[data-login-issuer]");
-    if (box) run("issuers-out", () => saveLogin(box));
+    if (!box) return;
+    // The switch stays enabled, so it keeps keyboard focus. A change during a request is undone.
+    if (box.getAttribute("aria-busy") === "true") {
+      box.checked = !box.checked;
+      return;
+    }
+    run("issuers-out", () => saveLogin(box));
   });
 
   // Debugger ---------------------------------------------------------------------------
