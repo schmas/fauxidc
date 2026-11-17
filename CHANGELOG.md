@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0](https://github.com/schmas/fauxidc/compare/v0.5.0...v0.6.0) - 2026-11-17
+
+### Added
+
+- link the login page to the admin dashboard ([#52](https://github.com/schmas/fauxidc/pull/52))
+- [**breaking**] open the login page on the Custom user form ([#51](https://github.com/schmas/fauxidc/pull/51))
+
+### Other
+
+- remove the pen.dev design file from the repo ([#49](https://github.com/schmas/fauxidc/pull/49))
+
 ## [0.5.0](https://github.com/schmas/fauxidc/compare/v0.4.0...v0.5.0) - 2026-11-16
 
 ### Added
