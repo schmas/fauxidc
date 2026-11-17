@@ -1,0 +1,66 @@
+---
+// The site title, plus the main links of the header: Docs, Recipes and Comparison.
+// On a narrow screen only "Docs" stays, so the header does not overflow.
+import Default from '@astrojs/starlight/components/SiteTitle.astro';
+
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+const path = Astro.url.pathname;
+const links = [
+  { label: 'Docs', href: `${base}/docs/configuration/`, match: `${base}/docs/`, always: true },
+  { label: 'Recipes', href: `${base}/docs/recipes/`, match: `${base}/docs/recipes/` },
+  { label: 'Comparison', href: `${base}/comparison/`, match: `${base}/comparison/` },
+];
+// The most specific match wins, so the Recipes page marks only "Recipes".
+const current = links
+  .filter((l) => path.startsWith(l.match))
+  .sort((a, b) => b.match.length - a.match.length)[0];
+---
+
+<div class="site-title-nav">
+  <Default />
+  <nav aria-label="Main">
+    {
+      links.map((l) => (
+        <a
+          href={l.href}
+          class:list={{ 'hide-narrow': !l.always }}
+          aria-current={l === current ? 'page' : undefined}
+        >
+          {l.label}
+        </a>
+      ))
+    }
+  </nav>
+</div>
+
+<style>
+  .site-title-nav {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    min-width: 0;
+  }
+  nav {
+    display: flex;
+    gap: 1.25rem;
+  }
+  nav a {
+    color: var(--sl-color-gray-2);
+    font-size: var(--sl-text-sm);
+    font-weight: 500;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+  nav a:hover,
+  nav a[aria-current='page'] {
+    color: var(--sl-color-accent-high);
+  }
+  @media (max-width: 50rem) {
+    .site-title-nav {
+      gap: 1rem;
+    }
+    .hide-narrow {
+      display: none;
+    }
+  }
+</style>
