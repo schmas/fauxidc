@@ -22,7 +22,7 @@ Only the pinned or unusual choices. The full crate table and the rejected crates
 - No C code in the default build. The release build is a static musl binary (size limit 5 MiB).
 - Optional `tls` feature: `rustls` with the `ring` provider (needs a C compiler).
 - Page styles are plain CSS without a build step: `assets/static/halo.css` for every page, plus
-  `dashboard.css` for the dashboard (ADR 0009). The design is `docs/fauxidc-design.pen`.
+  `dashboard.css` for the dashboard (ADR 0009). The design file is kept outside the repository.
 - `schemars` generates the config JSON Schema.
 - Releases: `release-plz` in registry mode. It publishes the crate to crates.io with trusted publishing (OIDC, `release` environment); no registry token secret.
   The `release-pr` job opens the release PR with a GitHub App token (`schmas-fauxidc-release`, secrets

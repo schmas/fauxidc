@@ -20,7 +20,7 @@ cargo test
 
 Every built-in page links `assets/static/halo.css`. The dashboard also links `assets/static/dashboard.css`.
 Both files are plain CSS. They have no build step, and `cargo build` embeds them as they are.
-The design is `docs/fauxidc-design.pen`. Light and dark follow `prefers-color-scheme`.
+The design file is kept outside the repository. Light and dark follow `prefers-color-scheme`.
 
 `assets/static/fauxidc.css` and `assets/static/login.css` are old stylesheets. No built-in page links them.
 They stay served for old custom templates, and they are frozen.

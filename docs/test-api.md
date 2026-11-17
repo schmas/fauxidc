@@ -333,7 +333,7 @@ At a narrow width, a select box replaces the sidebar.
 - The signed-out page of `/endsession` links back to the dashboard.
 - The page needs JavaScript (`/_mock/static/dashboard.js`, embedded, no framework). The Issuer links work without it.
 - The page links `/_mock/static/halo.css`, the stylesheet of every built-in page, and `/_mock/static/dashboard.css`, its shell.
-  Light and dark follow the browser `prefers-color-scheme` setting. The design is in [fauxidc-design.pen](fauxidc-design.pen) (pen.dev).
+  Light and dark follow the browser `prefers-color-scheme` setting. The design file is kept outside the repository.
 - The answer has `Cache-Control: no-store`, `X-Frame-Options: DENY` and `Content-Security-Policy: frame-ancestors 'none'`, so another site cannot put the page in a frame.
 - The Debugger view frames a page of the same origin. The debugger page, the login page, the error page and the other Issuer pages send
   `X-Frame-Options: SAMEORIGIN` and `Content-Security-Policy: frame-ancestors 'self'`. A page of another origin cannot frame them.

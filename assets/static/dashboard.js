@@ -1,7 +1,7 @@
 // The fauxidc dashboard (/_mock/). It calls the JSON routes of the Test API, the same
 // routes that curl and tests use (docs/test-api.md). No framework and no build step.
 // Every value from the server goes into the page through textContent, never as HTML.
-// The layout follows docs/fauxidc-design.pen.
+// The layout follows the halo design.
 "use strict";
 (() => {
   const $ = (selector, root = document) => root.querySelector(selector);

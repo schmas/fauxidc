@@ -15,7 +15,7 @@ A missing `login_template` file or a template syntax error stops the server at s
 
 Every built-in page links `/_mock/static/halo.css` (`{{ static_base|href }}/halo.css` in a template).
 It is plain CSS without a build step, embedded in the binary. The page needs no network.
-Light and dark themes follow the browser `prefers-color-scheme` setting. The design is `docs/fauxidc-design.pen`.
+Light and dark themes follow the browser `prefers-color-scheme` setting. The design file is kept outside the repository.
 The dashboard also links `/_mock/static/dashboard.css`, its shell (sidebar and views). It uses the halo tokens.
 
 A custom template (`templates_dir` or `login_template`) can link `halo.css` and use its classes. The main ones:
