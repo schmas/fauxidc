@@ -1,0 +1,32 @@
+---
+// Shows docs/media/ on the landing page: the hero GIF first, then the other images.
+// scripts/sync-docs.mjs copies docs/media/ to public/media/ and lists the files in
+// src/generated/site-data.json. If no file is there, this component shows nothing.
+import data from '../generated/site-data.json';
+
+const files: string[] = data.media;
+const images = files.filter((f) => /\.(gif|png|jpe?g|webp|svg)$/i.test(f));
+const hero = images.find((f) => /^hero\./i.test(f));
+const others = images.filter((f) => f !== hero);
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+const caption = (f: string) => {
+  const words = f.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ').trim();
+  return words.charAt(0).toUpperCase() + words.slice(1);
+};
+---
+
+{hero && (
+  <div class="fx-media not-content">
+    <img src={`${base}/media/${hero}`} alt="fauxidc in use: the login page and the tokens" loading="eager" />
+  </div>
+)}
+{others.length > 0 && (
+  <div class="fx-media fx-gallery not-content">
+    {others.map((f) => (
+      <figure>
+        <a href={`${base}/media/${f}`}><img src={`${base}/media/${f}`} alt={caption(f)} loading="lazy" /></a>
+        <figcaption>{caption(f)}</figcaption>
+      </figure>
+    ))}
+  </div>
+)}

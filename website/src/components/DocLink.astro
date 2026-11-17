@@ -1,0 +1,21 @@
+---
+// A link to a page made from docs/. If the docs/ file does not exist (yet), the link
+// goes to `fallback` (for example a README section on GitHub), so no link breaks.
+import data from '../generated/site-data.json';
+
+interface Props {
+  /** The source file, relative to docs/, for example `agents.md`. */
+  doc: string;
+  /** The `#anchor` on the page, if any. */
+  hash?: string;
+  /** The link when the docs/ file does not exist. */
+  fallback: string;
+}
+
+const { doc, hash = '', fallback } = Astro.props;
+const page = data.pages.find((p) => p.source === `docs/${doc}`);
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+const href = page ? `${base}${page.route}${hash}` : fallback;
+---
+
+<a href={href}><slot /></a>

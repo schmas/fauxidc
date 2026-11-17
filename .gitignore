@@ -4,3 +4,11 @@
 /e2e/spa/node_modules/
 /e2e/spa/test-results/
 /e2e/spa/playwright-report/
+/website/node_modules/
+/website/dist/
+/website/.astro/
+# Generated from docs/ by website/scripts/sync-docs.mjs.
+/website/src/content/docs/docs/
+/website/src/content/docs/adr/
+/website/src/generated/
+/website/public/media/

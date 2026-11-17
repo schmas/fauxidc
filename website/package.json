@@ -1,0 +1,17 @@
+{
+  "name": "fauxidc-website",
+  "private": true,
+  "type": "module",
+  "version": "0.0.0",
+  "scripts": {
+    "sync": "node scripts/sync-docs.mjs",
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview"
+  },
+  "dependencies": {
+    "@astrojs/starlight": "0.43.1",
+    "astro": "7.4.12",
+    "starlight-links-validator": "0.27.0"
+  }
+}
