@@ -118,6 +118,7 @@ issuer_url = "http://localhost:9000/auth0/"
 issuer_from_host = false      # true: iss follows the request host (ADR 0006)
 lenient = false
 auto_login = false            # login_hint=<user id> signs in at once
+show_user_list = false        # login page opens on the User dropdown
 require_nonce = false
 sub_template = "auth0|{user_id}"
 default_claims = {}
@@ -275,6 +276,7 @@ Later wins:
 - Shows the `client_id` and the Issuer id.
 - Checkbox "Remember me and skip this page" (Auto-select). It sets a cookie per Issuer with the User id. The next `/authorize` signs in that User with no page. `prompt=login` still shows the page. Logout clears the cookie. The debugger page has a "Signed in as … · change" link that clears it.
 - `login_hint=<user id>` with `auto_login = true` signs in that User at once. This is for E2E tests.
+- `issuer.<id>.show_user_list` (default false) opens the login page on the User dropdown.
 
 ## 9. Tokens
 

@@ -244,6 +244,19 @@ mod tests {
     use crate::config::test_util::*;
 
     #[test]
+    fn show_user_list_defaults_to_false_and_loads() {
+        let l = load_str("[issuer.a]\nissuer_url = \"http://localhost:9000/a\"\n").unwrap();
+        assert!(!l.config.issuer["a"].show_user_list);
+        let l = load_str(
+            "[issuer.a]\nissuer_url = \"http://localhost:9000/a\"\nshow_user_list = true\n",
+        )
+        .unwrap();
+        assert!(l.config.issuer["a"].show_user_list);
+        let l = load(&inputs(&[])).unwrap();
+        assert!(!l.config.issuer["default"].show_user_list);
+    }
+
+    #[test]
     fn zero_config_when_nothing_given() {
         let l = load(&inputs(&[])).unwrap();
         assert!(l.zero_config);
