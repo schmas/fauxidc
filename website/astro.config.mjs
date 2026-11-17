@@ -65,6 +65,7 @@ export default defineConfig({
       logo: { src: './src/assets/logo.svg', alt: '' },
       favicon: '/favicon.svg',
       customCss: ['./src/styles/halo.css'],
+      components: { SocialIcons: './src/components/SocialIcons.astro' },
       social: [
         { icon: 'github', label: 'GitHub', href: GITHUB },
       ],
