@@ -51,7 +51,8 @@ Every context has `context_version` (integer, `3`). Fields are added in a minor 
 ### Changes from version 2
 
 - `context_version` is `3` in all contexts. A template that tests `context_version == 2` must change.
-- `login.html`: new fields `show_user_list`, `user_list_saved`, `view_cookie` and `view_cookie_path`.
+- `login.html`: new fields `show_user_list`, `user_list_saved`, `view_cookie`, `view_cookie_path` and `admin_href`.
+- `error.html` and `signed_out.html`: new field `admin_href`. The built-in pages show an "Admin" link to the dashboard in the header.
 - The built-in login page opens on the Custom user form. It no longer has a `Custom…` option: the form view posts a hidden `user=__custom__`, and a switch shows the User dropdown.
 - `custom_label` stays, but the built-in page no longer shows it.
 - A custom `login.html` that ignores the new fields keeps working, because the POST contract is the same.
@@ -99,6 +100,7 @@ The autoescape writes `/` as `&#x2f;`, which a browser decodes. The `href` filte
 | `user_list_saved` | boolean | `true` when this browser has a valid login view cookie (`list` or `form`). (Version 3.) |
 | `view_cookie` | string | The login view cookie name, `fauxidc_login_view_{issuer_id}`. (Version 3.) |
 | `view_cookie_path` | string | The `Path` of the login view cookie: the Issuer path. (Version 3.) |
+| `admin_href` | string | The dashboard link of the page header, opened in a new tab. `/_mock/#issuers`, where the Users and the login page setting are. Empty for no link. (Version 3.) |
 
 `params` must be posted back unchanged: render each pair as `<input type="hidden" name="{{ pair[0] }}" value="{{ pair[1] }}">`.
 
@@ -131,6 +133,7 @@ The built-in page marks only that input.
 | `issuer_id` | string | Id of the issuer. |
 | `message` | string | The error message. |
 | `static_base` | string | URL prefix for static files, `/_mock/static`. |
+| `admin_href` | string | The dashboard link of the page header, opened in a new tab. `/_mock/#requests`, the request log. Empty for no link. (Version 3.) |
 
 ### `signed_out.html`
 
@@ -144,6 +147,7 @@ The built-in page marks only that input.
 | `signed_in_as` | string or null | Always null: the same response clears the Auto-select cookie. The field stays for compatibility. |
 | `change_href` | string or null | The debugger `?forget=1` URL of the Issuer. It clears the Auto-select cookie. |
 | `static_base` | string | URL prefix for static files, `/_mock/static`. |
+| `admin_href` | string | The dashboard link of the page header, opened in a new tab. `/_mock/#issuers`. Empty for no link. (Version 3.) |
 
 `signed_in_as` and `change_href` are optional fields. `signed_in_as` on `signed_out.html` is always null.
 

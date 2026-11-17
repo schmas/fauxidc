@@ -278,6 +278,7 @@ Later wins:
 - Login view cookie: the switch sets `fauxidc_login_view_{issuer_id}` to `list` or `form` (`Path` = the Issuer path, `SameSite=Lax`, `Max-Age=31536000`, not `HttpOnly`). Any other value is ignored. While it is set, the switch shows "Saved in this browser · Sign out clears it". Else it shows the number of Users and the first 3 ids. `{issuer}/endsession` clears it.
 - A collapsed "Override claims" JSON field for Claim overrides.
 - Shows the `client_id` and the Issuer id.
+- The header has an "Admin" link to the dashboard (`/_mock/#issuers`), opened in a new tab (`target="_blank" rel="noopener"`). The link changes no cookie or state, so the login flow in the first tab goes on. The error page links to `/_mock/#requests`, and the signed-out page to `/_mock/#issuers`.
 - Checkbox "Remember me and skip this page" (Auto-select). It sets a cookie per Issuer with the User id. The next `/authorize` signs in that User with no page. `prompt=login` still shows the page. Logout clears the cookie. The debugger page has a "Signed in as … · change" link that clears it.
 - `login_hint=<user id>` with `auto_login = true` signs in that User at once. This is for E2E tests.
 

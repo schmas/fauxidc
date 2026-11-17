@@ -11,7 +11,8 @@
 <div class="page">
 <header class="page-top">
 <span class="brand"><svg class="ic" aria-hidden="true" viewBox="0 0 24 24"><path d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"/><circle cx="16.5" cy="7.5" r=".5"/></svg>fauxidc</span>
-<span class="label label-warning">Mock server · not for production</span>
+<span class="row row-tight">{% if admin_href %}<a class="label label-link" href="{{ admin_href|href }}" target="_blank" rel="noopener">Admin<svg class="ic" aria-hidden="true" viewBox="0 0 24 24"><path d="M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg><span class="sr-only"> (opens in a new tab)</span></a>{% endif %}
+<span class="label label-warning">Mock server · not for production</span></span>
 </header>
 <main class="card">
 <div class="card-head">

@@ -20,7 +20,9 @@ use crate::debugger::change_href;
 use crate::error::{OAuthError, append_query};
 use crate::logging::{record_client, record_endpoint};
 use crate::state::IssuerCtx;
-use crate::templates::{CONTEXT_VERSION, STATIC_BASE, SignedOutContext, issuer_page};
+use crate::templates::{
+    CONTEXT_VERSION, DASHBOARD_ISSUERS_HREF, STATIC_BASE, SignedOutContext, issuer_page,
+};
 use crate::tokens::verify_id_token_hint;
 
 /// The logout request parameters after aliases are applied.
@@ -203,6 +205,7 @@ async fn endsession(ctx: &IssuerCtx, request: &HeaderMap, raw: Vec<(String, Stri
             signed_in_as: None,
             change_href: Some(change_href(ctx)),
             static_base: STATIC_BASE.to_owned(),
+            admin_href: DASHBOARD_ISSUERS_HREF.to_owned(),
         };
         match ctx.app.templates.render_signed_out(&context) {
             Ok(html) => issuer_page(StatusCode::OK, html),

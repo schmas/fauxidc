@@ -55,6 +55,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .wrap { min-width: 0; overflow-wrap: anywhere; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 .row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.row-tight { gap: 8px; }
 .row-end { align-items: flex-end; }
 .row-between { justify-content: space-between; }
 .stack { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
@@ -80,6 +81,9 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .label-warning { background: var(--warning); color: var(--warning-fg); }
 .label-error { background: var(--error); color: var(--error-fg); }
 .label-info { background: var(--info); color: var(--info-fg); }
+.label-link { background: transparent; color: var(--primary); border: 1px solid var(--input); text-decoration: none; }
+.label-link:hover { background: var(--tile); }
+.label-link .ic { width: 14px; height: 14px; }
 /* A label with a name and a value, for example "Issuer auth0". */
 .label-pair { background: var(--tile); color: var(--fg); border: 1px solid var(--border); font-weight: 400; }
 .label-pair > span:first-child { color: var(--muted-fg); }
