@@ -46,6 +46,7 @@ scripts/check-css.sh                               # check the page styles (CI j
 cargo run -q -- config --schema > schema/fauxidc.schema.json   # regenerate the schema
 cd e2e/spa && npm ci && npx playwright test        # SPA exit test (docs/testing/m2-exit-test.md)
 scripts/conformance.sh                             # OpenID conformance suite (conformance/README.md)
+cd website && npm ci && npm run build              # project website, pages made from docs/ (website/dist)
 ```
 
 ## Directory Structure
@@ -61,6 +62,7 @@ scripts/conformance.sh                             # OpenID conformance suite (c
 ├── e2e/spa/      # SPA exit test (Node and Playwright, outside Cargo)
 ├── conformance/  # OpenID conformance suite plans and expected results
 ├── scripts/      # CSS check, image build, binary check, conformance runner
+├── website/      # project website (Astro Starlight); the docs pages come from docs/ at build time
 ├── docs/         # spec.md, configuration.md, test-api.md, features.md, templates.md, testcontainers.md, adr/, testing/
 └── .agents/      # plans and work files, git-ignored
 ```
@@ -79,6 +81,8 @@ scripts/conformance.sh                             # OpenID conformance suite (c
   second copy of the halo tokens. `fauxidc.css` and `login.css` are frozen old files; the CI job `css` checks them.
 - A change to the config structs regenerates `schema/fauxidc.schema.json` in the same commit. A test checks it.
 - A behavior change amends `docs/spec.md` in the same commit, and the user docs (`README.md`, `docs/`).
+- The website shows every `docs/*.md` file except `releasing.md`, and `docs/adr/`. Do not copy docs into `website/`;
+  `website/scripts/sync-docs.mjs` makes the pages at build time. Only the landing and comparison pages live in `website/`.
 - Plans go in `.agents/plans/<date>-<slug>/`. `.agents/` is git-ignored.
 
 ## Rules

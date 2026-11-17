@@ -6,6 +6,7 @@
 [![ghcr.io](https://img.shields.io/badge/ghcr.io-schmas%2Ffauxidc-blue)](https://github.com/schmas/fauxidc/pkgs/container/fauxidc)
 
 fauxidc is an OAuth 2.0 / OpenID Connect mock server for local development and integration tests.
+Website and docs: [schmas.github.io/fauxidc](https://schmas.github.io/fauxidc/).
 
 <p align="center"><img src="docs/media/banner.svg" alt="fauxidc: OAuth 2.0 / OpenID Connect mock server" width="720"></p>
 

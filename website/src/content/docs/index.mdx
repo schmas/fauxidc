@@ -1,0 +1,134 @@
+---
+title: fauxidc
+description: fauxidc is an OAuth 2.0 / OpenID Connect mock server for local development and integration tests.
+template: splash
+editUrl: false
+next: false
+hero:
+  tagline: fauxidc is an OAuth 2.0 / OpenID Connect mock server for local development and integration tests. Never use it in production.
+  actions:
+    - text: Start in 60 seconds
+      link: '#start-in-60-seconds'
+      icon: right-arrow
+    - text: View on GitHub
+      link: https://github.com/schmas/fauxidc
+      icon: github
+      variant: minimal
+    - text: Releases
+      link: https://github.com/schmas/fauxidc/releases
+      icon: download
+      variant: minimal
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+import Media from '../../components/Media.astro';
+import DocLink from '../../components/DocLink.astro';
+
+export const GH = 'https://github.com/schmas/fauxidc';
+
+<Media part="hero" />
+
+## Features
+
+<CardGrid>
+  <Card title="Single binary" icon="rocket">
+    One static binary or one small container image. Start it with no config:
+    you get an Issuer, a Client and two Users.
+  </Card>
+  <Card title="No infrastructure" icon="laptop">
+    No database and no other service to run. It works offline, on a laptop and in CI.
+  </Card>
+  <Card title="Real login flow, real signed tokens" icon="approve-check">
+    Your app goes through the real authorization code flow with PKCE.
+    It gets real signed JWTs, with discovery and JWKS.
+  </Card>
+  <Card title="Test API" icon="setting">
+    Mint tokens without a browser, with the claims you need.
+    Inject failures to test how your app handles a provider outage.
+  </Card>
+  <Card title="Admin dashboard" icon="list-format">
+    See the Issuers, Users, Clients, keys and the Request log in the browser.
+    Mint tokens and inject failures from the same page.
+  </Card>
+  <Card title="OpenID conformance in CI" icon="star">
+    Each change runs the OpenID Foundation conformance suite plans "Basic OP" and "Config OP" in CI.
+  </Card>
+  <Card title="Built in Rust" icon="seti:rust">
+    One static binary with low memory use and a fast start.
+    For the measured numbers, see the <DocLink doc="footprint.md" fallback={`${GH}/blob/main/docs/footprint.md`}>Footprint</DocLink> page.
+  </Card>
+</CardGrid>
+
+## See it in action
+
+<Media part="gallery" />
+
+## Start in 60 seconds
+
+Start the server with Docker:
+
+```sh
+docker run --rm -p 9000:9000 ghcr.io/schmas/fauxidc
+```
+
+Or download the binary from the [GitHub releases](https://github.com/schmas/fauxidc/releases),
+or install it with `cargo install fauxidc --locked`.
+
+With no config, fauxidc starts in Zero config mode: one Issuer `default` in Lenient mode,
+one public Client `test`, and the Users `alice` and `bob`. In a second terminal:
+
+```sh
+# Discovery document
+curl -s http://localhost:9000/default/.well-known/openid-configuration
+# Tokens for alice, without a browser
+curl -s http://localhost:9000/_mock/default/token -H 'content-type: application/json' -d '{"user": "alice"}'
+# Health check
+curl -s http://localhost:9000/_mock/health
+```
+
+Point your app at the Issuer URL `http://localhost:9000/default` with the client id `test`.
+Open `http://localhost:9000/default/debugger` and click "Run login flow" to see the login page.
+
+The [README](https://github.com/schmas/fauxidc#start-in-60-seconds) has all the install options.
+
+## Use with an AI coding agent
+
+A coding agent can add fauxidc to an app project, write its config, mint tokens in tests and inject failures.
+The repo gives the agent two skills: [skills/fauxidc](https://github.com/schmas/fauxidc/blob/main/skills/fauxidc/SKILL.md) (reference)
+and [skills/fauxidc-setup](https://github.com/schmas/fauxidc/blob/main/skills/fauxidc-setup/SKILL.md) (project setup).
+[llms.txt](https://github.com/schmas/fauxidc/blob/main/llms.txt) lists the docs for agents that read it.
+Install the skills, then give your agent a prompt such as:
+
+```text
+Our single-page app uses oidc-client-ts. Make it log in against a local fauxidc in Zero config:
+start it with "docker run --rm -p 9000:9000 ghcr.io/schmas/fauxidc".
+Use the authority http://localhost:9000/default, the public Client id "test", the code flow with PKCE (S256)
+and the scope "openid profile email". Put these values in .env.development, not in the code.
+Then open the app, log in as alice on the fauxidc login page and check that the app shows her email.
+```
+
+```text
+Write an integration test for GET /api/orders of our API. Start fauxidc with examples/generic.toml
+(Issuer "generic" at http://localhost:9000/generic). Before the request, mint an access token with the Test API:
+POST http://localhost:9000/_mock/generic/token with the JSON body
+{"user": "alice", "audience": "https://api.example.test", "claims": {"roles": ["viewer"]}}.
+Send the access_token as a Bearer token and expect 200. Add a second test that mints a token with
+"expires_in": -60 and expects 401. Configure the API to trust the issuer http://localhost:9000/generic
+and to accept the access token header typ "at+jwt".
+```
+
+For more prompts and the install steps, see <DocLink doc="agents.md" fallback={`${GH}/blob/main/docs/agents.md`}>Use fauxidc with an AI coding agent</DocLink>.
+
+## Read the docs
+
+- <DocLink doc="configuration.md" fallback={`${GH}/blob/main/docs/configuration.md`}>Configuration</DocLink>: config sources, Zero config, Docker, examples and signing keys.
+- <DocLink doc="recipes.md" fallback={`${GH}/blob/main/docs/recipes.md`}>Recipes</DocLink>: SPA with PKCE, backend with a client secret, machine-to-machine, tokens in tests and more.
+- <DocLink doc="features.md" fallback={`${GH}/blob/main/docs/features.md`}>Features</DocLink>: the login page, Sessions, hot reload, the debugger, TLS and more.
+- <DocLink doc="test-api.md" fallback={`${GH}/blob/main/docs/test-api.md`}>Test API</DocLink>: mint tokens, inject failures, the Request log and the dashboard.
+- <DocLink doc="testcontainers.md" fallback={`${GH}/blob/main/docs/testcontainers.md`}>Testcontainers</DocLink>: start fauxidc from a JVM test.
+- <DocLink doc="footprint.md" fallback={`${GH}/blob/main/docs/footprint.md`}>Footprint</DocLink>: binary size, image size, startup time and memory, with the commands to measure them.
+- [Comparison](/fauxidc/comparison/): fauxidc and other mock OpenID Connect servers.
+
+fauxidc is pre-alpha: the config and the library API can change before 1.0.
+Anyone who can reach a fauxidc server can mint tokens. Never trust a fauxidc Issuer in production.
+It is free software under the MIT or Apache-2.0 license.
