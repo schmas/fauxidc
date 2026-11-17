@@ -222,6 +222,8 @@ async fn custom_fields_are_not_hidden_in_the_html() {
     assert!(tag_with_id(&b, "f-user").contains(" disabled"));
     assert!(b.contains("class=\"switch-row switch-tile js-only\""));
     assert!(css.contains("html:not(.js) .js-only { display: none; }"));
+    // In dark mode --tile equals --card, so the switch tile needs a border there.
+    assert!(css.contains(".switch-tile { border: 1px solid var(--border); }"));
 }
 
 #[tokio::test]

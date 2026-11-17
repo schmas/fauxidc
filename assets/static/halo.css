@@ -94,6 +94,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .switch-row { display: inline-flex; align-items: center; gap: 10px; cursor: pointer; }
 /* The login page switch: a tile with the switch, a label and a note line. */
 .switch-tile { display: flex; padding: 12px 16px; border-radius: 16px; background: var(--tile); font-weight: 400; }
+/* Dark mode: --tile equals --card, so a border shows the tile. */
+@media (prefers-color-scheme: dark) { .switch-tile { border: 1px solid var(--border); } }
 .stack-tight { display: flex; flex-direction: column; min-width: 0; }
 /* Controls that work only with the page script (the script adds the js class). */
 html:not(.js) .js-only { display: none; }

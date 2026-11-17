@@ -91,7 +91,7 @@ The autoescape writes `/` as `&#x2f;`, which a browser decodes. The `href` filte
 | `override_claims` | string | Prefilled JSON text for the override claims. |
 | `remember` | boolean | `true` to render the `remember` checkbox checked, for example after a form error. |
 | `static_base` | string | URL prefix for static files, `/_mock/static`. |
-| `custom_label` | string | The text of the Custom user option: `issuer.<id>.custom_user.label`, else `Custom…`. (Version 2.) |
+| `custom_label` | string | The text of the Custom user option: `issuer.<id>.custom_user.label`, else `Custom…`. The built-in page no longer shows it (version 3); a custom template can. (Version 2.) |
 | `custom_username` | boolean | `true` when the Issuer has `custom_user`. Then show one `username` field instead of `custom_sub` and `custom_claims`. (Version 2.) |
 | `username` | string | Prefilled text for the `username` field, for example after a form error. (Version 2.) |
 | `show_user_list` | boolean | `true` when the page starts on the User dropdown, `false` on the Custom user form. Always `false` when `users` is empty. (Version 3.) |

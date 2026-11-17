@@ -50,10 +50,10 @@
 <select id="f-user" name="user" class="select{% if error_field == "user" %} select-error{% endif %}" aria-describedby="f-user-help"{% if error_field == "user" %} aria-invalid="true"{% endif %}{% if not show_user_list %} disabled{% endif %}>
 {% for u in users %}<option value="{{ u.id }}"{% if selected == u.id %} selected{% endif %}>{{ u.label }}</option>
 {% endfor %}</select>
-<p id="f-user-help" class="hint small">Turn the switch off to type {% if custom_username %}a username{% else %}a subject and claims{% endif %}.</p>
+<p id="f-user-help" class="hint small js-only">Turn the switch off to type {% if custom_username %}a username{% else %}a subject and claims{% endif %}.</p>
 </div>
 {% if users %}<label class="switch-row switch-tile js-only">
-<input type="checkbox" role="switch" class="switch" id="f-show-users" data-cookie="{{ view_cookie }}" data-cookie-path="{{ view_cookie_path }}" aria-labelledby="f-show-users-label" aria-describedby="f-show-users-note"{% if show_user_list %} checked{% endif %}>
+<input type="checkbox" role="switch" class="switch" id="f-show-users" autocomplete="off" data-cookie="{{ view_cookie }}" data-cookie-path="{{ view_cookie_path }}" aria-labelledby="f-show-users-label" aria-describedby="f-show-users-note"{% if show_user_list %} checked{% endif %}>
 <span class="stack-tight"><span id="f-show-users-label">Choose a configured User</span>
 <span id="f-show-users-note" class="small muted">{% if user_list_saved %}Saved in this browser · Sign out clears it{% else %}{{ users|length }} User{% if users|length != 1 %}s{% endif %} on this Issuer: {% for u in users[:3] %}{{ u.id }}{% if not loop.last %}, {% endif %}{% endfor %}{% if users|length > 3 %}…{% endif %}{% endif %}</span></span>
 </label>
@@ -85,6 +85,8 @@
   var custom = document.getElementById("custom-user");
   if (!toggle || !list || !custom) return;
   var select = list.querySelector("select");
+  // A restored form state (back/forward, reload) can check the box without a change event.
+  toggle.checked = toggle.defaultChecked;
   toggle.addEventListener("change", function () {
     var on = toggle.checked;
     list.hidden = !on;

@@ -199,8 +199,8 @@ pub struct DashboardIssuer {
     pub discovery_href: String,
     pub jwks_href: String,
     pub debugger_href: String,
-    /// The `/endsession` path. A browser visit signs out: it clears the Session and the
-    /// Auto-select cookie.
+    /// The `/endsession` path. A browser visit signs out: it clears the Session, the
+    /// Auto-select cookie and the login view cookie.
     pub endsession_href: String,
     /// The login page setting and where its value comes from.
     pub login: crate::login_api::LoginSetting,
@@ -429,6 +429,11 @@ mod tests {
         assert!(html.contains("data-cookie-path=\"&#x2f;auth0\""), "{html}");
         assert!(html.contains("Choose a configured User"));
         assert!(html.contains("2 Users on this Issuer: alice, bob"));
+        // A restored form state cannot leave the switch out of step with the server view.
+        assert!(html.contains("class=\"switch\" id=\"f-show-users\" autocomplete=\"off\""));
+        assert!(html.contains("toggle.checked = toggle.defaultChecked;"));
+        // The hint names the switch, so it needs the page script too.
+        assert!(html.contains("<p id=\"f-user-help\" class=\"hint small js-only\">"));
         assert!(!html.contains(">Saved in this browser"));
 
         let saved = LoginContext {
