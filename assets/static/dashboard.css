@@ -1,6 +1,6 @@
 /* The dashboard (/_mock/) shell: sidebar, top bar, views and dialog. Hand-written,
  * no build step. The halo tokens and components are in halo.css, which the page links
- * first. The layout follows docs/fauxidc-design.pen. */
+ * first. The layout follows the halo design. */
 /* Shell: sidebar + main (design frames "Issuers" and others). */
 .app { display: flex; gap: 16px; min-height: 100dvh; padding: 16px; }
 .sidebar {

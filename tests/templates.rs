@@ -257,7 +257,7 @@ fn templates_have_no_external_urls() {
 #[test]
 fn templates_link_the_halo_css() {
     for (name, text) in template_files() {
-        // Every page links the halo base; the dashboard adds its shell (docs/fauxidc-design.pen).
+        // Every page links the halo base; the dashboard adds its shell (the halo design).
         assert!(text.contains("{{ static_base|href }}/halo.css"), "{name}");
         assert_eq!(
             text.contains("{{ static_base|href }}/dashboard.css"),

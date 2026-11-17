@@ -1,6 +1,6 @@
 /* The halo base of every built-in page: tokens, typography and the components
  * (Card, Button, Input, Select, Textarea, Checkbox, Label, Alert, Table, Tabs, Code).
- * Hand-written, no build step. The tokens and sizes follow docs/fauxidc-design.pen
+ * Hand-written, no build step. The tokens and sizes follow the halo design
  * (halo library). Light by default, dark with prefers-color-scheme: dark.
  * The dashboard adds its shell in dashboard.css. The other pages use the page layout
  * at the end of this file. */

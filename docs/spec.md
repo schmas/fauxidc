@@ -169,7 +169,7 @@ claims = { sub = "00u-alice" }
 - Default templates and static files are embedded in the binary.
 - `templates_dir` and `static_dir` replace them file by file. A missing file falls back to the embedded one.
 - `issuer.<id>.login_template` gives one Issuer its own login page.
-- Every built-in page links the embedded stylesheet `/_mock/static/halo.css`: plain CSS, light and dark, no build step (ADR 0009). The design is `docs/fauxidc-design.pen`.
+- Every built-in page links the embedded stylesheet `/_mock/static/halo.css`: plain CSS, light and dark, no build step (ADR 0009). The design file is kept outside the repository.
 - The dashboard (`dashboard.html`) also loads the embedded files `/_mock/static/dashboard.css` and `/_mock/static/dashboard.js`. The script calls only the JSON routes of the Test API.
 - `/_mock/static/fauxidc.css` and `/_mock/static/login.css` are old, frozen stylesheets. No built-in page links them. They stay served for old custom templates.
 - Framing: the HTML pages of an Issuer (login, error, signed out, `form_post`, debugger) send `X-Frame-Options: SAMEORIGIN` and `Content-Security-Policy: frame-ancestors 'self'`. The dashboard sends `X-Frame-Options: DENY` and `Content-Security-Policy: frame-ancestors 'none'`. A page of another origin cannot frame any of them.
