@@ -19,7 +19,7 @@ Give your app a real login flow and real signed tokens, with one small binary an
 - **No infrastructure.** No database, no external service, no account. It starts in Zero config with one command.
 - **Real signed tokens.** Signed JWTs (RS256 by default), discovery, JWKS, PKCE, refresh tokens and Sessions, as a real provider gives.
 - **Test API.** Mint tokens without a browser, inject failures, rotate keys and read the Request log under `/_mock/`.
-- **OpenID conformance in CI.** Every push to `main` runs the OpenID Foundation conformance suite.
+- **OpenID conformance in CI.** Every pull request and every push to `main` runs the OpenID Foundation conformance suite.
 
 It is pre-alpha: the config and the library API can change before 1.0.
 Anyone who can reach a fauxidc server can mint tokens, so never trust a fauxidc Issuer in production.
@@ -29,7 +29,6 @@ See [SECURITY.md](SECURITY.md).
 
 ## Start in 60 seconds
 
-The image and the binaries are available after the first release.
 Start the server with Docker:
 
 ```sh
@@ -49,7 +48,7 @@ fauxidc
 
 If macOS blocks a binary that a browser downloaded, run `xattr -d com.apple.quarantine /usr/local/bin/fauxidc`.
 
-Or install it from crates.io with Cargo (needs Rust 1.98 or newer), after the first release:
+Or install it from crates.io with Cargo (needs Rust 1.98 or newer):
 
 ```sh
 cargo install fauxidc --locked
