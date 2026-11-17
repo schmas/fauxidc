@@ -70,6 +70,18 @@
 </tr>
 {% endfor %}</tbody></table></div>
 <div class="alert">{{ icon("info") }}<div><strong>Sign out works in this browser only</strong><span>The Remember me cookie lives on the Issuer path. Sign out opens <code>{issuer}/endsession</code>, which clears it and the Session. <code>DELETE /_mock/state</code> and the CLI cannot clear it.</span></div></div>
+<div class="section" id="login-page">
+<div class="section-head"><h2>Login page</h2><p class="muted">Show the user dropdown by default. A change writes <code>show_user_list</code> to the config file. A choice saved in a browser on the login page wins for that browser.</p></div>
+<div class="table-wrap"><table>
+<thead><tr><th>Issuer</th><th>Show user dropdown</th><th>Source</th></tr></thead>
+<tbody>{% for i in issuers %}<tr data-login-row="{{ i.id }}">
+<td class="mono">{{ i.id }}</td>
+<td><label class="switch-row"><input type="checkbox" role="switch" class="switch" data-login-issuer="{{ i.id }}" aria-label="Show user dropdown for {{ i.id }}" aria-describedby="login-state-{{ i.id }}"{% if i.login.show_user_list %} checked{% endif %}><span id="login-state-{{ i.id }}" data-login-state>{% if i.login.show_user_list %}On · User dropdown{% else %}Off · Subject and Claims form{% endif %}</span></label></td>
+<td data-login-source><div class="row">{% if i.login.source == "default" %}<span class="label">Default</span>{% elif i.login.source == "file" %}<span class="label label-info">Config file</span><span class="small muted mono">show_user_list = {% if i.login.show_user_list %}true{% else %}false{% endif %}</span>{% elif i.login.source == "memory" %}<span class="label label-warning">Not saved</span>{% else %}<span class="label">{{ i.login.source }}</span>{% if i.login.origin %}<span class="small muted mono">{{ i.login.origin }}</span>{% endif %}{% endif %}</div></td>
+</tr>
+{% endfor %}</tbody></table></div>
+{% if not config_file %}<div class="alert alert-warning">{{ icon("warn") }}<div>Not saved: no config file. A change stays in memory, and a restart returns to off.</div></div>{% endif %}
+</div>
 </section>
 
 <section id="keys" class="view">

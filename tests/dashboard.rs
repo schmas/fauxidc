@@ -240,3 +240,92 @@ async fn dashboard_sidebar_item_has_label_then_icon() {
         "data-view=\"issuers\"><span>Issuers</span><svg class=\"ic ic-lg\" aria-hidden=\"true\"><use href=\"#i-server\"/></svg></a>"
     ));
 }
+
+// The "Login page" section of the Issuers view (issue #45).
+
+#[tokio::test]
+async fn issuers_view_has_the_login_setting() {
+    let inputs = fauxidc::config::LoadInputs {
+        config_files: vec![],
+        env: vec![],
+        flags: fauxidc::config::CliOverrides::default(),
+        cwd: tmp_dir(),
+    };
+    let app = app_from_config(fauxidc::config::load(&inputs).unwrap().config);
+    let (_, _, b) = send(&app, get("/_mock/")).await;
+    for needle in [
+        "data-login-issuer=\"default\"",
+        "role=\"switch\"",
+        "Off · Subject and Claims form",
+        ">Default<",
+        "Not saved: no config file",
+    ] {
+        assert!(b.contains(needle), "{needle}");
+    }
+    assert!(!b.contains(" checked"), "the switch is off");
+}
+
+#[tokio::test]
+async fn issuers_view_shows_config_file_source() {
+    use std::sync::Arc;
+    let file = tmp_dir().join("fauxidc.toml");
+    std::fs::write(
+        &file,
+        format!("{AUTH0}show_user_list = true\n[user.alice]\nlabel = \"Alice\"\n"),
+    )
+    .unwrap();
+    let inputs = fauxidc::config::LoadInputs {
+        config_files: vec![file],
+        env: vec![],
+        flags: fauxidc::config::CliOverrides::default(),
+        cwd: tmp_dir(),
+    };
+    let config = fauxidc::config::load(&inputs).unwrap().config;
+    let state = Arc::new(
+        fauxidc::state::AppState::new(config, KeyHandle::ready(KEY.clone()), true).unwrap(),
+    );
+    let writer = state.config_writer.clone();
+    let (app, handle) = fauxidc::reload::live_router(state);
+    assert!(
+        writer
+            .set(fauxidc::reload::ConfigWriter::new(
+                inputs,
+                handle.downgrade()
+            ))
+            .is_ok()
+    );
+    let (_, _, b) = send(&app, get("/_mock/")).await;
+    for needle in [
+        "data-login-issuer=\"auth0\"",
+        " checked",
+        "Config file",
+        "show_user_list = true",
+        "On · User dropdown",
+    ] {
+        assert!(b.contains(needle), "{needle}");
+    }
+    assert!(!b.contains("Not saved: no config file"));
+}
+
+#[tokio::test]
+async fn issuers_view_shows_memory_source() {
+    let inputs = fauxidc::config::LoadInputs {
+        config_files: vec![],
+        env: vec![],
+        flags: fauxidc::config::CliOverrides::default(),
+        cwd: tmp_dir(),
+    };
+    let app = app_from_config(fauxidc::config::load(&inputs).unwrap().config);
+    let req = Request::builder()
+        .method("PUT")
+        .uri("/_mock/default/login")
+        .header("host", "localhost:9000")
+        .header("content-type", "application/json")
+        .body(Body::from(r#"{"show_user_list": true}"#))
+        .unwrap();
+    let (s, _, _) = send(&app, req).await;
+    assert_eq!(s, 200);
+    let (_, _, b) = send(&app, get("/_mock/")).await;
+    assert!(b.contains(" checked"));
+    assert!(b.contains(">Not saved<"));
+}

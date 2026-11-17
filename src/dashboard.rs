@@ -40,6 +40,7 @@ fn issuer_links(state: &Arc<AppState>, id: &str, headers: &HeaderMap) -> Option<
         jwks_href: ctx.endpoint_href(Endpoint::Jwks),
         debugger_href: ctx.endpoint_href(Endpoint::Debugger),
         endsession_href: ctx.endpoint_href(Endpoint::Endsession),
+        login: crate::login_api::setting(state, id)?,
     })
 }
 
@@ -54,6 +55,10 @@ pub fn context(state: &Arc<AppState>, headers: &HeaderMap) -> DashboardContext {
             .filter_map(|id| issuer_links(state, id, headers))
             .collect(),
         request_log: state.request_log.enabled(),
+        config_file: state
+            .config_writer
+            .get()
+            .is_some_and(|w| !w.inputs().config_files.is_empty()),
         static_base: STATIC_BASE.to_owned(),
     }
 }

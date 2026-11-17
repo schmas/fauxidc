@@ -192,6 +192,8 @@ pub struct DashboardIssuer {
     /// The `/endsession` path. A browser visit signs out: it clears the Session and the
     /// Auto-select cookie.
     pub endsession_href: String,
+    /// The login page setting and where its value comes from.
+    pub login: crate::login_api::LoginSetting,
 }
 
 /// The context of `dashboard.html`. Version 2.
@@ -201,6 +203,8 @@ pub struct DashboardContext {
     pub issuers: Vec<DashboardIssuer>,
     /// `false` when `server.request_log_size` is 0.
     pub request_log: bool,
+    /// `true` when the Test API can write a config file (the last config file exists).
+    pub config_file: bool,
     pub static_base: String,
 }
 
