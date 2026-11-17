@@ -26,7 +26,7 @@ It has no real accounts. Anyone who can reach it can get a token, so it listens 
 
 ## Users
 
-The login page lists these Users. Click one to sign in. There are no passwords.
+The login page opens on a form for any username. Use the switch "Choose a configured User" to pick one of these Users. There are no passwords.
 
 | User | Email | Roles |
 | --- | --- | --- |

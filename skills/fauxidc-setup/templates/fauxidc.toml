@@ -11,7 +11,7 @@ key_file = "/data/server.pem"
 issuer_url = "http://localhost:{{port}}/{{issuer_id}}"
 # Strict mode (the default): a wrong client_id, redirect_uri, secret or a missing PKCE fails.
 
-# Custom user: remove the `#` to add a "Custom..." login option. {username} is what the visitor types.
+# Custom user: remove the `#` to make the Custom user form ask for one username. {username} is what the visitor types.
 # [issuer.{{issuer_id}}.custom_user]
 # label = "Other user..."
 # [issuer.{{issuer_id}}.custom_user.claims]

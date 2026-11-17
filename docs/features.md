@@ -62,6 +62,16 @@ A Session records that a User signed in at an Issuer. Sessions are in memory (at
 - If `max_age` is sent, Session reuse wins over `login_hint` with `auto_login` and over Auto-select.
 - `/endsession` deletes the Session and both cookies.
 
+## Login page
+
+- The built-in page opens on the Custom user form: Subject and Claims.
+- The switch "Choose a configured User" shows the dropdown of the configured Users. The dropdown has no Custom user entry. An Issuer without Users has no switch.
+- The switch saves the view in the cookie `fauxidc_login_view_{issuer_id}` (`list` or `form`). Its Path is the Issuer path and it lasts one year. It is not `HttpOnly`, because the page script writes it.
+  The page then shows "Saved in this browser · Sign out clears it".
+- `{issuer}/endsession` clears the cookie. The next `/authorize` opens on the Issuer view again.
+- The start view is the first rule that applies: no Users (form); an error on the `user` field (dropdown); the posted `user` after a rejected form; a `login_hint` that names a User (dropdown); the cookie; `issuer.<id>.show_user_list`.
+- `show_user_list` is `false` by default. Change it in the config, with `PUT /_mock/{issuer-id}/login` or with the Login page switch in the dashboard. See [ADR 0010](adr/0010-login-view-cookie-and-setting.md).
+
 ## Hot reload
 
 fauxidc polls the config files every second (modification time and length) and also reloads on SIGHUP.

@@ -17,8 +17,8 @@
 - [Configuration reference](docs/configuration.md): sources, Zero config, Docker, examples, Strict and Lenient mode, signing keys
 - [Test API reference](docs/test-api.md): token minting, key rotation, Injected failures, Users, Clients, config view, state reset, config reload, Request log, the dashboard at `/_mock/`
 - [Testcontainers guide](docs/testcontainers.md): `GenericContainer` setup, wait strategy, random host port, Spring Boot, tokens from Java
-- [Features reference](docs/features.md): Sessions, hot reload, debugger, TLS, token exchange, `private_key_jwt`
-- [Templates reference](docs/templates.md): the template context (version 2) and the stylesheet
+- [Features reference](docs/features.md): the login page view (`show_user_list`, `GET`/`PUT /_mock/{issuer-id}/login`), Sessions, hot reload, debugger, TLS, token exchange, `private_key_jwt`
+- [Templates reference](docs/templates.md): the template context (version 3) and the stylesheet
 - [Spec](docs/spec.md): the full behavior reference
 
 ## Config

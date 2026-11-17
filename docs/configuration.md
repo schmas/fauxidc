@@ -104,6 +104,21 @@ With `auth0-spa-js` and `useRefreshTokens`, set `cacheLocation: "localstorage"` 
 The default `"memory"` uses a web worker that accepts only `/oauth/token`. See
 [testing/m2-exit-test.md](testing/m2-exit-test.md).
 
+## Login page view
+
+The built-in login page opens on the Custom user form. Set `show_user_list = true` on the Issuer to open it on the User dropdown instead:
+
+```toml
+[issuer.app]
+issuer_url = "http://localhost:9000/app"
+show_user_list = true
+```
+
+- The default is `false`. An Issuer without Users always shows the form.
+- A browser that used the switch "Choose a configured User" keeps its own view in the cookie `fauxidc_login_view_{issuer_id}`. The cookie wins over this key.
+- `PUT /_mock/{issuer-id}/login` and the dashboard change the key in the last config file, or in memory when there is no file. See [test-api.md](test-api.md#login-page-setting).
+- If an env var, inline config or a flag sets the key, the write fails with 409. Change that source and restart.
+
 ## Strict mode and Lenient mode
 
 An Issuer is in Strict mode by default. Set `lenient = true` on the Issuer for Lenient mode.

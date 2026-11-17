@@ -49,7 +49,7 @@ Ask the person in one message, with a default for each:
    `logout_param_aliases` and `default_claims` into the new Issuer table. Keep `issuer_url` from step 3.
 3. The Users and their claims. Default: `alice` (role `admin`) and `bob` (role `viewer`). Use the claim names the app reads,
    for example `roles`, `groups` or a namespaced claim. Use `example.com` or `example.test` email addresses.
-4. A Custom user template (a "Custom..." login option where you type any username). Default: no.
+4. A Custom user template (the Custom user form asks for one username and fills a claims template). Default: no.
 5. The target directory. Default `devtools/local-idp/`.
 
 Done when every question has an answer or the person accepts the default.
@@ -138,7 +138,7 @@ Then print a short summary for the person:
 - The settings above and the file you wrote them to.
 - The manual next steps. For example: the app must trust the new issuer (an allow list of issuers, or an audience check);
   a resource server must accept the access token header `typ` `at+jwt`; restart the app to read the new settings.
-- How to test the login: start the app, click its login button, pick a User on the fauxidc login page.
+- How to test the login: start the app, click its login button, use the switch "Choose a configured User" on the fauxidc login page and pick a User.
 
 ## Notes
 
