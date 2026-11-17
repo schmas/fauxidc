@@ -239,6 +239,7 @@ The answer follows hot reload and the Users routes.
 
 - `config` is the merged config. `sources` has one entry for each value that `fauxidc config` prints, by the same dotted path.
 - A source is `default`, `<file>:<line>`, `inline`, `env <name>` or `flag <name>`, the same text as `fauxidc config`.
+- A `show_user_list` value that `PUT /_mock/{issuer-id}/login` kept in memory shows in `config`, with the source `memory`.
 - Secrets are `"***"`: each `client_secret`, and the private members of a JWK in a Client `jwks` (`d`, `p`, `q`, `dp`, `dq`, `qi`, `oth`, `k`).
 - The server loads its config sources again for the sources. If that load does not give the running value, the source is `unknown`.
   This happens for a restart-only key that changed in a file, for a file change before the next poll or `POST /_mock/reload`, and for an invalid file.
