@@ -12,6 +12,8 @@ The [dashboard](#dashboard) at `/_mock/` gives a browser page for every route be
 | `POST /_mock/{issuer-id}/rotate-key` | [Rotate the signing key](#rotate-the-signing-key) of an Issuer. |
 | `POST /_mock/{issuer-id}/fail-next` | [Inject failures](#injected-failures) into an endpoint. |
 | `DELETE /_mock/{issuer-id}/fail-next` | Remove the Injected failures of an Issuer. |
+| `GET /_mock/{issuer-id}/login` | Show the login page setting `show_user_list` and its source. |
+| `PUT /_mock/{issuer-id}/login` | Set `show_user_list` in the config file, or in memory when there is no file. Body: `{"show_user_list": true}`. |
 | `GET /_mock/users` | List the [Users](#users). |
 | `GET /_mock/users/{user-id}` | Show one User. |
 | `POST /_mock/users` | Add a User to the config file. |

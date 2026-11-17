@@ -33,6 +33,7 @@ pub mod jwks_fetch;
 pub mod jwt_bearer;
 pub mod keys;
 pub mod logging;
+pub mod login_api;
 pub mod prompt;
 pub mod refresh;
 pub mod reload;
