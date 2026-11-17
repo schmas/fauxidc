@@ -1,18 +1,21 @@
 name: Pages
 
 # Builds the project website (website/) from docs/ and deploys it to GitHub Pages.
-# A pull request that changes docs/ or website/ builds the site. The build fails on a
+# The build reads docs/ and the README (image alt texts). A pull request that changes
+# docs/, README.md or website/ builds the site. The build fails on a
 # broken internal link (starlight-links-validator). A push to main also deploys the site.
 on:
   push:
     branches: [main]
     paths:
       - "docs/**"
+      - "README.md"
       - "website/**"
       - ".github/workflows/pages.yml"
   pull_request:
     paths:
       - "docs/**"
+      - "README.md"
       - "website/**"
       - ".github/workflows/pages.yml"
   workflow_dispatch:
