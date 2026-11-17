@@ -127,8 +127,8 @@ login_template = ""           # per-Issuer login page
 paths = { token = "/oauth/token", endsession = "/v2/logout" }
 logout_param_aliases = { returnTo = "post_logout_redirect_uri" }
 
-[issuer.auth0.custom_user]    # M4, optional: "Custom…" asks for one username
-label = "Other…"              # dropdown label, default "Custom…"
+[issuer.auth0.custom_user]    # M4, optional: the Custom user form asks for one username
+label = "Other…"              # `custom_label` of the template context, default "Custom…"
 [issuer.auth0.custom_user.claims]   # only {username} is allowed; no sub
 email = "{username}@example.test"
 email_verified = true
@@ -270,13 +270,16 @@ Later wins:
 
 ### 8.3 Login page
 
-- A dropdown of Users (by `label`), and a "Custom…" option for a Custom user (`sub` + claims JSON).
-- With `issuer.<id>.custom_user`, "Custom…" (or its `label`) shows one `username` field instead: `sub` is the username (trimmed, lowercase), and the claims are the template with `{username}` filled in every string value.
+- The page opens on the Custom user form: Subject (`sub`) and Claims (JSON, optional). It posts `user=__custom__` from a hidden field.
+- With `issuer.<id>.custom_user`, the form has one `username` field instead: `sub` is the username (trimmed, lowercase), and the claims are the template with `{username}` filled in every string value.
+- A switch "Choose a configured User" shows a dropdown of the configured Users (by `label`) instead of the form. The dropdown has no Custom user entry. If the config has no Users, the page has no switch and always shows the form.
+- The page shows both views. The inactive view is `hidden` and its controls are `disabled`, so only one `user` value posts. The page works without JavaScript; the switch needs JavaScript.
+- Start view, the first that applies: no Users (form); an error on the `user` field (dropdown); the posted `user` after a rejected form (`__custom__` is the form, else the dropdown); a `login_hint` that names a User (dropdown, that User selected); the login view cookie; `issuer.<id>.show_user_list` (default false, also set by `PUT /_mock/{issuer_id}/login`).
+- Login view cookie: the switch sets `fauxidc_login_view_{issuer_id}` to `list` or `form` (`Path` = the Issuer path, `SameSite=Lax`, `Max-Age=31536000`, not `HttpOnly`). Any other value is ignored. While it is set, the switch shows "Saved in this browser · Sign out clears it". Else it shows the number of Users and the first 3 ids. `{issuer}/endsession` clears it.
 - A collapsed "Override claims" JSON field for Claim overrides.
 - Shows the `client_id` and the Issuer id.
 - Checkbox "Remember me and skip this page" (Auto-select). It sets a cookie per Issuer with the User id. The next `/authorize` signs in that User with no page. `prompt=login` still shows the page. Logout clears the cookie. The debugger page has a "Signed in as … · change" link that clears it.
 - `login_hint=<user id>` with `auto_login = true` signs in that User at once. This is for E2E tests.
-- `issuer.<id>.show_user_list` (default false) opens the login page on the User dropdown.
 
 ## 9. Tokens
 

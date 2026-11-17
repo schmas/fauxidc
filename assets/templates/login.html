@@ -28,32 +28,36 @@
 <svg class="ic" aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
 <span class="wrap">{{ error }}</span>
 </div>{% endif %}
-<div class="field">
-<label for="f-user">User</label>
-<select id="f-user" name="user" class="select{% if error_field == "user" %} select-error{% endif %}" aria-describedby="f-user-help"{% if error_field == "user" %} aria-invalid="true"{% endif %}>
-{% for u in users %}<option value="{{ u.id }}"{% if selected == u.id %} selected{% endif %}>{{ u.label }}</option>
-{% endfor %}<option value="__custom__"{% if selected == "__custom__" %} selected{% endif %} data-custom>{{ custom_label }}</option>
-</select>
-<p id="f-user-help" class="hint small">No password. Pick {{ custom_label }} to type {% if custom_username %}a username{% else %}a subject and claims{% endif %}.</p>
-</div>
-<fieldset id="custom-user" class="group">
-<legend>Custom User<span> · only for {{ custom_label }}</span></legend>
+<fieldset id="custom-user" class="stack"{% if show_user_list %} hidden disabled{% endif %}>
+<input type="hidden" name="user" value="__custom__">
 {% if custom_username %}<div class="field">
 <label for="f-username">Username</label>
 <input id="f-username" type="text" name="username" value="{{ username }}" class="input mono{% if error_field == "username" %} input-error{% endif %}" placeholder="carol" autocomplete="off" autocapitalize="none" spellcheck="false" aria-describedby="f-username-help"{% if error_field == "username" %} aria-invalid="true"{% endif %}>
-<p id="f-username-help" class="hint small">The <code>sub</code> claim, in lowercase. It fills the claims template.</p>
+<p id="f-username-help" class="hint small">No password. The <code>sub</code> claim, in lowercase. It fills the claims template.</p>
 </div>
 {% else %}<div class="field">
 <label for="f-custom-sub">Subject</label>
 <input id="f-custom-sub" type="text" name="custom_sub" value="{{ custom_sub }}" class="input mono{% if error_field == "custom_sub" %} input-error{% endif %}" placeholder="carol" autocomplete="off" spellcheck="false" aria-describedby="f-custom-sub-help"{% if error_field == "custom_sub" %} aria-invalid="true"{% endif %}>
-<p id="f-custom-sub-help" class="hint small">The <code>sub</code> claim.</p>
+<p id="f-custom-sub-help" class="hint small">No password. Type any subject. It becomes the sub claim.</p>
 </div>
 <div class="field">
 <label for="f-custom-claims">Claims <small>(JSON, optional)</small></label>
 <textarea id="f-custom-claims" name="custom_claims" rows="3" class="textarea{% if error_field == "custom_claims" %} textarea-error{% endif %}" placeholder='{"email": "carol@example.test"}' spellcheck="false"{% if error_field == "custom_claims" %} aria-invalid="true"{% endif %}>{{ custom_claims }}</textarea>
 </div>
 {% endif %}</fieldset>
-<details class="details"{% if override_claims or error_field == "override_claims" %} open{% endif %}>
+<div id="user-list" class="field"{% if not show_user_list %} hidden{% endif %}>
+<label for="f-user">User</label>
+<select id="f-user" name="user" class="select{% if error_field == "user" %} select-error{% endif %}" aria-describedby="f-user-help"{% if error_field == "user" %} aria-invalid="true"{% endif %}{% if not show_user_list %} disabled{% endif %}>
+{% for u in users %}<option value="{{ u.id }}"{% if selected == u.id %} selected{% endif %}>{{ u.label }}</option>
+{% endfor %}</select>
+<p id="f-user-help" class="hint small">Turn the switch off to type {% if custom_username %}a username{% else %}a subject and claims{% endif %}.</p>
+</div>
+{% if users %}<label class="switch-row switch-tile js-only">
+<input type="checkbox" role="switch" class="switch" id="f-show-users" data-cookie="{{ view_cookie }}" data-cookie-path="{{ view_cookie_path }}" aria-labelledby="f-show-users-label" aria-describedby="f-show-users-note"{% if show_user_list %} checked{% endif %}>
+<span class="stack-tight"><span id="f-show-users-label">Choose a configured User</span>
+<span id="f-show-users-note" class="small muted">{% if user_list_saved %}Saved in this browser · Sign out clears it{% else %}{{ users|length }} User{% if users|length != 1 %}s{% endif %} on this Issuer: {% for u in users[:3] %}{{ u.id }}{% if not loop.last %}, {% endif %}{% endfor %}{% if users|length > 3 %}…{% endif %}{% endif %}</span></span>
+</label>
+{% endif %}<details class="details"{% if override_claims or error_field == "override_claims" %} open{% endif %}>
 <summary><span>Override claims <small class="muted">· optional</small></span><svg class="ic" aria-hidden="true" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg></summary>
 <div>
 <label for="f-override" class="sr-only">Override claims (JSON)</label>
@@ -76,12 +80,24 @@
 <script>
 (function () {
   document.documentElement.classList.add("js");
-  var select = document.querySelector("select[name=user]");
+  var toggle = document.getElementById("f-show-users");
+  var list = document.getElementById("user-list");
   var custom = document.getElementById("custom-user");
-  if (!select || !custom) return;
-  function update() { custom.hidden = select.value !== "__custom__"; }
-  select.addEventListener("change", update);
-  update();
+  if (!toggle || !list || !custom) return;
+  var select = list.querySelector("select");
+  toggle.addEventListener("change", function () {
+    var on = toggle.checked;
+    list.hidden = !on;
+    select.disabled = !on;
+    custom.hidden = on;
+    custom.disabled = on;
+    var first = on ? select : custom.querySelector("input:not([type=hidden]), textarea");
+    if (first) first.focus();
+    document.cookie = toggle.dataset.cookie + "=" + (on ? "list" : "form") +
+      "; Path=" + toggle.dataset.cookiePath + "; SameSite=Lax; Max-Age=31536000";
+    var note = document.getElementById("f-show-users-note");
+    if (note) note.textContent = "Saved in this browser \u00b7 Sign out clears it";
+  });
 })();
 </script>
 </body>

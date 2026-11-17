@@ -12,7 +12,10 @@ use crate::clients::{
     ResolvedClient, debugger_redirect_ok, find_client, redirect_uri_matches, register_lenient,
 };
 use crate::config::{Claims, CustomUserConfig, Endpoint};
-use crate::cookies::{auto_select_name, auto_select_set, read_cookie, session_name, session_set};
+use crate::cookies::{
+    auto_select_name, auto_select_set, login_view_name, login_view_path, read_cookie,
+    read_login_view, session_name, session_set,
+};
 use crate::error::{OAuthError, append_query};
 use crate::logging::{record_client, record_endpoint};
 use crate::prompt::{self, PromptError, PromptRequest};
@@ -404,7 +407,14 @@ async fn authorize_request(ctx: &IssuerCtx, headers: &HeaderMap, p: &AuthorizePa
         };
     }
     if prompt.force_login {
-        return login_page(ctx, &request, StatusCode::OK, None, &KeptInput::default());
+        return login_page(
+            ctx,
+            &request,
+            headers,
+            StatusCode::OK,
+            None,
+            &KeptInput::default(),
+        );
     }
     // `max_age` is checked against the Session `auth_time` (spec 11): a Session that is not
     // older than `max_age` is reused, so `auth_time` stays (OIDF oidcc-max-age-10000).
@@ -422,7 +432,14 @@ async fn authorize_request(ctx: &IssuerCtx, headers: &HeaderMap, p: &AuthorizePa
                 overrides: Claims::new(),
             },
         ),
-        None => login_page(ctx, &request, StatusCode::OK, None, &KeptInput::default()),
+        None => login_page(
+            ctx,
+            &request,
+            headers,
+            StatusCode::OK,
+            None,
+            &KeptInput::default(),
+        ),
     }
 }
 
@@ -646,16 +663,52 @@ impl LoginError {
     }
 }
 
+/// `true` when the login page starts on the User dropdown, `false` on the Custom user form.
+///
+/// No Users: the form. Else the first that applies: an error on `user` (the list), the posted
+/// `user` (`__custom__` is the form), a `login_hint` that names a User (the list), the login
+/// view cookie `saved`, the Issuer setting.
+fn start_view(
+    ctx: &IssuerCtx,
+    request: &ValidRequest,
+    error: Option<LoginError>,
+    kept: &KeptInput,
+    saved: Option<bool>,
+) -> bool {
+    let users = &ctx.app.config.user;
+    if users.is_empty() {
+        return false;
+    }
+    if error.is_some_and(|e| e.field == "user") {
+        return true;
+    }
+    if let Some(user) = kept.user.as_deref() {
+        return user != CUSTOM_USER;
+    }
+    if request
+        .params
+        .login_hint
+        .as_ref()
+        .is_some_and(|hint| users.contains_key(hint))
+    {
+        return true;
+    }
+    saved.unwrap_or_else(|| ctx.show_user_list())
+}
+
 /// Renders the login page. `error` is shown on the page and marks its field; `kept` refills
-/// the text fields.
+/// the text fields. `headers` carry the login view cookie.
 fn login_page(
     ctx: &IssuerCtx,
     request: &ValidRequest,
+    headers: &HeaderMap,
     status: StatusCode,
     error: Option<LoginError>,
     kept: &KeptInput,
 ) -> Response {
     let custom_user = ctx.issuer().custom_user.as_ref();
+    let saved = read_login_view(headers, &ctx.id);
+    let show_user_list = start_view(ctx, request, error, kept, saved);
     let known = |id: &&String| ctx.app.config.user.contains_key(*id);
     let selected = kept
         .user
@@ -695,6 +748,10 @@ fn login_page(
             .map_or_else(|| CustomUserConfig::default().label, |c| c.label.clone()),
         custom_username: custom_user.is_some(),
         username: kept.username.clone(),
+        show_user_list,
+        user_list_saved: saved.is_some(),
+        view_cookie: login_view_name(&ctx.id),
+        view_cookie_path: login_view_path(&ctx.path),
     };
     match ctx.app.templates.render_login(&ctx.id, &login) {
         Ok(html) => issuer_page(status, html),
@@ -776,7 +833,14 @@ pub async fn authorize_post(
         }
         Err(error) => {
             tracing::info!(issuer = %ctx.id, "login rejected: {}", error.message);
-            login_page(&ctx, &request, StatusCode::BAD_REQUEST, Some(error), &kept)
+            login_page(
+                &ctx,
+                &request,
+                &headers,
+                StatusCode::BAD_REQUEST,
+                Some(error),
+                &kept,
+            )
         }
     }
 }

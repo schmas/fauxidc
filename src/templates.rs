@@ -44,7 +44,7 @@ pub(crate) fn issuer_page(status: StatusCode, html: String) -> Response {
 }
 
 /// The current template context version.
-pub const CONTEXT_VERSION: u32 = 2;
+pub const CONTEXT_VERSION: u32 = 3;
 
 const LOGIN: &str = "login.html";
 const ERROR: &str = "error.html";
@@ -69,8 +69,9 @@ pub struct UserOption {
     pub label: String,
 }
 
-/// The context of `login.html`. Version 2.
+/// The context of `login.html`. Version 3.
 #[derive(Debug, Clone, Serialize)]
+#[allow(clippy::struct_excessive_bools)] // independent template fields of a versioned contract
 pub struct LoginContext {
     pub context_version: u32,
     pub issuer_id: String,
@@ -96,9 +97,18 @@ pub struct LoginContext {
     pub custom_username: bool,
     /// Prefilled text for the `username` field, for example after an error.
     pub username: String,
+    /// `true` when the page starts on the User dropdown, `false` on the Custom user form.
+    /// Always `false` when `users` is empty. (Version 3.)
+    pub show_user_list: bool,
+    /// `true` when this browser has a valid login view cookie. (Version 3.)
+    pub user_list_saved: bool,
+    /// The name of the login view cookie of this Issuer. (Version 3.)
+    pub view_cookie: String,
+    /// The `Path` of the login view cookie. (Version 3.)
+    pub view_cookie_path: String,
 }
 
-/// The context of `error.html`. Version 2.
+/// The context of `error.html`. Version 3.
 #[derive(Debug, Clone, Serialize)]
 pub struct ErrorContext {
     pub context_version: u32,
@@ -107,7 +117,7 @@ pub struct ErrorContext {
     pub static_base: String,
 }
 
-/// The context of `signed_out.html`. Version 2.
+/// The context of `signed_out.html`. Version 3.
 #[derive(Debug, Clone, Serialize)]
 pub struct SignedOutContext {
     pub context_version: u32,
@@ -122,7 +132,7 @@ pub struct SignedOutContext {
 }
 
 /// The context of `form_post.html`: the `/authorize` response for `response_mode=form_post`.
-/// Version 2.
+/// Version 3.
 #[derive(Debug, Clone, Serialize)]
 pub struct FormPostContext {
     pub context_version: u32,
@@ -152,7 +162,7 @@ pub struct DecodedJwt {
     pub issuer_note: String,
 }
 
-/// The context of `debugger.html`. Version 2.
+/// The context of `debugger.html`. Version 3.
 #[derive(Debug, Clone, Serialize)]
 pub struct DebuggerContext {
     pub context_version: u32,
@@ -196,7 +206,7 @@ pub struct DashboardIssuer {
     pub login: crate::login_api::LoginSetting,
 }
 
-/// The context of `dashboard.html`. Version 2.
+/// The context of `dashboard.html`. Version 3.
 #[derive(Debug, Clone, Serialize)]
 pub struct DashboardContext {
     pub context_version: u32,
@@ -395,7 +405,91 @@ mod tests {
             custom_label: "Custom…".into(),
             custom_username: false,
             username: String::new(),
+            show_user_list: true,
+            user_list_saved: false,
+            view_cookie: "fauxidc_login_view_auth0".into(),
+            view_cookie_path: "/auth0".into(),
         }
+    }
+
+    fn user(id: &str) -> UserOption {
+        UserOption {
+            id: id.into(),
+            label: id.into(),
+        }
+    }
+
+    #[test]
+    fn login_page_switch_markup() {
+        let templates = Templates::load(&config("")).unwrap();
+        let html = templates.render_login("auth0", &login_ctx()).unwrap();
+        assert!(html.contains("role=\"switch\""), "{html}");
+        assert!(html.contains("id=\"f-show-users\""));
+        assert!(html.contains("data-cookie=\"fauxidc_login_view_auth0\""));
+        assert!(html.contains("data-cookie-path=\"&#x2f;auth0\""), "{html}");
+        assert!(html.contains("Choose a configured User"));
+        assert!(html.contains("2 Users on this Issuer: alice, bob"));
+        assert!(!html.contains(">Saved in this browser"));
+
+        let saved = LoginContext {
+            user_list_saved: true,
+            ..login_ctx()
+        };
+        let html = templates.render_login("auth0", &saved).unwrap();
+        assert!(html.contains(">Saved in this browser · Sign out clears it"));
+        assert!(!html.contains("Users on this Issuer"));
+
+        let one = LoginContext {
+            users: vec![user("alice")],
+            ..login_ctx()
+        };
+        let html = templates.render_login("auth0", &one).unwrap();
+        assert!(html.contains("1 User on this Issuer: alice<"), "{html}");
+
+        let four = LoginContext {
+            users: ["a", "b", "c", "d"].map(user).to_vec(),
+            ..login_ctx()
+        };
+        let html = templates.render_login("auth0", &four).unwrap();
+        assert!(html.contains("4 Users on this Issuer: a, b, c…"), "{html}");
+
+        let none = LoginContext {
+            users: vec![],
+            show_user_list: false,
+            ..login_ctx()
+        };
+        let html = templates.render_login("auth0", &none).unwrap();
+        assert!(!html.contains("role=\"switch\""), "{html}");
+        assert!(!html.contains("id=\"f-show-users\""));
+    }
+
+    #[test]
+    fn login_page_hides_and_disables_the_inactive_view() {
+        let templates = Templates::load(&config("")).unwrap();
+        let html = templates.render_login("auth0", &login_ctx()).unwrap();
+        assert!(html.contains("<fieldset id=\"custom-user\" class=\"stack\" hidden disabled>"));
+        assert!(html.contains("<div id=\"user-list\" class=\"field\">"));
+        let form = LoginContext {
+            show_user_list: false,
+            ..login_ctx()
+        };
+        let html = templates.render_login("auth0", &form).unwrap();
+        assert!(html.contains("<fieldset id=\"custom-user\" class=\"stack\">"));
+        assert!(html.contains("<div id=\"user-list\" class=\"field\" hidden>"));
+        assert!(
+            html.contains(
+                "name=\"user\" class=\"select\" aria-describedby=\"f-user-help\" disabled>"
+            ),
+            "{html}"
+        );
+        assert!(html.contains("No password. Type any subject. It becomes the sub claim."));
+        assert!(html.contains("Turn the switch off to type a subject and claims."));
+        let username = LoginContext {
+            custom_username: true,
+            ..login_ctx()
+        };
+        let html = templates.render_login("auth0", &username).unwrap();
+        assert!(html.contains("Turn the switch off to type a username."));
     }
 
     #[test]
@@ -409,7 +503,9 @@ mod tests {
         assert!(html.contains("<option value=\"bob\" selected>bob</option>"));
         assert!(html.contains("href=\"/_mock/static/halo.css\""));
         assert!(html.contains("<option value=\"alice\">Alice Admin</option>"));
-        assert!(html.contains("value=\"__custom__\""));
+        assert!(!html.contains("<option value=\"__custom__\""), "{html}");
+        assert!(!html.contains("Custom…"), "{html}");
+        assert!(html.contains("<input type=\"hidden\" name=\"user\" value=\"__custom__\">"));
         assert!(html.contains(
             "<span class=\"label label-pair\"><span>Client</span><span>example-app</span></span>"
         ));

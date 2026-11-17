@@ -44,9 +44,19 @@ Only a page of the same origin, the dashboard Debugger view, can show them in a 
 The dashboard has `X-Frame-Options: DENY` and `Content-Security-Policy: frame-ancestors 'none'`. No page can frame it.
 The headers do not depend on the template, so a custom template gets them too.
 
-## Context version 2
+## Context version 3
 
-Every context has `context_version` (integer, `2`). Fields are added in a minor release only if they are optional for existing templates. Removing or renaming a field is a breaking release.
+Every context has `context_version` (integer, `3`). Fields are added in a minor release only if they are optional for existing templates. Removing or renaming a field is a breaking release.
+
+### Changes from version 2
+
+- `context_version` is `3` in all contexts. A template that tests `context_version == 2` must change.
+- `login.html`: new fields `show_user_list`, `user_list_saved`, `view_cookie` and `view_cookie_path`.
+- The built-in login page opens on the Custom user form. It no longer has a `Custom…` option: the form view posts a hidden `user=__custom__`, and a switch shows the User dropdown.
+- `custom_label` stays, but the built-in page no longer shows it.
+- A custom `login.html` that ignores the new fields keeps working, because the POST contract is the same.
+
+No field is removed or renamed.
 
 ### Changes from version 1
 
@@ -67,7 +77,7 @@ The autoescape writes `/` as `&#x2f;`, which a browser decodes. The `href` filte
 
 | Field | Type | Meaning |
 | --- | --- | --- |
-| `context_version` | integer | Always `2`. |
+| `context_version` | integer | Always `3`. |
 | `issuer_id` | string | Id of the issuer. |
 | `client_id` | string | The `client_id` of the authorize request. |
 | `action` | string | The form target. Post the form here with `method="post"`. |
@@ -84,10 +94,18 @@ The autoescape writes `/` as `&#x2f;`, which a browser decodes. The `href` filte
 | `custom_label` | string | The text of the Custom user option: `issuer.<id>.custom_user.label`, else `Custom…`. (Version 2.) |
 | `custom_username` | boolean | `true` when the Issuer has `custom_user`. Then show one `username` field instead of `custom_sub` and `custom_claims`. (Version 2.) |
 | `username` | string | Prefilled text for the `username` field, for example after a form error. (Version 2.) |
+| `show_user_list` | boolean | `true` when the page starts on the User dropdown, `false` on the Custom user form. Always `false` when `users` is empty. (Version 3.) |
+| `user_list_saved` | boolean | `true` when this browser has a valid login view cookie (`list` or `form`). (Version 3.) |
+| `view_cookie` | string | The login view cookie name, `fauxidc_login_view_{issuer_id}`. (Version 3.) |
+| `view_cookie_path` | string | The `Path` of the login view cookie: the Issuer path. (Version 3.) |
 
 `params` must be posted back unchanged: render each pair as `<input type="hidden" name="{{ pair[0] }}" value="{{ pair[1] }}">`.
 
 The form fields the server reads: `user` (a user `id` or `__custom__`), `custom_sub`, `custom_claims`, `override_claims`, `username`, and `remember` (checkbox). The flow needs no JavaScript.
+
+The built-in page renders both views and posts one `user` value: the inactive view is `hidden` and its controls are `disabled`.
+`show_user_list` follows this order: no Users (false); an error on `user` (true); the posted `user` after a rejected form (`__custom__` is false); a `login_hint` that names a User (true); the login view cookie; `issuer.<id>.show_user_list`.
+The page script sets the cookie when the switch changes: `{{ view_cookie }}=list` or `=form`, `Path={{ view_cookie_path }}; SameSite=Lax; Max-Age=31536000`. `{issuer}/endsession` clears it.
 
 With `user=__custom__`, the server reads only `username` and `override_claims` when the Issuer has `custom_user`, and only `custom_sub`, `custom_claims` and `override_claims` when it does not.
 An empty `username` (after trim) gives the page again with status 400, the error `Enter a username` and `error_field` = `username`.
@@ -108,7 +126,7 @@ The built-in page marks only that input.
 
 | Field | Type | Meaning |
 | --- | --- | --- |
-| `context_version` | integer | Always `2`. |
+| `context_version` | integer | Always `3`. |
 | `issuer_id` | string | Id of the issuer. |
 | `message` | string | The error message. |
 | `static_base` | string | URL prefix for static files, `/_mock/static`. |
@@ -119,7 +137,7 @@ The built-in page marks only that input.
 
 | Field | Type | Meaning |
 | --- | --- | --- |
-| `context_version` | integer | Always `2`. |
+| `context_version` | integer | Always `3`. |
 | `issuer_id` | string | Id of the issuer. |
 | `client_id` | string or null | The Client of the logout request, from `client_id` or `id_token_hint`, when known. |
 | `signed_in_as` | string or null | Always null: the same response clears the Auto-select cookie. The field stays for compatibility. |
@@ -135,7 +153,7 @@ The response has status 200 and `Cache-Control: no-store`. It is an optional tem
 
 | Field | Type | Meaning |
 | --- | --- | --- |
-| `context_version` | integer | Always `2`. |
+| `context_version` | integer | Always `3`. |
 | `issuer_id` | string | Id of the issuer. |
 | `redirect_uri` | string | The validated `redirect_uri` of the request. Post the form here with `method="post"`. |
 | `fields` | list of `[name, value]` | The response parameters, in order: `code` and `state` on success, or `error`, `error_description` and `state` on an error. `state` is in the list only when the request sent it. |
@@ -153,7 +171,7 @@ The login flow callback renders it with the decoded tokens of the flow. It is a 
 
 | Field | Type | Meaning |
 | --- | --- | --- |
-| `context_version` | integer | Always `2`. |
+| `context_version` | integer | Always `3`. |
 | `issuer_id` | string | Id of the issuer. |
 | `action` | string | The debugger path. Post the form here with `method="post"` and a field `token`. |
 | `start_href` | string | The debugger path + `/start`. A link here starts the login flow with the built-in `debugger` Client. |
@@ -190,7 +208,7 @@ A custom page that loads the script must keep them, or use its own script.
 
 | Field | Type | Meaning |
 | --- | --- | --- |
-| `context_version` | integer | Always `2`. |
+| `context_version` | integer | Always `3`. |
 | `issuers` | list of Issuers | Each configured Issuer, by id. |
 | `request_log` | boolean | `false` when `server.request_log_size` is 0. |
 | `static_base` | string | URL prefix for static files, `/_mock/static`. |

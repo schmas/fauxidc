@@ -92,6 +92,11 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .switch:checked::after { transform: translateX(16px); }
 .switch:disabled { opacity: 0.6; cursor: progress; }
 .switch-row { display: inline-flex; align-items: center; gap: 10px; cursor: pointer; }
+/* The login page switch: a tile with the switch, a label and a note line. */
+.switch-tile { display: flex; padding: 12px 16px; border-radius: 16px; background: var(--tile); font-weight: 400; }
+.stack-tight { display: flex; flex-direction: column; min-width: 0; }
+/* Controls that work only with the page script (the script adds the js class). */
+html:not(.js) .js-only { display: none; }
 @media (prefers-reduced-motion: reduce) { .switch, .switch::after { transition: none; } }
 
 /* Alerts. */
@@ -138,6 +143,7 @@ td { overflow-wrap: anywhere; }
 .group { display: grid; gap: 16px; padding: 8px 16px 16px; border: 1px dashed var(--border); border-radius: 24px; background: var(--tile); min-width: 0; }
 .group legend { padding: 0 6px; color: var(--muted-fg); font-size: 12px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
 .group legend span { font-weight: 400; letter-spacing: 0; text-transform: none; }
+fieldset.stack { margin: 0; padding: 0; border: 0; }
 .js .group legend span { display: none; }
 
 /* Collapsible (an Accordion item of halo, on <details>). */
