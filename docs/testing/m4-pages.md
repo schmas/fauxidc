@@ -78,10 +78,10 @@ Desktop is 1280x720. Mobile is 375 px wide.
 
 | # | Check | Result |
 | --- | --- | --- |
-| 1 | Login, no page scroll (1280x720, 1440x900, light, dark, three states) | pass, 2026-11-15 |
-| 2 | Login with an error | pass, 2026-11-15 |
-| 3 | Login, Custom user fields (the old "Custom…" option; run again for the switch) | pass, 2026-11-15 |
-| 4 | Login with JavaScript off | pass, 2026-11-15 |
+| 1 | Login, no page scroll (1280x720, 1440x900, light, dark, three states) | not run for the switch; last pass 2026-11-15 on the old page |
+| 2 | Login with an error | not run for the switch; last pass 2026-11-15 on the old page |
+| 3 | Login, Custom user fields (the old "Custom…" option; run again for the switch) | not run for the switch; last pass 2026-11-15 on the old page |
+| 4 | Login with JavaScript off | not run for the switch; last pass 2026-11-15 on the old page |
 | 5 | Focus rings | pass, 2026-11-15 |
 | 6 | Error and signed-out pages, no page scroll | pass, 2026-11-15 |
 | 7 | Debugger layout and badges | pass, 2026-11-15 |
@@ -89,10 +89,10 @@ Desktop is 1280x720. Mobile is 375 px wide.
 | 9 | Every page at 375 px, long error message wraps | pass, 2026-11-15 |
 | 10 | Only `localhost:9000` URLs | pass, 2026-11-15 |
 | 11 | Contrast at least 4.5:1, light and dark (lowest: 4.97 light "signature valid", 5.27 dark alert text) | pass, 2026-11-15 |
-| 2 | Login with an error marks only the failed field (part 4 re-run in the browser: empty Subject; the other fields in `tests/templates.rs`) | pass, 2026-11-15 |
-| 12 | Username mode, no page scroll (1280x720, 1440x900, light, dark, four states); no horizontal scroll at 375 px and 1280 px | pass, 2026-11-15 |
+| 2 | Login with an error marks only the failed field (part 4 re-run in the browser: empty Subject; the other fields in `tests/templates.rs`) | not run for the switch; last pass 2026-11-15 on the old page |
+| 12 | Username mode, no page scroll (1280x720, 1440x900, light, dark, four states); no horizontal scroll at 375 px and 1280 px | not run for the switch; last pass 2026-11-15 on the old page |
 | 13 | Username mode with an error marks only Username | pass, 2026-11-15 |
-| 14 | Username mode with JavaScript off | pass, 2026-11-15 |
+| 14 | Username mode with JavaScript off | not run for the switch; last pass 2026-11-15 on the old page |
 | 15 | Username mode contrast at least 4.5:1 (lowest: 5.14 light "Mock server" badge, 5.27 dark alert text) | pass, 2026-11-15 |
 
 The 2026-11-15 run used Chromium through a Playwright script outside the repo (light and dark, 1280x720, 1440x900 and 375x740, JavaScript on and off).

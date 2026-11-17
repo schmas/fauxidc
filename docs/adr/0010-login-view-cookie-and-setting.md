@@ -14,7 +14,13 @@ The page script writes the cookie, so the cookie cannot be `HttpOnly`.
 ## Decision
 
 - The page opens on the Custom user form. A switch "Choose a configured User" shows the User dropdown. The dropdown has no Custom user entry.
-- The start view is the first rule that applies: no Users (form); an error on `user` (dropdown); the posted `user`; a known `login_hint` (dropdown); the cookie; the Issuer setting.
+- The start view is the first rule that applies:
+  1. The Issuer has no Users: form.
+  2. The `user` field has an error: dropdown.
+  3. A rejected form posted a `user`: that view.
+  4. A known `login_hint`: dropdown.
+  5. The cookie.
+  6. The Issuer setting.
 - The cookie is `fauxidc_login_view_{issuer_id}`, with the value `list` or `form`. `Path` is the Issuer path, `SameSite=Lax`, `Max-Age=31536000`.
   It is not `HttpOnly`, because the page script writes it. Any other value is ignored. `{issuer}/endsession` clears it.
 - The Issuer setting is `issuer.<id>.show_user_list`. The default is `false`.

@@ -177,7 +177,7 @@ test("the Login page switch sets show_user_list and the next login page opens on
     source: "file",
   });
 
-  // A new browser context has no saved view, so the Issuer setting decides.
+  // No view cookie is set yet, so the Issuer setting decides.
   await page.goto(loginUrl);
   await expect(page.locator("#user-list")).toBeVisible();
   await expect(page.locator("#custom-user")).toBeHidden();

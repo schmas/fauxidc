@@ -13,7 +13,7 @@ issuer_url = "https://fauxidc/conformance"
 # Strict mode; the suite drives the login page.
 lenient = false
 auto_login = false
-# the suite clicks Sign in on the default view: start on the User dropdown
+# The suite clicks Sign in on the default view, so start on the User dropdown.
 show_user_list = true
 
 [client.conformance_1]
