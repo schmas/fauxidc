@@ -729,6 +729,18 @@ async fn login_page_defaults_to_the_custom_user_form() {
 }
 
 #[tokio::test]
+async fn login_page_links_to_the_dashboard_users() {
+    let (s, h, b) = send(&zero_app(), get(ZERO_AUTHORIZE)).await;
+    assert_eq!(s, 200, "{b}");
+    assert!(
+        b.contains(r#"href="/_mock/#issuers" target="_blank" rel="noopener">Admin"#),
+        "{b}"
+    );
+    // The page sets no cookie, so a dashboard tab cannot change the login flow.
+    assert!(h.get("set-cookie").is_none());
+}
+
+#[tokio::test]
 async fn subject_only_sign_in_returns_a_code() {
     let (s, h, b) = send(
         &zero_app(),

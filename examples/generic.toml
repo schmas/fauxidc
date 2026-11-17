@@ -9,8 +9,8 @@
 [issuer.generic]
 issuer_url = "http://localhost:9000/generic"
 
-# Custom user template. Remove the `#` to add a "Custom..." option to the login page.
-# The visitor types one username and the claims below apply with {username} filled in.
+# Custom user template. Remove the `#` to replace Subject and Claims on the login page
+# with one username field. The claims below apply with {username} filled in.
 # [issuer.generic.custom_user]
 # label = "Other..."
 # [issuer.generic.custom_user.claims]

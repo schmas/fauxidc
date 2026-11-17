@@ -43,6 +43,11 @@ pub(crate) fn issuer_page(status: StatusCode, html: String) -> Response {
     res
 }
 
+/// The dashboard view of the Issuers, their Users and the login page setting.
+pub const DASHBOARD_ISSUERS_HREF: &str = "/_mock/#issuers";
+/// The dashboard view of the request log.
+pub const DASHBOARD_REQUESTS_HREF: &str = "/_mock/#requests";
+
 /// The current template context version.
 pub const CONTEXT_VERSION: u32 = 3;
 
@@ -106,6 +111,9 @@ pub struct LoginContext {
     pub view_cookie: String,
     /// The `Path` of the login view cookie. (Version 3.)
     pub view_cookie_path: String,
+    /// The dashboard link of the page header, opened in a new tab. Empty for no link.
+    /// (Version 3.)
+    pub admin_href: String,
 }
 
 /// The context of `error.html`. Version 3.
@@ -115,6 +123,9 @@ pub struct ErrorContext {
     pub issuer_id: String,
     pub message: String,
     pub static_base: String,
+    /// The dashboard link of the page header, opened in a new tab. Empty for no link.
+    /// (Version 3.)
+    pub admin_href: String,
 }
 
 /// The context of `signed_out.html`. Version 3.
@@ -129,6 +140,9 @@ pub struct SignedOutContext {
     /// The debugger `?forget=1` URL of the Issuer, which clears the Auto-select cookie.
     pub change_href: Option<String>,
     pub static_base: String,
+    /// The dashboard link of the page header, opened in a new tab. Empty for no link.
+    /// (Version 3.)
+    pub admin_href: String,
 }
 
 /// The context of `form_post.html`: the `/authorize` response for `response_mode=form_post`.
@@ -409,6 +423,7 @@ mod tests {
             user_list_saved: false,
             view_cookie: "fauxidc_login_view_auth0".into(),
             view_cookie_path: "/auth0".into(),
+            admin_href: "/_mock/#issuers".into(),
         }
     }
 
@@ -649,8 +664,45 @@ mod tests {
                 issuer_id: "auth0".into(),
                 message: "no <client>".into(),
                 static_base: STATIC_BASE.into(),
+                admin_href: "/_mock/#requests".into(),
             })
             .unwrap();
         assert!(html.contains("no &lt;client&gt;"));
+        assert!(html.contains(ADMIN_LINK_REQUESTS), "{html}");
+    }
+
+    const ADMIN_LINK_ISSUERS: &str = "<a class=\"label label-link\" href=\"/_mock/#issuers\" target=\"_blank\" rel=\"noopener\">Admin";
+    const ADMIN_LINK_REQUESTS: &str = "<a class=\"label label-link\" href=\"/_mock/#requests\" target=\"_blank\" rel=\"noopener\">Admin";
+
+    #[test]
+    fn login_page_links_to_the_dashboard() {
+        let templates = Templates::load(&config("")).unwrap();
+        let html = templates.render_login("auth0", &login_ctx()).unwrap();
+        assert!(html.contains(ADMIN_LINK_ISSUERS), "{html}");
+
+        // An empty href drops the link, so a page can hide it.
+        let no_link = LoginContext {
+            admin_href: String::new(),
+            ..login_ctx()
+        };
+        let html = templates.render_login("auth0", &no_link).unwrap();
+        assert!(!html.contains("label-link"), "{html}");
+    }
+
+    #[test]
+    fn signed_out_page_links_to_the_dashboard() {
+        let templates = Templates::load(&config("")).unwrap();
+        let html = templates
+            .render_signed_out(&SignedOutContext {
+                context_version: CONTEXT_VERSION,
+                issuer_id: "auth0".into(),
+                client_id: None,
+                signed_in_as: None,
+                change_href: None,
+                static_base: STATIC_BASE.into(),
+                admin_href: "/_mock/#issuers".into(),
+            })
+            .unwrap();
+        assert!(html.contains(ADMIN_LINK_ISSUERS), "{html}");
     }
 }

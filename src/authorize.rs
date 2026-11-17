@@ -22,8 +22,8 @@ use crate::prompt::{self, PromptError, PromptRequest};
 use crate::session::Session;
 use crate::state::{CodeGrant, IssuerCtx, PkceMethod, Subject};
 use crate::templates::{
-    CONTEXT_VERSION, ErrorContext, FormPostContext, LoginContext, STATIC_BASE, UserOption,
-    frame_same_origin, issuer_page,
+    CONTEXT_VERSION, DASHBOARD_ISSUERS_HREF, DASHBOARD_REQUESTS_HREF, ErrorContext,
+    FormPostContext, LoginContext, STATIC_BASE, UserOption, frame_same_origin, issuer_page,
 };
 use crate::tokens::verify_id_token_hint;
 
@@ -752,6 +752,7 @@ fn login_page(
         user_list_saved: saved.is_some(),
         view_cookie: login_view_name(&ctx.id),
         view_cookie_path: login_view_path(&ctx.path),
+        admin_href: DASHBOARD_ISSUERS_HREF.to_owned(),
     };
     match ctx.app.templates.render_login(&ctx.id, &login) {
         Ok(html) => issuer_page(status, html),
@@ -765,6 +766,7 @@ pub(crate) fn error_page(ctx: &IssuerCtx, status: StatusCode, message: String) -
         issuer_id: ctx.id.clone(),
         message,
         static_base: STATIC_BASE.to_owned(),
+        admin_href: DASHBOARD_REQUESTS_HREF.to_owned(),
     };
     match ctx.app.templates.render_error(&context) {
         Ok(html) => issuer_page(status, html),

@@ -104,6 +104,10 @@ async fn unregistered_post_logout_redirect_shows_error_page() {
     assert_eq!(s, 400);
     assert!(h.get("location").is_none() && b.contains("post_logout_redirect_uri not registered"));
     assert!(h.get("set-cookie").is_none());
+    assert!(
+        b.contains(r#"href="/_mock/#requests" target="_blank" rel="noopener">Admin"#),
+        "{b}"
+    );
 }
 
 #[tokio::test]
@@ -158,6 +162,10 @@ async fn no_redirect_shows_signed_out_page() {
     assert_eq!(s, 200);
     assert!(b.contains("Signed out") && b.contains("auth0"), "{b}");
     assert!(b.contains("example-app"), "{b}");
+    assert!(
+        b.contains(r#"href="/_mock/#issuers" target="_blank" rel="noopener">Admin"#),
+        "{b}"
+    );
     clears_auto_select(&h);
 }
 
