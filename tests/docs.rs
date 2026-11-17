@@ -111,6 +111,8 @@ fn readme_is_short_and_ordered() {
         .map(|h| r.find(h).unwrap_or_else(|| panic!("{h}")))
         .collect();
     assert!(pos.windows(2).all(|w| w[0] < w[1]));
+    // The recipes live in docs/recipes.md. The README lists them with links.
+    let recipes = read("docs/recipes.md");
     for recipe in [
         "SPA with PKCE",
         "Backend with a client secret",
@@ -120,7 +122,11 @@ fn readme_is_short_and_ordered() {
         "Simulate a provider outage",
         "Use with an agent",
     ] {
-        assert!(r.contains(&format!("### {recipe}")), "{recipe}");
+        assert!(recipes.contains(&format!("\n## {recipe}\n")), "{recipe}");
+        assert!(
+            r.contains(&format!("[{recipe}](docs/recipes.md#")),
+            "{recipe}"
+        );
     }
     assert!(r.contains("ghcr.io/schmas/fauxidc") && r.contains("img.shields.io/github/v/release"));
     for example in [
@@ -132,6 +138,65 @@ fn readme_is_short_and_ordered() {
         "cognito.toml",
     ] {
         assert!(r.contains(example), "{example}");
+    }
+}
+
+#[test]
+fn readme_shows_the_product_at_the_top() {
+    let r = read("README.md");
+    let first = r
+        .lines()
+        .find(|l| !l.is_empty() && !l.starts_with('#') && !l.starts_with("[!["))
+        .expect("first line");
+    assert!(
+        first.contains("OAuth 2.0 / OpenID Connect mock server"),
+        "{first}"
+    );
+    assert!(r.contains(r#"alt="fauxidc: OAuth 2.0 / OpenID Connect mock server""#));
+    let why = r.find("## Why fauxidc").expect("why section");
+    let hero = r.find("](docs/media/login-flow.gif)").expect("hero GIF");
+    assert!(hero < why && why < r.find("## Start in 60 seconds").expect("start section"));
+    for media in [
+        "banner.svg",
+        "login-flow.gif",
+        "terminal.gif",
+        "inject-failure.gif",
+        "login-page.png",
+        "debugger.png",
+        "dashboard.png",
+    ] {
+        assert!(r.contains(&format!("docs/media/{media}")), "{media}");
+        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("docs/media")
+            .join(media);
+        assert!(path.exists(), "{media}");
+    }
+    // Every image has alt text.
+    assert!(!r.contains("![]("));
+    assert!(r.contains("docs/agents.md") && r.contains("docs/footprint.md"));
+}
+
+#[test]
+fn agents_doc_has_prompts_and_footprint_doc_has_numbers() {
+    let a = read("docs/agents.md");
+    assert!(a.matches("```text").count() >= 4);
+    for needle in [
+        "llms.txt",
+        "skills/fauxidc/SKILL.md",
+        "/_mock/",
+        "fail-next",
+        "~/.agents/skills/",
+    ] {
+        assert!(a.contains(needle), "{needle}");
+    }
+    let f = read("docs/footprint.md");
+    for needle in [
+        "cargo build --release",
+        "ps -o rss=",
+        "/_mock/health",
+        "macOS",
+    ] {
+        assert!(f.contains(needle), "{needle}");
     }
 }
 

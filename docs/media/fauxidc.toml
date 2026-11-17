@@ -1,0 +1,29 @@
+#:schema https://raw.githubusercontent.com/schmas/fauxidc/main/schema/fauxidc.schema.json
+# Config for the README media. scripts/readme-media.sh starts fauxidc with it.
+# The fixed clock keeps the token times the same in every run.
+
+[server]
+port = 9000
+fixed_time = "2026-01-01T09:00:00Z"
+
+[issuer.example]
+issuer_url = "http://localhost:9000/example"
+
+# The public Client of the demo app that scripts/readme-media.mjs serves.
+[client.example_app]
+issuer = "example"
+client_id = "example-app"
+redirect_uris = ["http://localhost:5180/"]
+post_logout_redirect_uris = ["http://localhost:5180/"]
+
+[user.alice]
+label = "Alice Admin"
+claims = { email = "alice@example.com", name = "Alice Admin", email_verified = true, roles = ["admin"] }
+
+[user.bob]
+label = "Bob Viewer"
+claims = { email = "bob@example.com", name = "Bob Viewer", email_verified = true, roles = ["viewer"] }
+
+[user.carol]
+label = "Carol Editor"
+claims = { email = "carol@example.com", name = "Carol Editor", email_verified = true, roles = ["editor"] }

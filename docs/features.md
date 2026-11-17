@@ -72,6 +72,22 @@ A Session records that a User signed in at an Issuer. Sessions are in memory (at
 - The start view is the first rule that applies: no Users (form); an error on the `user` field (dropdown); the posted `user` after a rejected form; a `login_hint` that names a User (dropdown); the cookie; `issuer.<id>.show_user_list`.
 - `show_user_list` is `false` by default. Change it in the config, with `PUT /_mock/{issuer-id}/login` or with the Login page switch in the dashboard. See [ADR 0010](adr/0010-login-view-cookie-and-setting.md).
 
+### Custom user template
+
+For a Custom user from one username, set a claims template on the Issuer. The Custom user form
+(label "Other…" for a custom template) then shows one `username` field instead of the subject and JSON fields:
+
+```toml
+[issuer.app.custom_user]
+label = "Other…"
+[issuer.app.custom_user.claims]
+email = "{username}@example.test"
+email_verified = true
+```
+
+`sub` is the username, trimmed and in lowercase (a `sub` in Override claims wins). `{username}` is filled in every string value, nested values too.
+[templates.md](templates.md) has the template context (version 3) and the override rules.
+
 ## Hot reload
 
 fauxidc polls the config files every second (modification time and length) and also reloads on SIGHUP.
