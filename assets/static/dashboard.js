@@ -140,6 +140,63 @@
     }
   }
 
+  // Login page setting ------------------------------------------------------------------
+
+  /** The file name of an origin such as `/path/fauxidc.toml:7`. */
+  function fileName(origin) {
+    const path = String(origin || "").replace(/:\d+$/, "");
+    return path.split(/[\\/]/).pop() || "config file";
+  }
+
+  /** Puts the answer of `PUT /_mock/<id>/login` into the row of `box`. */
+  function showLogin(box, answer) {
+    const on = answer.show_user_list === true;
+    box.checked = on;
+    const state = document.getElementById(box.getAttribute("aria-describedby"));
+    if (state) state.textContent = on ? "On · User dropdown" : "Off · Subject and Claims form";
+    const cell = box.closest("tr").querySelector("[data-login-source]");
+    const row = el("div", "row");
+    if (answer.source === "file") {
+      row.append(label("Saved to file", "warning"), el("span", "small muted", `just now · ${fileName(answer.origin)}`));
+    } else if (answer.source === "memory") {
+      row.append(label("Not saved", "warning"));
+    } else if (answer.source === "default") {
+      row.append(label("Default"));
+    } else {
+      row.append(label(answer.source || "unknown"));
+      if (answer.origin) row.append(el("span", "small muted mono", answer.origin));
+    }
+    cell.replaceChildren(row);
+  }
+
+  async function saveLogin(box) {
+    const wanted = box.checked;
+    $("#issuers-out").replaceChildren();
+    box.setAttribute("aria-busy", "true");
+    try {
+      const answer = await api("PUT", `/_mock/${encodeURIComponent(box.dataset.loginIssuer)}/login`, {
+        show_user_list: wanted,
+      });
+      showLogin(box, answer);
+    } catch (e) {
+      box.checked = !wanted;
+      throw e;
+    } finally {
+      box.removeAttribute("aria-busy");
+    }
+  }
+
+  document.addEventListener("change", (event) => {
+    const box = event.target.closest("[data-login-issuer]");
+    if (!box) return;
+    // The switch stays enabled, so it keeps keyboard focus. A change during a request is undone.
+    if (box.getAttribute("aria-busy") === "true") {
+      box.checked = !box.checked;
+      return;
+    }
+    run("issuers-out", () => saveLogin(box));
+  });
+
   // Debugger ---------------------------------------------------------------------------
   // The debugger page of the chosen Issuer runs in a same-origin frame with ?embed=1.
   // The page is the same one that {issuer}/debugger serves; the frame only hides its brand row.

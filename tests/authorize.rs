@@ -5,7 +5,8 @@ use common::*;
 async fn valid_request_shows_login_page() {
     let (s, _, b) = send(&app(STRICT), get(&authorize_url(&[]))).await;
     assert_eq!(s, 200);
-    assert!(b.contains("Alice Admin") && b.contains("Bobby Viewer") && b.contains("Custom"));
+    assert!(b.contains("Alice Admin") && b.contains("Bobby Viewer"));
+    assert!(b.contains("Choose a configured User"), "{b}");
     assert!(b.contains("example-app") && b.contains("auth0"));
     assert!(b.contains(r#"name="state" value="st""#));
 }
@@ -192,8 +193,11 @@ async fn custom_user_needs_sub() {
     .await;
     assert_eq!(s, 400);
     assert!(b.contains("Custom user needs a sub"));
-    assert!(b.contains(r#"value="__custom__" selected"#), "{b}");
-    assert!(!b.contains("checked"), "remember was not posted");
+    assert_form_view(&b);
+    assert!(
+        !b.contains(r#"value="1" checked"#),
+        "remember was not posted"
+    );
     let (s, _, _) = send(
         &app(STRICT),
         post_form(
@@ -476,7 +480,8 @@ async fn login_page_shows_the_username_field() {
     let (s, _, b) = send(&app, get(&authorize_url(&[]))).await;
     assert_eq!(s, 200);
     assert!(b.contains("name=\"username\""), "{b}");
-    assert!(b.contains(">Other…</option>"), "{b}");
+    assert!(!b.contains(">Other…"), "{b}");
+    assert!(b.contains("Turn the switch off to type a username."), "{b}");
     assert!(!b.contains("name=\"custom_claims\""), "{b}");
     assert!(!b.contains("name=\"custom_sub\""), "{b}");
     assert!(b.contains("name=\"override_claims\""), "{b}");
@@ -568,7 +573,7 @@ async fn empty_username_shows_the_page_with_an_error() {
     assert!(h.get("location").is_none());
     assert!(b.contains("Enter a username"), "{b}");
     assert!(b.contains("name=\"username\""), "{b}");
-    assert!(b.contains(r#"value="__custom__" selected"#), "{b}");
+    assert_form_view(&b);
 }
 
 #[tokio::test]
@@ -598,7 +603,11 @@ async fn without_template_the_subject_fields_stay() {
     let (_, _, b) = send(&app, get(&authorize_url(&[]))).await;
     assert!(b.contains("name=\"custom_sub\"") && b.contains("name=\"custom_claims\""));
     assert!(!b.contains("name=\"username\""), "{b}");
-    assert!(b.contains(">Custom…</option>"), "{b}");
+    assert!(!b.contains("Custom…"), "{b}");
+    assert!(
+        b.contains("Turn the switch off to type a subject and claims."),
+        "{b}"
+    );
     let code = login_code(
         &app,
         &[
@@ -629,17 +638,268 @@ async fn custom_user_follows_reload() {
         .unwrap();
     let (_, _, b) = send(&app, get(&authorize_url(&[]))).await;
     assert!(
-        b.contains("name=\"username\"") && b.contains(">Other…</option>"),
+        b.contains("name=\"username\"") && b.contains("to type a username."),
         "{b}"
     );
-    let changed = TEMPLATE.replace("Other…", "Someone else…");
     handle
-        .apply(
-            fauxidc::config::load_str(&format!("{STRICT}{changed}"))
-                .unwrap()
-                .config,
-        )
+        .apply(fauxidc::config::load_str(STRICT).unwrap().config)
         .unwrap();
     let (_, _, b) = send(&app, get(&authorize_url(&[]))).await;
-    assert!(b.contains(">Someone else…</option>"), "{b}");
+    assert!(!b.contains("name=\"username\""), "{b}");
+    assert!(b.contains("to type a subject and claims."), "{b}");
+}
+
+/// The opening tag of the element with `id`.
+fn tag_with_id<'a>(html: &'a str, id: &str) -> &'a str {
+    let at = html.find(&format!("id=\"{id}\"")).expect("element present");
+    let start = html[..at].rfind('<').unwrap();
+    let end = at + html[at..].find('>').unwrap();
+    &html[start..=end]
+}
+
+/// Asserts the page starts on the User dropdown: the list is shown and enabled, the Custom
+/// user fieldset is `hidden disabled`.
+fn assert_list_view(b: &str) {
+    let list = tag_with_id(b, "user-list");
+    let select = tag_with_id(b, "f-user");
+    let custom = tag_with_id(b, "custom-user");
+    assert!(!list.contains("hidden"), "{list}");
+    assert!(!select.contains("disabled"), "{select}");
+    assert!(custom.contains(" hidden disabled"), "{custom}");
+}
+
+/// Asserts the page starts on the Custom user form: the fieldset is shown and enabled, the
+/// list is `hidden` and its select `disabled`.
+fn assert_form_view(b: &str) {
+    let list = tag_with_id(b, "user-list");
+    let select = tag_with_id(b, "f-user");
+    let custom = tag_with_id(b, "custom-user");
+    assert!(list.contains(" hidden"), "{list}");
+    assert!(select.contains(" disabled"), "{select}");
+    assert!(
+        !custom.contains("hidden") && !custom.contains("disabled"),
+        "{custom}"
+    );
+}
+
+/// `STRICT` with `show_user_list = true` on the Issuer.
+fn strict_list() -> String {
+    STRICT.replace(
+        "sub_template = \"auth0|{user_id}\"\n",
+        "sub_template = \"auth0|{user_id}\"\nshow_user_list = true\n",
+    )
+}
+
+/// The app of a Zero config (Issuer `default`, Users alice and bob).
+fn zero_app() -> Router {
+    let inputs = fauxidc::config::LoadInputs {
+        config_files: vec![],
+        env: vec![],
+        flags: fauxidc::config::CliOverrides::default(),
+        cwd: tmp_dir(),
+    };
+    app_from_config(fauxidc::config::load(&inputs).unwrap().config)
+}
+
+const ZERO_AUTHORIZE: &str = "/default/authorize?client_id=test&response_type=code&scope=openid&redirect_uri=http%3A%2F%2Flocalhost%3A3000%2Fcb&state=st";
+
+fn zero_form(extra: &[(&'static str, &'static str)]) -> Vec<(&'static str, &'static str)> {
+    let mut f = vec![
+        ("client_id", "test"),
+        ("redirect_uri", "http://localhost:3000/cb"),
+        ("response_type", "code"),
+        ("scope", "openid"),
+        ("state", "st"),
+    ];
+    f.extend_from_slice(extra);
+    f
+}
+
+#[tokio::test]
+async fn login_page_defaults_to_the_custom_user_form() {
+    let (s, _, b) = send(&zero_app(), get(ZERO_AUTHORIZE)).await;
+    assert_eq!(s, 200, "{b}");
+    assert_form_view(&b);
+    assert!(b.contains("name=\"custom_sub\""), "{b}");
+    assert!(b.contains(r#"<input type="hidden" name="user" value="__custom__">"#));
+    assert!(!b.contains(r#"<option value="__custom__""#), "{b}");
+    assert!(b.contains("role=\"switch\""), "{b}");
+    assert!(!tag_with_id(&b, "f-show-users").contains("checked"));
+    assert!(b.contains("2 Users on this Issuer: alice, bob"), "{b}");
+}
+
+#[tokio::test]
+async fn subject_only_sign_in_returns_a_code() {
+    let (s, h, b) = send(
+        &zero_app(),
+        post_form(
+            "/default/authorize",
+            &zero_form(&[("user", "__custom__"), ("custom_sub", "carol")]),
+            &[],
+        ),
+    )
+    .await;
+    assert_eq!(s, 302, "{b}");
+    assert!(query_param(&location(&h), "code").is_some());
+}
+
+#[tokio::test]
+async fn issuer_setting_opens_the_user_list() {
+    let (s, _, b) = send(&app(&strict_list()), get(&authorize_url(&[]))).await;
+    assert_eq!(s, 200);
+    assert_list_view(&b);
+    assert!(tag_with_id(&b, "f-show-users").contains("checked"));
+    assert!(!b.contains(">Saved in this browser"), "{b}");
+}
+
+#[tokio::test]
+async fn cookie_wins_over_the_issuer_setting() {
+    let (_, _, b) = send(
+        &app(&strict_list()),
+        get_with(
+            &authorize_url(&[]),
+            &[("cookie", "fauxidc_login_view_auth0=form")],
+        ),
+    )
+    .await;
+    assert_form_view(&b);
+    assert!(
+        b.contains(">Saved in this browser · Sign out clears it"),
+        "{b}"
+    );
+    let (_, _, b) = send(
+        &app(STRICT),
+        get_with(
+            &authorize_url(&[]),
+            &[("cookie", "a=b; fauxidc_login_view_auth0=list")],
+        ),
+    )
+    .await;
+    assert_list_view(&b);
+    assert!(b.contains(">Saved in this browser"), "{b}");
+}
+
+#[tokio::test]
+async fn bad_cookie_value_is_ignored() {
+    for (toml, list) in [(STRICT.to_owned(), false), (strict_list(), true)] {
+        let (s, _, b) = send(
+            &app(&toml),
+            get_with(
+                &authorize_url(&[]),
+                &[("cookie", "fauxidc_login_view_auth0=xyz")],
+            ),
+        )
+        .await;
+        assert_eq!(s, 200);
+        if list {
+            assert_list_view(&b);
+        } else {
+            assert_form_view(&b);
+        }
+        assert!(!b.contains(">Saved in this browser"), "{b}");
+    }
+}
+
+#[tokio::test]
+async fn memory_setting_applies_at_once() {
+    let app = zero_app();
+    let (_, _, b) = send(&app, get(ZERO_AUTHORIZE)).await;
+    assert_form_view(&b);
+    let body = Body::from(r#"{"show_user_list":true}"#);
+    let req = Request::builder()
+        .method("PUT")
+        .uri("/_mock/default/login")
+        .header("host", "localhost:9000")
+        .header("content-type", "application/json")
+        .body(body)
+        .unwrap();
+    let (s, _, b) = send(&app, req).await;
+    assert_eq!(s, 200, "{b}");
+    let (_, _, b) = send(&app, get(ZERO_AUTHORIZE)).await;
+    assert_list_view(&b);
+}
+
+#[tokio::test]
+async fn user_error_opens_the_user_list() {
+    let cookie = [("cookie", "fauxidc_login_view_auth0=form")];
+    let (s, _, b) = send(
+        &app(STRICT),
+        post_form(
+            "/auth0/authorize",
+            &login_form(&[("user", "nobody")]),
+            &cookie,
+        ),
+    )
+    .await;
+    assert_eq!(s, 400);
+    assert_list_view(&b);
+    let cookie = [("cookie", "fauxidc_login_view_auth0=list")];
+    let (s, _, b) = send(
+        &app(&strict_list()),
+        post_form(
+            "/auth0/authorize",
+            &login_form(&[("user", "__custom__"), ("custom_sub", "")]),
+            &cookie,
+        ),
+    )
+    .await;
+    assert_eq!(s, 400);
+    assert!(b.contains("Custom user needs a sub"), "{b}");
+    assert_form_view(&b);
+}
+
+#[tokio::test]
+async fn known_login_hint_opens_the_user_list() {
+    let (s, _, b) = send(
+        &app(STRICT),
+        get_with(
+            &authorize_url(&[("login_hint", "bob")]),
+            &[("cookie", "fauxidc_login_view_auth0=form")],
+        ),
+    )
+    .await;
+    assert_eq!(s, 200);
+    assert_list_view(&b);
+    assert!(b.contains(r#"<option value="bob" selected>"#), "{b}");
+    let (_, _, b) = send(
+        &app(STRICT),
+        get(&authorize_url(&[("login_hint", "nobody")])),
+    )
+    .await;
+    assert_form_view(&b);
+}
+
+#[tokio::test]
+async fn no_users_means_no_switch() {
+    let without_users = STRICT.split("[user.alice]").next().unwrap().replace(
+        "sub_template = \"auth0|{user_id}\"\n",
+        "sub_template = \"auth0|{user_id}\"\nshow_user_list = true\n",
+    );
+    let (s, _, b) = send(
+        &app(&without_users),
+        get_with(
+            &authorize_url(&[]),
+            &[("cookie", "fauxidc_login_view_auth0=list")],
+        ),
+    )
+    .await;
+    assert_eq!(s, 200, "{b}");
+    assert_form_view(&b);
+    assert!(!b.contains("role=\"switch\""), "{b}");
+}
+
+#[tokio::test]
+async fn custom_user_list_view_posts_the_user() {
+    let app = app(&format!("{}{TEMPLATE}", strict_list()));
+    let (_, _, b) = send(&app, get(&authorize_url(&[]))).await;
+    assert_list_view(&b);
+    let start = b.find("id=\"custom-user\"").unwrap();
+    let end = start + b[start..].find("</fieldset>").unwrap();
+    assert!(b[start..end].contains("name=\"username\""), "{b}");
+    let code = login_code(&app, &[("user", "alice")]).await;
+    let tokens = exchange_code_for(&app, &code).await;
+    assert_eq!(
+        claims_of(tokens["id_token"].as_str().unwrap())["sub"],
+        "auth0|alice"
+    );
 }

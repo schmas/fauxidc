@@ -355,6 +355,11 @@
           "type": "boolean",
           "default": false
         },
+        "show_user_list": {
+          "description": "Show the User dropdown on the login page by default. Default false: the Custom user form.",
+          "type": "boolean",
+          "default": false
+        },
         "signing_alg": {
           "description": "The JWS algorithm of this Issuer's tokens.",
           "$ref": "#/$defs/SigningAlg",

@@ -89,7 +89,8 @@ claims = { email = "alice@example.com", email_verified = true, name = "Alice Exa
 - Copy an example from the fauxidc repo `examples/`: `generic.toml` (default paths), `auth0.toml`, `okta.toml`,
   `keycloak.toml`, `entra.toml`, `cognito.toml`. Each imitates the paths and claims of one provider style.
 - Provider paths: `paths = { token = "/oauth/token", endsession = "/v2/logout" }` on the Issuer. Discovery publishes them.
-- `issuer.<id>.custom_user` adds a "Custom…" login option with one `username` field and a claims template with `{username}`.
+- The login page opens on the Custom user form. A switch shows the User dropdown. Set `issuer.<id>.show_user_list = true` to open on the dropdown. `GET` / `PUT /_mock/{issuer-id}/login` shows or sets it. Details: `docs/features.md` and `docs/test-api.md` in the fauxidc repo.
+- `issuer.<id>.custom_user` makes the Custom user form ask for one `username` and sets a claims template with `{username}`.
 
 ## Mint a token with the Test API
 

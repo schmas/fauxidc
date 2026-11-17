@@ -118,6 +118,7 @@ issuer_url = "http://localhost:9000/auth0/"
 issuer_from_host = false      # true: iss follows the request host (ADR 0006)
 lenient = false
 auto_login = false            # login_hint=<user id> signs in at once
+show_user_list = false        # login page opens on the User dropdown
 require_nonce = false
 sub_template = "auth0|{user_id}"
 default_claims = {}
@@ -126,8 +127,8 @@ login_template = ""           # per-Issuer login page
 paths = { token = "/oauth/token", endsession = "/v2/logout" }
 logout_param_aliases = { returnTo = "post_logout_redirect_uri" }
 
-[issuer.auth0.custom_user]    # M4, optional: "Custom…" asks for one username
-label = "Other…"              # dropdown label, default "Custom…"
+[issuer.auth0.custom_user]    # M4, optional: the Custom user form asks for one username
+label = "Other…"              # `custom_label` of the template context, default "Custom…"
 [issuer.auth0.custom_user.claims]   # only {username} is allowed; no sub
 email = "{username}@example.test"
 email_verified = true
@@ -269,8 +270,12 @@ Later wins:
 
 ### 8.3 Login page
 
-- A dropdown of Users (by `label`), and a "Custom…" option for a Custom user (`sub` + claims JSON).
-- With `issuer.<id>.custom_user`, "Custom…" (or its `label`) shows one `username` field instead: `sub` is the username (trimmed, lowercase), and the claims are the template with `{username}` filled in every string value.
+- The page opens on the Custom user form: Subject (`sub`) and Claims (JSON, optional). It posts `user=__custom__` from a hidden field.
+- With `issuer.<id>.custom_user`, the form has one `username` field instead: `sub` is the username (trimmed, lowercase), and the claims are the template with `{username}` filled in every string value.
+- A switch "Choose a configured User" shows a dropdown of the configured Users (by `label`) instead of the form. The dropdown has no Custom user entry. If the config has no Users, the page has no switch and always shows the form.
+- The page shows both views. The inactive view is `hidden` and its controls are `disabled`, so only one `user` value posts. The page works without JavaScript; the switch needs JavaScript.
+- Start view, the first that applies: no Users (form); an error on the `user` field (dropdown); the posted `user` after a rejected form (`__custom__` is the form, else the dropdown); a `login_hint` that names a User (dropdown, that User selected); the login view cookie; `issuer.<id>.show_user_list` (default false, also set by `PUT /_mock/{issuer_id}/login`).
+- Login view cookie: the switch sets `fauxidc_login_view_{issuer_id}` to `list` or `form` (`Path` = the Issuer path, `SameSite=Lax`, `Max-Age=31536000`, not `HttpOnly`). Any other value is ignored. While it is set, the switch shows "Saved in this browser · Sign out clears it". Else it shows the number of Users and the first 3 ids. `{issuer}/endsession` clears it.
 - A collapsed "Override claims" JSON field for Claim overrides.
 - Shows the `client_id` and the Issuer id.
 - Checkbox "Remember me and skip this page" (Auto-select). It sets a cookie per Issuer with the User id. The next `/authorize` signs in that User with no page. `prompt=login` still shows the page. Logout clears the cookie. The debugger page has a "Signed in as … · change" link that clears it.
@@ -301,18 +306,19 @@ Paths are below the Issuer path unless they start with `/_mock`.
 | `/authorize` | Code flow, PKCE, `state`, `nonce`, `login_hint`, Auto-select. `response_mode` `query` (default) and `form_post` (after M4, section 10.1). | M1, after M4 |
 | `/token` | `authorization_code` (M1). `client_credentials`, `refresh_token` (M2). Token exchange (M3). jwt-bearer (after M4). | M1 to M3, after M4 |
 | `/userinfo` | Bearer access token. Scope-filtered claims. | M1 |
-| `/endsession` | `id_token_hint` optional. In Strict mode, `post_logout_redirect_uri` must match the Client, which is found by `client_id` or `id_token_hint`. With no redirect: "signed out" page. `state` passed through. Clears the Session and the Auto-select cookie. Aliases apply. | M2 |
+| `/endsession` | `id_token_hint` optional. In Strict mode, `post_logout_redirect_uri` must match the Client, which is found by `client_id` or `id_token_hint`. With no redirect: "signed out" page. `state` passed through. Clears the Session, the Auto-select cookie and the login view cookie. Aliases apply. | M2 |
 | `/introspect` | Requires an authenticated confidential Client of the same Issuer. | M2 |
 | `/revoke` | Confidential Clients, or public Clients by `client_id` for their own tokens. Limitation: a revoked JWT stays valid for resource servers that verify it locally. Only `/introspect` sees the revocation. | M2 |
 | `/debugger` | Decodes a pasted JWT and checks it against this Issuer's JWKS. Runs a code + PKCE flow with a built-in `debugger` Client and shows the decoded tokens. M4: the built-in Client allows only the exact callback URL that `/debugger/start` builds, and needs PKCE S256 in both modes. `/debugger/start` sets the cookie `fauxidc_debugger_<issuer id>` with the flow `state`; without the matching cookie the callback gives 400. The server keeps at most 10 000 pending flows and drops the one that expires first. `?embed=1` on the page, the form post and `/debugger/start` hides the brand row and the footer for the dashboard frame; a flow started with it ends on the embedded callback page. `X-Frame-Options: SAMEORIGIN`, `Content-Security-Policy: frame-ancestors 'self'` (5.5). | M3, M4 |
-| `GET /_mock/` | Admin dashboard: one HTML page for every Test API operation, built on the JSON routes. Its Debugger section shows the `/debugger` page of the chosen Issuer (`?embed=1`) in a same-origin frame, with an Issuer select (in the URL fragment, for example `#debugger/default`) and an "Open in new tab" link. `GET /` and `GET /_mock` redirect to it when no Issuer route is at that path. `Cache-Control: no-store`, `X-Frame-Options: DENY`, `Content-Security-Policy: frame-ancestors 'none'`. | after M4 |
+| `GET /_mock/` | Admin dashboard: one HTML page for every Test API operation, built on the JSON routes. Its Debugger section shows the `/debugger` page of the chosen Issuer (`?embed=1`) in a same-origin frame, with an Issuer select (in the URL fragment, for example `#debugger/default`) and an "Open in new tab" link. Its Issuers view has a "Login page" section: one switch per Issuer for `show_user_list` (`PUT /_mock/{issuer_id}/login`), with the Source of the value. `GET /` and `GET /_mock` redirect to it when no Issuer route is at that path. `Cache-Control: no-store`, `X-Frame-Options: DENY`, `Content-Security-Policy: frame-ancestors 'none'`. | after M4 |
 | `GET /_mock/health` | Health check. | M1 |
 | `POST /_mock/{issuer-id}/token` | Issues tokens without a browser: User id, extra claims, `expires_in` (negative allowed). | M2 |
 | `GET /_mock/requests?issuer=&path=`, `DELETE /_mock/requests` | Request log. Ring buffer of `request_log_size`, raw bodies. | M2 |
 | `POST /_mock/{issuer-id}/rotate-key` | Key rotation. A foreign `Origin` header gives 403 `access_denied` (M4). | M3, M4 |
 | `POST /_mock/{issuer-id}/fail-next` | Injected failure: `{endpoint, status, error, count, delay_ms}`. | M3 |
+| `GET /_mock/{issuer-id}/login`, `PUT /_mock/{issuer-id}/login` | The `show_user_list` setting of an Issuer. `GET` answers `{show_user_list, source, origin}`; `source` is `default`, `file`, `memory`, `env`, `inline`, `flag` or `unknown`. `PUT {"show_user_list": bool}` writes the key to the last config file and applies it at once (ADR 0008). With no config file, the value stays in memory until `DELETE /_mock/state`. A value from env, inline config or a flag gives 409 `conflict`. A foreign `Origin` header gives 403 `access_denied`; an unknown Issuer gives 404. | after M4 |
 | `POST /_mock/reload` | Reloads the config files at once (section 11). 200 `{changed, warnings}`, 422 `invalid_config` with `errors`, 409 with no config file. A foreign `Origin` header gives 403. | after M4 |
-| `GET /_mock/config` | The running config as `{config, sources}`, with the masking of 5.7. The sources come from a new load of the config inputs. A value that the new load does not give (a restart-only key changed in a file, a change before the next poll, a server without load inputs) has the source `unknown`. `?format=toml` gives TOML without sources. | after M4 |
+| `GET /_mock/config` | The running config as `{config, sources}`, with the masking of 5.7. The sources come from a new load of the config inputs. A value that the new load does not give (a restart-only key changed in a file, a change before the next poll, a server without load inputs) has the source `unknown`. A `show_user_list` value kept in memory by `PUT /_mock/{issuer-id}/login` shows in `config` with the source `memory`. `?format=toml` gives TOML without sources. | after M4 |
 
 CORS (M2) on `/token`, `/userinfo` and `/revoke`: allowed origins come from the Client `web_origins`. If `web_origins` is not set, the origins of its redirect URIs are allowed.
 

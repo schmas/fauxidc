@@ -78,6 +78,9 @@ pub struct Store {
     pub failures: Mutex<HashMap<(String, String), Injected>>,
     /// Debugger login flows by `state`.
     pub debugger_flows: Mutex<HashMap<String, DebuggerFlow>>,
+    /// The `show_user_list` value of an Issuer set without a config file, by Issuer id. Cleared
+    /// by `DELETE /_mock/state` and a restart, kept across a config reload.
+    pub show_user_list: Mutex<HashMap<String, bool>>,
 }
 
 /// The most debugger flows the [`Store`] keeps.
@@ -264,6 +267,7 @@ impl Store {
             sessions,
             failures,
             debugger_flows,
+            show_user_list,
         } = self;
         let other = |id: &str| issuer_id.is_some_and(|keep| keep != id);
         lock(codes).retain(|_, g| other(&g.issuer_id));
@@ -271,6 +275,7 @@ impl Store {
         lock(lenient_clients).retain(|(id, _), _| other(id));
         lock(debugger_flows).retain(|_, f| other(&f.issuer_id));
         lock(failures).retain(|(id, _), _| other(id));
+        lock(show_user_list).retain(|id, _| other(id));
         if issuer_id.is_none() {
             lock(used_refresh).clear();
             lock(revoked).clear();
@@ -278,6 +283,31 @@ impl Store {
             lock(jwks_cache).clear();
             lock(jwks_refetched).clear();
         }
+    }
+
+    /// Sets the in-memory `show_user_list` value of an Issuer.
+    pub fn set_show_user_list(&self, issuer_id: &str, value: bool) {
+        self.show_user_list
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .insert(issuer_id.to_owned(), value);
+    }
+
+    /// Removes the in-memory `show_user_list` value of an Issuer, for example after a file write.
+    pub fn remove_show_user_list(&self, issuer_id: &str) {
+        self.show_user_list
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .remove(issuer_id);
+    }
+
+    /// The in-memory `show_user_list` value of an Issuer, if one is set.
+    pub fn show_user_list_of(&self, issuer_id: &str) -> Option<bool> {
+        self.show_user_list
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .get(issuer_id)
+            .copied()
     }
 
     pub fn clear_failures(&self, issuer_id: &str) {
@@ -453,6 +483,14 @@ impl IssuerCtx {
         &self.app.config.issuer[&self.id]
     }
 
+    /// The effective `show_user_list`: the in-memory value, else the config value.
+    pub fn show_user_list(&self) -> bool {
+        self.app
+            .store
+            .show_user_list_of(&self.id)
+            .unwrap_or(self.issuer().show_user_list)
+    }
+
     /// The key set of this Issuer. Waits for its first key.
     pub async fn keys(&self) -> Result<Arc<KeySet>, OAuthError> {
         self.app
@@ -549,6 +587,7 @@ mod tests {
                 .lock()
                 .unwrap()
                 .insert((issuer.into(), "c".into()), ClientConfig::default());
+            store.set_show_user_list(issuer, true);
             store.debugger_flows.lock().unwrap().insert(
                 issuer.into(),
                 DebuggerFlow {
@@ -590,7 +629,7 @@ mod tests {
     }
 
     /// The sizes of every Store field, in declaration order.
-    fn sizes(store: &Store) -> [usize; 10] {
+    fn sizes(store: &Store) -> [usize; 11] {
         [
             store.lenient_clients.lock().unwrap().len(),
             store.codes.lock().unwrap().len(),
@@ -602,24 +641,49 @@ mod tests {
             store.sessions.len(),
             store.failures.lock().unwrap().len(),
             store.debugger_flows.lock().unwrap().len(),
+            store.show_user_list.lock().unwrap().len(),
         ]
     }
 
     #[test]
     fn reset_clears_every_kind_of_state() {
         let store = full_store();
-        assert_eq!(sizes(&store), [2, 2, 1, 1, 1, 1, 1, 2, 2, 2]);
+        assert_eq!(sizes(&store), [2, 2, 1, 1, 1, 1, 1, 2, 2, 2, 2]);
         store.reset(None);
-        assert_eq!(sizes(&store), [0; 10]);
+        assert_eq!(sizes(&store), [0; 11]);
     }
 
     #[test]
     fn reset_of_one_issuer_keeps_the_others_and_the_jti_lists() {
         let store = full_store();
         store.reset(Some("a"));
-        assert_eq!(sizes(&store), [1, 1, 1, 1, 1, 1, 1, 1, 1, 1]);
+        assert_eq!(sizes(&store), [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]);
         assert!(store.take_failure("b", "token").is_some());
         assert!(store.take_failure("a", "token").is_none());
+    }
+
+    #[test]
+    fn show_user_list_memory_value_wins_and_resets() {
+        let ctx = test_ctx(
+            "[issuer.a]\nissuer_url = \"http://localhost:9000/a\"\nshow_user_list = true\n",
+            "a",
+        );
+        let store = &ctx.app.store;
+        assert!(ctx.show_user_list());
+        assert_eq!(store.show_user_list_of("a"), None);
+        store.set_show_user_list("a", false);
+        assert!(!ctx.show_user_list());
+        assert_eq!(store.show_user_list_of("a"), Some(false));
+        store.reset(Some("other"));
+        assert!(!ctx.show_user_list());
+        store.reset(Some("a"));
+        assert!(ctx.show_user_list());
+        store.set_show_user_list("a", false);
+        store.remove_show_user_list("a");
+        assert!(ctx.show_user_list());
+        store.set_show_user_list("a", false);
+        store.reset(None);
+        assert!(ctx.show_user_list());
     }
 
     #[test]

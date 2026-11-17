@@ -42,6 +42,18 @@ pub struct Loaded {
 }
 
 impl LoadInputs {
+    /// Whether `load` reads at least one config file: given, from `FAUXIDC_CONFIG` or
+    /// `./fauxidc.toml` in the working directory.
+    #[must_use]
+    pub fn has_config_file(&self) -> bool {
+        let list = self
+            .env
+            .iter()
+            .find(|(key, _)| key == "FAUXIDC_CONFIG")
+            .map(|(_, value)| value.as_str());
+        !resolve_files(self, list).is_empty()
+    }
+
     /// Reads the process env vars and the working directory.
     pub fn from_process(
         config_files: Vec<PathBuf>,
@@ -242,6 +254,19 @@ mod tests {
     use super::*;
     use crate::config::Source;
     use crate::config::test_util::*;
+
+    #[test]
+    fn show_user_list_defaults_to_false_and_loads() {
+        let l = load_str("[issuer.a]\nissuer_url = \"http://localhost:9000/a\"\n").unwrap();
+        assert!(!l.config.issuer["a"].show_user_list);
+        let l = load_str(
+            "[issuer.a]\nissuer_url = \"http://localhost:9000/a\"\nshow_user_list = true\n",
+        )
+        .unwrap();
+        assert!(l.config.issuer["a"].show_user_list);
+        let l = load(&inputs(&[])).unwrap();
+        assert!(!l.config.issuer["default"].show_user_list);
+    }
 
     #[test]
     fn zero_config_when_nothing_given() {

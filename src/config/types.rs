@@ -188,6 +188,8 @@ pub struct IssuerConfig {
     pub lenient: bool,
     /// Auto-select the only User and skip the login page.
     pub auto_login: bool,
+    /// Show the User dropdown on the login page by default. Default false: the Custom user form.
+    pub show_user_list: bool,
     /// Require a `nonce` in authorize requests.
     pub require_nonce: bool,
     /// Template of the `sub` claim. Empty: the User key.

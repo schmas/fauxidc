@@ -43,6 +43,11 @@
 .page-head > div:first-child { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0; }
 .page-head h1 { font-size: 28px; font-weight: 600; line-height: 1.2; }
 
+/* A section inside a view, for example "Login page" in the Issuers view. */
+.section { display: flex; flex-direction: column; gap: 16px; }
+.section-head { display: flex; flex-direction: column; gap: 4px; }
+.section-head h2 { font-size: 18px; font-weight: 600; line-height: 1.4; }
+
 /* Table details of the dashboard. */
 td.actions { width: 1%; white-space: nowrap; }
 td.actions .row { flex-wrap: nowrap; justify-content: flex-end; }

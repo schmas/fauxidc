@@ -198,3 +198,38 @@ async fn bad_query_is_invalid_request() {
         );
     }
 }
+
+async fn put_login(app: &Router, issuer: &str, value: bool) {
+    let req = Request::builder()
+        .method("PUT")
+        .uri(format!("/_mock/{issuer}/login"))
+        .header("host", "localhost:9000")
+        .header("content-type", "application/json")
+        .body(Body::from(json!({ "show_user_list": value }).to_string()))
+        .unwrap();
+    let (s, _, b) = send(app, req).await;
+    assert_eq!(s, 200, "{b}");
+}
+
+#[tokio::test]
+async fn config_view_shows_the_memory_login_setting() {
+    let app = app(AUTH0);
+    put_login(&app, "auth0", true).await;
+    let v = view_json(&app).await;
+    assert_eq!(at(&v["config"], "issuer.auth0.show_user_list"), true);
+    assert_eq!(v["sources"]["issuer.auth0.show_user_list"], "memory");
+    let (_, _, text) = view(&app, "/_mock/config?format=toml").await;
+    assert!(text.contains("show_user_list = true"), "{text}");
+}
+
+#[tokio::test]
+async fn config_view_shows_the_file_login_setting() {
+    let (app, _, _) = file_app(&file_text(), &[]);
+    put_login(&app, "auth0", true).await;
+    let v = view_json(&app).await;
+    assert_eq!(at(&v["config"], "issuer.auth0.show_user_list"), true);
+    let source = v["sources"]["issuer.auth0.show_user_list"]
+        .as_str()
+        .unwrap();
+    assert!(source.contains("fauxidc.toml"), "{source}");
+}

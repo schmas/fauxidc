@@ -1,3 +1,4 @@
+import { createHash, randomBytes } from "node:crypto";
 import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { expect, test, type Page } from "@playwright/test";
@@ -150,6 +151,48 @@ test("shows and clears the Request log, shows and reloads the config", async ({ 
   await expect(page.locator("#reset-out")).toContainText("Reset the runtime state of Issuer custom.");
 });
 
+test("the Login page switch sets show_user_list and the next login page opens on the dropdown", async ({ page }) => {
+  await open(page);
+  const verifier = randomBytes(32).toString("base64url");
+  const q = new URLSearchParams({
+    client_id: "example-spa",
+    redirect_uri: "http://localhost:5173/",
+    response_type: "code",
+    scope: "openid",
+    state: "dashboard-login-view",
+    code_challenge: createHash("sha256").update(verifier).digest("base64url"),
+    code_challenge_method: "S256",
+  });
+  const loginUrl = `${MOCK}/auth0/authorize?${q}`;
+  const toggle = page.locator('[data-login-issuer="auth0"]');
+  const state = page.locator("#login-state-auth0");
+
+  await expect(toggle).not.toBeChecked();
+  const put = page.waitForResponse((r) => r.url().endsWith("/_mock/auth0/login") && r.request().method() === "PUT");
+  await toggle.check();
+  expect((await put).status()).toBe(200);
+  await expect(state).toContainText("On");
+  expect(await (await page.request.get(`${MOCK}/_mock/auth0/login`)).json()).toMatchObject({
+    show_user_list: true,
+    source: "file",
+  });
+
+  // No view cookie is set yet, so the Issuer setting decides.
+  await page.goto(loginUrl);
+  await expect(page.locator("#user-list")).toBeVisible();
+  await expect(page.locator("#custom-user")).toBeHidden();
+  await expect(page.locator("#f-show-users")).toBeChecked();
+
+  await page.context().clearCookies();
+  await open(page);
+  const putOff = page.waitForResponse((r) => r.url().endsWith("/_mock/auth0/login") && r.request().method() === "PUT");
+  await page.locator('[data-login-issuer="auth0"]').uncheck();
+  expect((await putOff).status()).toBe(200);
+  await page.goto(loginUrl);
+  await expect(page.locator("#custom-user")).toBeVisible();
+  await expect(page.locator("#user-list")).toBeHidden();
+});
+
 test("Sign out shows the signed-out page with a link back", async ({ page }) => {
   await open(page);
   await page.locator('[data-issuer-row="auth0"]').getByRole("link", { name: "Sign out" }).click();
@@ -179,6 +222,7 @@ async function loginInFrame(page: Page, user: string) {
   const frame = page.frameLocator("#debugger-frame");
   await frame.getByRole("link", { name: "Run login flow" }).click();
   await expect(frame.locator("h1")).toHaveText("Sign in");
+  await frame.locator("#f-show-users").setChecked(true);
   await frame.locator("select[name=user]").selectOption(user);
   await frame.getByRole("button", { name: "Sign in" }).click();
   // The callback page in the frame: the decoded tokens of the flow, without the page chrome.

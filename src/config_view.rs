@@ -86,7 +86,16 @@ pub async fn view(
             );
         }
     };
-    let root = masked(&state.config);
+    // A memory login setting is part of the running state: show it as part of the config.
+    let mut running_config = (*state.config).clone();
+    let mut memory_paths = Vec::new();
+    for (id, issuer) in &mut running_config.issuer {
+        if let Some(value) = state.store.show_user_list_of(id) {
+            issuer.show_user_list = value;
+            memory_paths.push(format!("issuer.{id}.show_user_list"));
+        }
+    }
+    let root = masked(&running_config);
     let mut response = match q.format {
         Format::Toml => match toml::to_string(&root) {
             Ok(text) => (
@@ -107,10 +116,13 @@ pub async fn view(
         },
         Format::Json => {
             let running = entries(&root, &SourceMap::new());
-            let sources = sources(
+            let mut sources = sources(
                 &running,
                 state.config_writer.get().map(ConfigWriter::inputs),
             );
+            for path in memory_paths {
+                sources.insert(path, "memory".to_owned());
+            }
             Json(json!({ "config": root, "sources": sources })).into_response()
         }
     };

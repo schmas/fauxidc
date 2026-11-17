@@ -57,7 +57,7 @@
 <noscript><div class="alert alert-warning">{{ icon("warn") }}<div>The dashboard needs JavaScript for every action. The Issuer links work without it.</div></div></noscript>
 
 <section id="issuers" class="view">
-<div class="page-head"><div><h1>Issuers</h1><p class="muted">Each Issuer, its iss and its endpoints. Sign out clears the Session and the Remember me cookie in this browser.</p></div>
+<div class="page-head"><div><h1>Issuers</h1><p class="muted">Each Issuer, its iss and its endpoints. Sign out clears the Session, the Remember me cookie and the saved login view in this browser.</p></div>
 <div class="row"><button type="button" class="btn btn-outline" data-action="reload">{{ icon("refresh") }}Reload config</button></div></div>
 <div id="issuers-out" class="out" aria-live="polite"></div>
 <div class="table-wrap"><table>
@@ -66,10 +66,22 @@
 <td class="mono">{{ i.id }}</td><td class="mono">{{ i.issuer_url }}</td>
 <td>{% if i.lenient %}<span class="label label-warning">Lenient</span>{% else %}<span class="label label-success">Strict</span>{% endif %}</td>
 <td class="links"><a href="{{ i.discovery_href|href }}">Discovery</a><a href="{{ i.jwks_href|href }}" data-jwks>JWKS</a><a href="{{ i.debugger_href|href }}" data-debugger>Debugger</a></td>
-<td class="actions"><div class="row"><a class="btn btn-outline" href="{{ i.endsession_href|href }}" title="Clears the Session and the Remember me cookie in this browser">{{ icon("logout") }}Sign out</a><button type="button" class="btn btn-ghost" data-action="reset-issuer" data-issuer="{{ i.id }}">{{ icon("reset") }}Reset state</button></div></td>
+<td class="actions"><div class="row"><a class="btn btn-outline" href="{{ i.endsession_href|href }}" title="Clears the Session, the Remember me cookie and the saved login view in this browser">{{ icon("logout") }}Sign out</a><button type="button" class="btn btn-ghost" data-action="reset-issuer" data-issuer="{{ i.id }}">{{ icon("reset") }}Reset state</button></div></td>
 </tr>
 {% endfor %}</tbody></table></div>
 <div class="alert">{{ icon("info") }}<div><strong>Sign out works in this browser only</strong><span>The Remember me cookie lives on the Issuer path. Sign out opens <code>{issuer}/endsession</code>, which clears it and the Session. <code>DELETE /_mock/state</code> and the CLI cannot clear it.</span></div></div>
+<div class="section" id="login-page">
+<div class="section-head"><h2>Login page</h2><p class="muted">Show the user dropdown by default. A change writes <code>show_user_list</code> to the config file. A choice saved in a browser on the login page wins for that browser.</p></div>
+<div class="table-wrap"><table>
+<thead><tr><th>Issuer</th><th>Show user dropdown</th><th>Source</th></tr></thead>
+<tbody>{% for i in issuers %}<tr data-login-row="{{ i.id }}">
+<td class="mono">{{ i.id }}</td>
+<td><label class="switch-row"><input type="checkbox" role="switch" class="switch" data-login-issuer="{{ i.id }}" aria-label="Show user dropdown for {{ i.id }}" aria-describedby="login-state-{{ i.id }}"{% if i.login.show_user_list %} checked{% endif %}><span id="login-state-{{ i.id }}" data-login-state>{% if i.login.show_user_list %}On · User dropdown{% else %}Off · Subject and Claims form{% endif %}</span></label></td>
+<td data-login-source><div class="row">{% if i.login.source == "default" %}<span class="label">Default</span>{% elif i.login.source == "file" %}<span class="label label-info">Config file</span><span class="small muted mono">show_user_list = {% if i.login.show_user_list %}true{% else %}false{% endif %}</span>{% elif i.login.source == "memory" %}<span class="label label-warning">Not saved</span>{% else %}<span class="label">{{ i.login.source }}</span>{% if i.login.origin %}<span class="small muted mono">{{ i.login.origin }}</span>{% endif %}{% endif %}</div></td>
+</tr>
+{% endfor %}</tbody></table></div>
+{% if not config_file %}<div class="alert alert-warning">{{ icon("warn") }}<div>Not saved: no config file. A change stays in memory, and a restart returns to off.</div></div>{% endif %}
+</div>
 </section>
 
 <section id="keys" class="view">

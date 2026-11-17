@@ -13,7 +13,9 @@ use serde_json::Value;
 use crate::authorize::error_page;
 use crate::clients::{find_client, redirect_uri_matches};
 use crate::config::Claims;
-use crate::cookies::{auto_select_clear, read_cookie, session_clear, session_name};
+use crate::cookies::{
+    auto_select_clear, login_view_clear, read_cookie, session_clear, session_name,
+};
 use crate::debugger::change_href;
 use crate::error::{OAuthError, append_query};
 use crate::logging::{record_client, record_endpoint};
@@ -217,7 +219,8 @@ async fn endsession(ctx: &IssuerCtx, request: &HeaderMap, raw: Vec<(String, Stri
     headers.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
     let cookies = auto_select_clear(&ctx.id, &ctx.path)
         .into_iter()
-        .chain(session_clear(&ctx.id, &ctx.path));
+        .chain(session_clear(&ctx.id, &ctx.path))
+        .chain(login_view_clear(&ctx.id, &ctx.path));
     for cookie in cookies {
         headers.append(header::SET_COOKIE, cookie);
     }

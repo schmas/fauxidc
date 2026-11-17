@@ -27,6 +27,7 @@ use crate::introspect;
 use crate::issuer::issuer_path;
 use crate::jwks;
 use crate::logging::{record_endpoint, request_span};
+use crate::login_api;
 use crate::request_log;
 use crate::revoke;
 use crate::state::{AppState, IssuerCtx};
@@ -84,6 +85,46 @@ pub fn build_router(state: Arc<AppState>) -> Router {
                 .with_state(state.clone()),
         )
         .route(
+            "/_mock/config",
+            get(config_view::view).with_state(state.clone()),
+        )
+        .route(
+            "/_mock/state",
+            delete(test_api::reset_state).with_state(state.clone()),
+        )
+        .route(
+            "/_mock/reload",
+            post(test_api::reload).with_state(state.clone()),
+        )
+        .route(
+            "/_mock/requests",
+            get(request_log::list)
+                .delete(request_log::clear)
+                .with_state(state.clone()),
+        )
+        .route(
+            "/_mock/health",
+            get(health::health).with_state(state.clone()),
+        )
+        .merge(dashboard_routes(&state))
+        .merge(config_edit_routes(&state))
+        .layer(axum::middleware::from_fn_with_state(
+            state,
+            request_log::record,
+        ))
+        .layer(trace)
+}
+
+/// The Test API routes that change the config: login setting, Users and Clients.
+fn config_edit_routes(state: &Arc<AppState>) -> Router {
+    Router::new()
+        .route(
+            "/_mock/{issuer_id}/login",
+            get(login_api::get)
+                .put(login_api::put)
+                .with_state(state.clone()),
+        )
+        .route(
             "/_mock/users",
             get(users_api::list)
                 .post(users_api::create)
@@ -111,34 +152,6 @@ pub fn build_router(state: Arc<AppState>) -> Router {
                 .delete(clients_api::remove)
                 .with_state(state.clone()),
         )
-        .route(
-            "/_mock/config",
-            get(config_view::view).with_state(state.clone()),
-        )
-        .route(
-            "/_mock/state",
-            delete(test_api::reset_state).with_state(state.clone()),
-        )
-        .route(
-            "/_mock/reload",
-            post(test_api::reload).with_state(state.clone()),
-        )
-        .route(
-            "/_mock/requests",
-            get(request_log::list)
-                .delete(request_log::clear)
-                .with_state(state.clone()),
-        )
-        .route(
-            "/_mock/health",
-            get(health::health).with_state(state.clone()),
-        )
-        .merge(dashboard_routes(&state))
-        .layer(axum::middleware::from_fn_with_state(
-            state,
-            request_log::record,
-        ))
-        .layer(trace)
 }
 
 /// `/_mock/` (the dashboard), `/_mock` and the fallback that redirects `/` to the dashboard.

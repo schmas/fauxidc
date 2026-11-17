@@ -216,11 +216,14 @@ async fn custom_fields_are_not_hidden_in_the_html() {
     ))
     .unwrap();
     assert!(!css.contains("#custom-user"));
-    // The custom option carries the data-custom hook.
-    assert!(
-        b.contains("value=\"__custom__\" data-custom"),
-        "data-custom hook"
-    );
+    // The form view posts `user=__custom__` from a hidden input; the User list is hidden and
+    // disabled, so only one `user` value posts. The switch needs the page script.
+    assert!(b.contains("<input type=\"hidden\" name=\"user\" value=\"__custom__\">"));
+    assert!(tag_with_id(&b, "f-user").contains(" disabled"));
+    assert!(b.contains("class=\"switch-row switch-tile js-only\""));
+    assert!(css.contains("html:not(.js) .js-only { display: none; }"));
+    // In dark mode --tile equals --card, so the switch tile needs a border there.
+    assert!(css.contains(".switch-tile { border: 1px solid var(--border); }"));
 }
 
 #[tokio::test]
@@ -416,18 +419,21 @@ async fn login_page_without_error_marks_no_field() {
 }
 
 #[tokio::test]
-async fn context_version_is_2() {
+async fn context_version_is_3() {
     let dir = tmp_dir();
     std::fs::write(
         dir.join("login.html"),
-        "v{{ context_version }} {{ custom_label }} {{ custom_username }} [{{ username }}] {{ error_field }}",
+        "v{{ context_version }} {{ custom_label }} {{ custom_username }} [{{ username }}] {{ error_field }} {{ show_user_list }} {{ user_list_saved }} {{ view_cookie }} {{ view_cookie_path }}",
     )
     .unwrap();
     std::fs::write(dir.join("error.html"), "v{{ context_version }}").unwrap();
     let toml = format!("[server]\ntemplates_dir = \"{}\"\n{STRICT}", dir.display());
     let app = app(&toml);
     let (_, _, b) = send(&app, get(&authorize_url(&[]))).await;
-    assert_eq!(b, "v2 Custom… False [] None");
+    assert_eq!(
+        b,
+        "v3 Custom… False [] None False False fauxidc_login_view_auth0 &#x2f;auth0"
+    );
     let (_, _, b) = send(
         &app,
         post_form(
@@ -437,13 +443,16 @@ async fn context_version_is_2() {
         ),
     )
     .await;
-    assert_eq!(b, "v2 Custom… False [] override_claims");
+    assert_eq!(
+        b,
+        "v3 Custom… False [] override_claims True False fauxidc_login_view_auth0 &#x2f;auth0"
+    );
     let (_, _, b) = send(
         &app,
         get("/auth0/authorize?client_id=nope&redirect_uri=http://x/cb&response_type=code"),
     )
     .await;
-    assert_eq!(b, "v2");
+    assert_eq!(b, "v3");
 }
 
 #[tokio::test]

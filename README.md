@@ -65,6 +65,8 @@ curl -s http://localhost:9000/_mock/health
 
 Point your app at the Issuer URL `http://localhost:9000/default` with the client id `test`.
 Open `http://localhost:9000/default/debugger` and click "Run login flow" to see the login page.
+The page opens on the Custom user form (Subject and Claims). Use the switch "Choose a configured User" to pick a User from a dropdown.
+To open the page on the dropdown, set `show_user_list = true` on the Issuer, or use the Login page switch in the dashboard.
 
 ## Recipes
 
@@ -232,6 +234,7 @@ The Test API lives under `/_mock/` and has no authentication.
 | `POST /_mock/{issuer-id}/token` | Mint tokens for a User or a Custom user. |
 | `POST /_mock/{issuer-id}/rotate-key` | Give the Issuer a new signing key. |
 | `POST` / `DELETE /_mock/{issuer-id}/fail-next` | Add or remove Injected failures. |
+| `GET` / `PUT /_mock/{issuer-id}/login` | Show or set `show_user_list`, the login page setting. |
 | `GET` / `POST /_mock/users`, `GET` / `PUT` / `PATCH` / `DELETE /_mock/users/{user-id}` | List and change the Users of the config file. `fauxidc users` does the same without a server. |
 | `GET` / `POST /_mock/clients`, `GET` / `PUT` / `PATCH` / `DELETE /_mock/clients/{client-key}` | List and change the Clients of the config file, with secrets masked. `fauxidc clients` does the same without a server. |
 | `GET /_mock/config` | Show the running config and the source of each value. Secrets are masked. |
@@ -248,8 +251,13 @@ Open `http://localhost:9000/_mock/` (or `/`) in a browser for the [dashboard](do
 You can replace the login page, the error page, the signed-out page, the debugger page, the `form_post` page and the dashboard with your own templates.
 The built-in pages link one embedded stylesheet, `/_mock/static/halo.css` (plain CSS, light and dark), and need no network.
 
-For a Custom user from one username, set a claims template on the Issuer. The "Custom…" entry
-(here "Other…") then shows one `username` field instead of the subject and JSON fields:
+The built-in login page opens on the Custom user form. The switch "Choose a configured User" shows the dropdown of the configured Users.
+The switch saves the view in the cookie `fauxidc_login_view_{issuer_id}` (`list` or `form`), and `{issuer}/endsession` clears it.
+The Issuer key `show_user_list` (default `false`) sets the view for a browser without that cookie.
+Change it with `PUT /_mock/{issuer-id}/login`, or with the Login page switch in the dashboard.
+
+For a Custom user from one username, set a claims template on the Issuer. The Custom user form
+(label "Other…" for a custom template) then shows one `username` field instead of the subject and JSON fields:
 
 ```toml
 [issuer.app.custom_user]
@@ -260,7 +268,7 @@ email_verified = true
 ```
 
 `sub` is the username, trimmed and in lowercase (a `sub` in Override claims wins). `{username}` is filled in every string value, nested values too.
-[docs/templates.md](docs/templates.md) has the template context (version 2) and the override rules.
+[docs/templates.md](docs/templates.md) has the template context (version 3) and the override rules.
 
 ## Debugger
 

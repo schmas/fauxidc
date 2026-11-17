@@ -12,6 +12,8 @@ The [dashboard](#dashboard) at `/_mock/` gives a browser page for every route be
 | `POST /_mock/{issuer-id}/rotate-key` | [Rotate the signing key](#rotate-the-signing-key) of an Issuer. |
 | `POST /_mock/{issuer-id}/fail-next` | [Inject failures](#injected-failures) into an endpoint. |
 | `DELETE /_mock/{issuer-id}/fail-next` | Remove the Injected failures of an Issuer. |
+| `GET /_mock/{issuer-id}/login` | Show the [login page setting](#login-page-setting) `show_user_list` and its source. |
+| `PUT /_mock/{issuer-id}/login` | Set `show_user_list` in the config file, or in memory when there is no file. Body: `{"show_user_list": true}`. |
 | `GET /_mock/users` | List the [Users](#users). |
 | `GET /_mock/users/{user-id}` | Show one User. |
 | `POST /_mock/users` | Add a User to the config file. |
@@ -222,6 +224,37 @@ The `--from` file has the fields of `[client.<key>]`, without the header. `get` 
 The commands do not see the Lenient-registered Clients of a running server.
 Exit codes: 0 on success, 2 on invalid input or config, 1 on a conflict, an unknown Client or a write error.
 
+## Login page setting
+
+`GET /_mock/{issuer-id}/login` shows the Issuer key `show_user_list`. It decides if the login page opens on the User dropdown (`true`) or on the Custom user form (`false`, the default).
+A browser that used the switch on the page keeps its own view in a cookie, and the cookie wins (see [features](features.md#login-page)).
+
+```json
+{"show_user_list": false, "source": "default", "origin": null}
+```
+
+| Field | Meaning |
+| --- | --- |
+| `show_user_list` | The value that the next login page uses. |
+| `source` | `default`, `file`, `memory`, `env`, `inline`, `flag` or `unknown`. |
+| `origin` | The file position, the env var or the flag, for `file`, `env` and `flag`. Else `null`. |
+
+`PUT /_mock/{issuer-id}/login` with the body `{"show_user_list": true}` sets the value and answers like `GET`.
+An unknown field or a value that is not a boolean gives 400 `invalid_request`.
+
+- With a config file, `PUT` writes the key to the last config file and applies it at once (ADR 0008). The value stays after a restart.
+- Without a config file (Zero config), the value lives in memory. A hot reload keeps it. `DELETE /_mock/state` and a restart clear it.
+  The Config view shows it with the source `memory`.
+- With a config file, `PUT` gives 409 `conflict` if an env var, inline config or a flag sets the key. Change that source.
+- Without a config file, `PUT` does not give 409. The value goes to memory and overrides the env value.
+- A request with a foreign `Origin` header gives 403 `access_denied`. An unknown Issuer id gives 404.
+- The dashboard Issuers view has a "Login page" section with one switch for each Issuer. It uses these routes.
+
+```sh
+curl -s localhost:9000/_mock/app/login
+curl -s -X PUT localhost:9000/_mock/app/login -H 'content-type: application/json' -d '{"show_user_list": true}'
+```
+
 ## Show the running config
 
 `GET /_mock/config` returns the config that the server uses now, with the source of each value.
@@ -237,6 +270,7 @@ The answer follows hot reload and the Users routes.
 
 - `config` is the merged config. `sources` has one entry for each value that `fauxidc config` prints, by the same dotted path.
 - A source is `default`, `<file>:<line>`, `inline`, `env <name>` or `flag <name>`, the same text as `fauxidc config`.
+- A `show_user_list` value that `PUT /_mock/{issuer-id}/login` kept in memory shows in `config`, with the source `memory`.
 - Secrets are `"***"`: each `client_secret`, and the private members of a JWK in a Client `jwks` (`d`, `p`, `q`, `dp`, `dq`, `qi`, `oth`, `k`).
 - The server loads its config sources again for the sources. If that load does not give the running value, the source is `unknown`.
   This happens for a restart-only key that changed in a file, for a file change before the next poll or `POST /_mock/reload`, and for an invalid file.
@@ -256,10 +290,10 @@ It returns 204.
 
 It clears codes, Sessions, used refresh token `jti`s, the revocation list, used client assertion `jti`s,
 Lenient-registered Clients, debugger flows, Injected failures, the Client JWKS cache and the Request log.
-Config and signing keys do not change.
+Config and signing keys do not change. A `show_user_list` value that `PUT /_mock/{issuer-id}/login` kept in memory is cleared too.
 
 `?issuer=<id>` clears only the data of one Issuer: codes, Sessions, Lenient-registered Clients, debugger flows,
-Injected failures and the Request log entries of that Issuer. The `jti` lists, the revocation list and the JWKS cache
+Injected failures, the Request log entries and the memory `show_user_list` value of that Issuer. The `jti` lists, the revocation list and the JWKS cache
 have no Issuer id, so they stay. An unknown Issuer id gives 404. An unknown query parameter gives 400.
 
 Refresh tokens and access tokens are signed JWTs, not stored state. They stay valid after a reset until they expire.
@@ -314,7 +348,7 @@ At a narrow width, a select box replaces the sidebar.
 | Section | What it does | Route |
 | --- | --- | --- |
 | Issuers | Shows each Issuer with its `iss`, its mode, and links to discovery, JWKS and the debugger. Resets the state of one Issuer. | `DELETE /_mock/state?issuer=` |
-| Issuers: Sign out | A link to `{issuer}/endsession`. It clears the Session and the "Remember me" (Auto-select) cookie of this browser, so the next `/authorize` shows the login page. | `/endsession` |
+| Issuers: Sign out | A link to `{issuer}/endsession`. It clears the Session, the "Remember me" (Auto-select) cookie and the saved login view of this browser, so the next `/authorize` shows the login page. | `/endsession` |
 | Keys | Shows the algorithm, the active `kid` and the key count from JWKS. Rotates the key, with or without `retire`. | `rotate-key` |
 | Users, Clients | Lists, shows, adds, changes and deletes entries in a JSON editor dialog. | `/_mock/users`, `/_mock/clients` |
 | Mint a token | Mints tokens for a User or a Custom user. A button decodes the `id_token` in the Debugger view. | `POST /_mock/{issuer-id}/token` |
