@@ -42,6 +42,18 @@ pub struct Loaded {
 }
 
 impl LoadInputs {
+    /// Whether `load` reads at least one config file: given, from `FAUXIDC_CONFIG` or
+    /// `./fauxidc.toml` in the working directory.
+    #[must_use]
+    pub fn has_config_file(&self) -> bool {
+        let list = self
+            .env
+            .iter()
+            .find(|(key, _)| key == "FAUXIDC_CONFIG")
+            .map(|(_, value)| value.as_str());
+        !resolve_files(self, list).is_empty()
+    }
+
     /// Reads the process env vars and the working directory.
     pub fn from_process(
         config_files: Vec<PathBuf>,

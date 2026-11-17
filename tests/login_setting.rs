@@ -188,3 +188,61 @@ async fn put_checks_origin_issuer_and_body() {
     let (s, _) = put(&app, "default", r#"{"show_user_list": true, "x": 1}"#).await;
     assert_eq!(s, StatusCode::BAD_REQUEST);
 }
+
+/// A config file found in the working directory, with no file given, is a config file for the
+/// dashboard (the Docker image runs this way).
+#[tokio::test]
+async fn dashboard_sees_a_config_file_found_in_the_working_directory() {
+    let dir = tmp_dir();
+    std::fs::write(dir.join("fauxidc.toml"), format!("{FILE}{STRICT}")).unwrap();
+    let inputs = LoadInputs {
+        config_files: vec![],
+        env: vec![],
+        flags: CliOverrides::default(),
+        cwd: dir,
+    };
+    let config = load(&inputs).unwrap().config;
+    let state = Arc::new(AppState::new(config, KeyHandle::ready(KEY.clone()), true).unwrap());
+    let writer = state.config_writer.clone();
+    let (app, handle) = live_router(state);
+    assert!(
+        writer
+            .set(ConfigWriter::new(inputs, handle.downgrade()))
+            .is_ok()
+    );
+    let (s, _, b) = send(&app, request("GET", "/_mock/", None, &[])).await;
+    assert_eq!(s, 200);
+    let page = &b;
+    assert!(!page.contains("Not saved: no config file"), "{page}");
+}
+
+/// Without any config file the dashboard warns that a change stays in memory.
+#[tokio::test]
+async fn dashboard_warns_when_there_is_no_config_file() {
+    let (s, _, b) = send(
+        &zero_app_with_writer(),
+        request("GET", "/_mock/", None, &[]),
+    )
+    .await;
+    assert_eq!(s, 200);
+    assert!(b.contains("Not saved: no config file"));
+}
+
+fn zero_app_with_writer() -> Router {
+    let inputs = LoadInputs {
+        config_files: vec![],
+        env: vec![],
+        flags: CliOverrides::default(),
+        cwd: tmp_dir(),
+    };
+    let config = load(&inputs).unwrap().config;
+    let state = Arc::new(AppState::new(config, KeyHandle::ready(KEY.clone()), true).unwrap());
+    let writer = state.config_writer.clone();
+    let (app, handle) = live_router(state);
+    assert!(
+        writer
+            .set(ConfigWriter::new(inputs, handle.downgrade()))
+            .is_ok()
+    );
+    app
+}

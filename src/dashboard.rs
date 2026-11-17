@@ -58,7 +58,7 @@ pub fn context(state: &Arc<AppState>, headers: &HeaderMap) -> DashboardContext {
         config_file: state
             .config_writer
             .get()
-            .is_some_and(|w| !w.inputs().config_files.is_empty()),
+            .is_some_and(|w| w.inputs().has_config_file()),
         static_base: STATIC_BASE.to_owned(),
     }
 }
