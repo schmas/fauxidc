@@ -25,6 +25,8 @@ pub enum Section {
     User,
     /// `[client.<key>]`
     Client,
+    /// `[issuer.<id>]`
+    Issuer,
 }
 
 impl Section {
@@ -33,6 +35,7 @@ impl Section {
         match self {
             Section::User => "user",
             Section::Client => "client",
+            Section::Issuer => "issuer",
         }
     }
 
@@ -41,6 +44,7 @@ impl Section {
         match self {
             Section::User => "User",
             Section::Client => "Client",
+            Section::Issuer => "Issuer",
         }
     }
 
@@ -48,6 +52,7 @@ impl Section {
         match self {
             Section::User => config.user.contains_key(id),
             Section::Client => config.client.contains_key(id),
+            Section::Issuer => config.issuer.contains_key(id),
         }
     }
 }
@@ -208,6 +213,114 @@ pub fn prepare(
         new_text,
         loaded,
     })
+}
+
+/// Sets the boolean `issuer.<issuer_id>.<key>` in the last config file and checks the result.
+/// Writes nothing.
+///
+/// A value from an earlier file is not a conflict: the last file wins the merge. A value from
+/// env, inline config or a flag is a conflict: a file write would not win.
+pub fn prepare_issuer_bool(
+    inputs: &LoadInputs,
+    issuer_id: &str,
+    key: &str,
+    value: bool,
+) -> Result<Edit, EditError> {
+    let section = Section::Issuer;
+    if !valid_id(issuer_id) {
+        return Err(EditError::InvalidId(issuer_id.to_owned()));
+    }
+    let current = load(inputs).map_err(EditError::Invalid)?;
+    let Some(path) = current.files.last().cloned() else {
+        return Err(EditError::NoFile);
+    };
+    if !section.contains(&current.config, issuer_id) {
+        return Err(EditError::NotFound {
+            section,
+            id: issuer_id.to_owned(),
+        });
+    }
+    let source_key = vec![
+        section.key().to_owned(),
+        issuer_id.to_owned(),
+        key.to_owned(),
+    ];
+    if let Some(origin) = current
+        .sources
+        .get(&source_key)
+        .filter(|source| !matches!(source, Source::File { .. }))
+    {
+        return Err(EditError::Conflict {
+            section,
+            id: issuer_id.to_owned(),
+            origin: origin.clone(),
+            target: path,
+        });
+    }
+    let parse_error = |message: String| EditError::Parse {
+        path: path.clone(),
+        message,
+    };
+    let old_text = std::fs::read_to_string(&path).map_err(|e| parse_error(e.to_string()))?;
+    let mut doc = old_text
+        .parse::<DocumentMut>()
+        .map_err(|e| parse_error(e.to_string()))?;
+    set_issuer_bool(&mut doc, issuer_id, key, value).map_err(parse_error)?;
+    let new_text = doc.to_string();
+    let loaded = load_with_file_text(inputs, &path, &new_text).map_err(EditError::Invalid)?;
+    Ok(Edit {
+        path,
+        old_text,
+        new_text,
+        loaded,
+    })
+}
+
+fn set_issuer_bool(
+    doc: &mut DocumentMut,
+    issuer_id: &str,
+    key: &str,
+    value: bool,
+) -> Result<(), String> {
+    let root = doc.as_table_mut();
+    if !root.contains_key("issuer") {
+        let mut table = Table::new();
+        table.set_implicit(true);
+        root.insert("issuer", Item::Table(table));
+    }
+    let slot = &mut root["issuer"];
+    if !slot.is_table() {
+        let item = std::mem::take(slot);
+        *slot = Item::Table(
+            item.into_table()
+                .map_err(|_| "`issuer` is not a table".to_owned())?,
+        );
+    }
+    let Some(issuers) = slot.as_table_mut() else {
+        return Err("`issuer` is not a table".to_owned());
+    };
+    if let Some(entry) = issuers.get_mut(issuer_id) {
+        if !entry.is_table() {
+            let item = std::mem::take(entry);
+            *entry = Item::Table(
+                item.into_table()
+                    .map_err(|_| format!("`issuer.{issuer_id}` is not a table"))?,
+            );
+        }
+        let Some(table) = entry.as_table_mut() else {
+            return Err(format!("`issuer.{issuer_id}` is not a table"));
+        };
+        table.insert(key, toml_edit::value(value));
+    } else {
+        let mut table = Table::new();
+        if issuers.iter().next().is_some() || issuers.position().is_some() {
+            // Keep a blank line before the new table header.
+            table.decor_mut().set_prefix("\n");
+        }
+        table.insert(key, toml_edit::value(value));
+        issuers.insert(issuer_id, Item::Table(table));
+    }
+    Ok(())
 }
 
 /// The first source of a value of the entry that is not the file `target`.
@@ -511,5 +624,80 @@ claims = { email = \"alice@example.com\" }
             "{ a = 1, b = 1.5, c = [true, \"x\"], d = { e = \"f\" } }"
         );
         assert!(toml_value(&serde_json::Value::Null).is_err());
+    }
+
+    #[test]
+    fn issuer_bool_sets_the_key_and_keeps_comments() {
+        let (i, _) = file_inputs(BASE);
+        let edit = prepare_issuer_bool(&i, "a", "show_user_list", true).unwrap();
+        assert!(
+            edit.new_text.contains(
+                "# Local issuer.\n[issuer.a]\nissuer_url = \"http://localhost:9000/a\"\nshow_user_list = true\n"
+            ),
+            "{}",
+            edit.new_text
+        );
+        assert!(edit.new_text.contains("label = \"Alice\" # keep me"));
+        assert!(edit.loaded.config.issuer["a"].show_user_list);
+        edit.write().unwrap();
+        let (i2, _) = file_inputs(&edit.new_text);
+        let edit = prepare_issuer_bool(&i2, "a", "show_user_list", false).unwrap();
+        assert_eq!(edit.new_text.matches("show_user_list").count(), 1);
+        assert!(edit.new_text.contains("show_user_list = false"));
+        assert!(!edit.loaded.config.issuer["a"].show_user_list);
+    }
+
+    #[test]
+    fn issuer_bool_from_an_earlier_file_adds_a_table() {
+        let first = write_tmp("[issuer.a]\nissuer_url = \"http://localhost:9000/a\"\n");
+        let last = write_tmp("[user.bob]\nlabel = \"Bob\"\n");
+        let mut i = inputs(&[]);
+        i.config_files = vec![first, last.clone()];
+        let edit = prepare_issuer_bool(&i, "a", "show_user_list", true).unwrap();
+        assert_eq!(edit.path, last);
+        assert!(
+            edit.new_text.contains("[issuer.a]\nshow_user_list = true"),
+            "{}",
+            edit.new_text
+        );
+        let issuer = &edit.loaded.config.issuer["a"];
+        assert!(issuer.show_user_list);
+        assert_eq!(issuer.issuer_url, "http://localhost:9000/a");
+    }
+
+    #[test]
+    fn issuer_bool_refuses_env() {
+        let file = write_tmp(BASE);
+        let mut i = inputs(&[("FAUXIDC__ISSUER__A__SHOW_USER_LIST", "true")]);
+        i.config_files = vec![file];
+        let e = prepare_issuer_bool(&i, "a", "show_user_list", false).unwrap_err();
+        assert!(
+            matches!(
+                e,
+                EditError::Conflict {
+                    section: Section::Issuer,
+                    ..
+                }
+            ),
+            "{e}"
+        );
+    }
+
+    #[test]
+    fn issuer_bool_unknown_issuer_and_no_file() {
+        let (i, _) = file_inputs(BASE);
+        let e = prepare_issuer_bool(&i, "zed", "show_user_list", true).unwrap_err();
+        assert!(
+            matches!(
+                e,
+                EditError::NotFound {
+                    section: Section::Issuer,
+                    ..
+                }
+            ),
+            "{e}"
+        );
+        let e = prepare_issuer_bool(&inputs(&[]), "default", "show_user_list", true).unwrap_err();
+        assert!(matches!(e, EditError::NoFile), "{e}");
     }
 }
