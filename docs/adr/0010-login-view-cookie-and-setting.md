@@ -6,7 +6,7 @@ Status: accepted.
 ## Context
 
 The login page first showed a User dropdown with a "Custom…" entry. Most visits need a Custom user or a User, and the old dropdown hid the Custom user form behind one entry.
-Issue #45 asked for a switch to choose the view. A test run needs a way to set the view for every browser, and a person needs the view to stay on reload.
+Issue #44 asked for a switch on the login page to choose the view. Issue #45 asked for a setting on the dashboard. A test run needs a way to set the view for every browser, and a person needs the view to stay on reload.
 
 Config has several sources (spec 5.1). Env, inline config and flags change only at restart. ADR 0008 sets how a Test API write changes the config.
 The page script writes the cookie, so the cookie cannot be `HttpOnly`.
@@ -26,7 +26,7 @@ The page script writes the cookie, so the cookie cannot be `HttpOnly`.
 - The Issuer setting is `issuer.<id>.show_user_list`. The default is `false`.
 - `PUT /_mock/{issuer-id}/login` and the dashboard switch write the key to the last config file (ADR 0008).
   With no config file, the value stays in memory. A hot reload keeps it. `DELETE /_mock/state` and a restart clear it.
-- A write fails with 409 when an env var, inline config or a flag sets the key. The answer of `GET` has the `source`: `default`, `file`, `memory`, `env`, `inline`, `flag` or `unknown`.
+- With a config file, a write fails with 409 when an env var, inline config or a flag sets the key. Without a config file, the value goes to memory and overrides the env value. The answer of `GET` has the `source`: `default`, `file`, `memory`, `env`, `inline`, `flag` or `unknown`.
 - The Config view shows a memory value with the source `memory`.
 - The login template context has version 3 with the new fields `show_user_list`, `user_list_saved`, `view_cookie` and `view_cookie_path`.
 

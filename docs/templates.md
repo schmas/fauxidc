@@ -55,6 +55,7 @@ Every context has `context_version` (integer, `3`). Fields are added in a minor 
 - The built-in login page opens on the Custom user form. It no longer has a `Custom…` option: the form view posts a hidden `user=__custom__`, and a switch shows the User dropdown.
 - `custom_label` stays, but the built-in page no longer shows it.
 - A custom `login.html` that ignores the new fields keeps working, because the POST contract is the same.
+- `dashboard.html`: new field `config_file` in the page context and new field `login` in each Issuer. The built-in Login page section uses them.
 
 No field is removed or renamed.
 
@@ -211,6 +212,7 @@ A custom page that loads the script must keep them, or use its own script.
 | `context_version` | integer | Always `3`. |
 | `issuers` | list of Issuers | Each configured Issuer, by id. |
 | `request_log` | boolean | `false` when `server.request_log_size` is 0. |
+| `config_file` | boolean | `true` when the server reads a config file (given, `FAUXIDC_CONFIG` or `./fauxidc.toml`). If `false`, a login setting change stays in memory. (Version 3.) |
 | `static_base` | string | URL prefix for static files, `/_mock/static`. |
 
 An Issuer has these fields. The hrefs are paths on this server.
@@ -224,3 +226,11 @@ An Issuer has these fields. The hrefs are paths on this server.
 | `jwks_href` | string | The JWKS endpoint. |
 | `debugger_href` | string | The debugger page. The Debugger view shows it in the frame `#debugger-frame` with `?embed=1`. |
 | `endsession_href` | string | The `/endsession` endpoint. A browser visit signs out: it clears the Session, the Auto-select cookie and the login view cookie. |
+| `login` | object | The login page setting of the Issuer: `show_user_list` (boolean), `source` (`default`, `file`, `memory`, `env`, `inline`, `flag` or `unknown`) and `origin` (string or null: the file position, env var or flag). (Version 3.) |
+
+The built-in `dashboard.js` needs these hooks for the Login page section:
+
+- `data-login-issuer="{id}"` on the switch (a checkbox with `role="switch"`). The script sends `PUT /_mock/{id}/login` when it changes.
+- `aria-describedby` on the switch. It names the state span (`login-state-{id}`) that the script updates with the new state text.
+- `data-login-source` on the cell in the same table row (`tr`) as the switch. The script replaces its content with the source label.
+- `#issuers-out`. The script shows an error of the request here.

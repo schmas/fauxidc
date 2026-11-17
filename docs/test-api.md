@@ -245,7 +245,8 @@ An unknown field or a value that is not a boolean gives 400 `invalid_request`.
 - With a config file, `PUT` writes the key to the last config file and applies it at once (ADR 0008). The value stays after a restart.
 - Without a config file (Zero config), the value lives in memory. A hot reload keeps it. `DELETE /_mock/state` and a restart clear it.
   The Config view shows it with the source `memory`.
-- If an env var, inline config or a flag sets the key, `PUT` gives 409 `conflict`. Change that source.
+- With a config file, `PUT` gives 409 `conflict` if an env var, inline config or a flag sets the key. Change that source.
+- Without a config file, `PUT` does not give 409. The value goes to memory and overrides the env value.
 - A request with a foreign `Origin` header gives 403 `access_denied`. An unknown Issuer id gives 404.
 - The dashboard Issuers view has a "Login page" section with one switch for each Issuer. It uses these routes.
 
@@ -292,7 +293,7 @@ Lenient-registered Clients, debugger flows, Injected failures, the Client JWKS c
 Config and signing keys do not change. A `show_user_list` value that `PUT /_mock/{issuer-id}/login` kept in memory is cleared too.
 
 `?issuer=<id>` clears only the data of one Issuer: codes, Sessions, Lenient-registered Clients, debugger flows,
-Injected failures and the Request log entries of that Issuer. The `jti` lists, the revocation list and the JWKS cache
+Injected failures, the Request log entries and the memory `show_user_list` value of that Issuer. The `jti` lists, the revocation list and the JWKS cache
 have no Issuer id, so they stay. An unknown Issuer id gives 404. An unknown query parameter gives 400.
 
 Refresh tokens and access tokens are signed JWTs, not stored state. They stay valid after a reset until they expire.

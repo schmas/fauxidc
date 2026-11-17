@@ -117,7 +117,8 @@ show_user_list = true
 - The default is `false`. An Issuer without Users always shows the form.
 - A browser that used the switch "Choose a configured User" keeps its own view in the cookie `fauxidc_login_view_{issuer_id}`. The cookie wins over this key.
 - `PUT /_mock/{issuer-id}/login` and the dashboard change the key in the last config file, or in memory when there is no file. See [test-api.md](test-api.md#login-page-setting).
-- If an env var, inline config or a flag sets the key, the write fails with 409. Change that source and restart.
+- With a config file, a write fails with 409 if an env var, inline config or a flag sets the key. Change that source and restart.
+- Without a config file, the write does not fail. The value goes to memory and overrides the env value.
 
 ## Strict mode and Lenient mode
 
