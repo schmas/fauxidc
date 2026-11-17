@@ -17,6 +17,22 @@ fauxidc reads five sources. A later source overrides an earlier one.
 
 Every source rejects unknown keys. Invalid config stops the server with exit code 2.
 
+## A small config
+
+One Issuer, one confidential Client and one User:
+
+```toml
+[issuer.app]
+issuer_url = "http://localhost:9000/app"
+
+[client.web]
+client_secret = "local"
+redirect_uris = ["http://localhost:3000/callback"]
+
+[user.alice]
+claims = { email = "alice@example.com", name = "Alice Example" }
+```
+
 ## Zero config
 
 With no config file, no inline config and no `FAUXIDC__*` env var, fauxidc starts in Zero config mode.

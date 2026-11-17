@@ -5,9 +5,22 @@
 [![Release](https://img.shields.io/github/v/release/schmas/fauxidc)](https://github.com/schmas/fauxidc/releases)
 [![ghcr.io](https://img.shields.io/badge/ghcr.io-schmas%2Ffauxidc-blue)](https://github.com/schmas/fauxidc/pkgs/container/fauxidc)
 
-fauxidc is a small OAuth 2.0 / OpenID Connect mock server for local development and integration tests.
-It ships as a single static binary and needs no external infrastructure.
-It gives your app a real login flow, real signed tokens and a Test API to mint tokens and inject failures.
+fauxidc is an OAuth 2.0 / OpenID Connect mock server for local development and integration tests.
+
+<p align="center"><img src="docs/media/banner.svg" alt="fauxidc: OAuth 2.0 / OpenID Connect mock server" width="720"></p>
+
+Give your app a real login flow and real signed tokens, with one small binary and no setup.
+
+![An app sends the browser to the fauxidc login page. The user picks Alice Admin and signs in. The app shows the ID token claims of alice.](docs/media/login-flow.gif)
+
+## Why fauxidc
+
+- **Single binary.** One binary written in Rust, with a small footprint. On macOS arm64 the release binary is 3.3 MB and uses 5.6 MiB of memory at idle. The linux/arm64 container image is 6.3 MB. See [Footprint](docs/footprint.md).
+- **No infrastructure.** No database, no external service, no account. It starts in Zero config with one command.
+- **Real signed tokens.** Signed JWTs (RS256 by default), discovery, JWKS, PKCE, refresh tokens and Sessions, as a real provider gives.
+- **Test API.** Mint tokens without a browser, inject failures, rotate keys and read the Request log under `/_mock/`.
+- **OpenID conformance in CI.** Every push to `main` runs the OpenID Foundation conformance suite.
+
 It is pre-alpha: the config and the library API can change before 1.0.
 Anyone who can reach a fauxidc server can mint tokens, so never trust a fauxidc Issuer in production.
 See [SECURITY.md](SECURITY.md).
@@ -51,6 +64,8 @@ cargo install --git https://github.com/schmas/fauxidc --locked
 Add `--tag v0.1.0` (or another release tag) to the `--git` command to pin a version.
 The archive also has the `examples/` directory. From a checkout, use `cargo run --` in place of `fauxidc`.
 
+![A terminal starts fauxidc, mints an access token for alice with the Test API and calls /userinfo with it.](docs/media/terminal.gif)
+
 With no config, fauxidc starts in Zero config mode: one Issuer `default` in Lenient mode,
 one public Client `test`, and the Users `alice` and `bob`. In a second terminal:
 
@@ -68,9 +83,15 @@ Open `http://localhost:9000/default/debugger` and click "Run login flow" to see 
 The page opens on the Custom user form (Subject and Claims). Use the switch "Choose a configured User" to pick a User from a dropdown.
 To open the page on the dropdown, set `show_user_list = true` on the Issuer, or use the Login page switch in the dashboard.
 
+## Screenshots
+
+| Login page | Debugger | Dashboard |
+| --- | --- | --- |
+| [![The login page with the Subject and Claims fields and the switch "Choose a configured User".](docs/media/login-page.png)](docs/media/login-page.png) | [![The debugger page with a decoded access token: signature valid, iss ok, header and payload.](docs/media/debugger.png)](docs/media/debugger.png) | [![The admin dashboard at /_mock/ with the Issuers view and the sidebar.](docs/media/dashboard.png)](docs/media/dashboard.png) |
+
 ## Recipes
 
-The recipes use [examples/generic.toml](examples/generic.toml). Start fauxidc with it:
+[docs/recipes.md](docs/recipes.md) has the recipes. They use [examples/generic.toml](examples/generic.toml). Start fauxidc with it:
 
 ```sh
 # Docker: the image has the examples in /examples/
@@ -82,109 +103,28 @@ fauxidc --config generic.toml
 cargo run -- --config examples/generic.toml
 ```
 
-### SPA with PKCE
+- [SPA with PKCE](docs/recipes.md#spa-with-pkce)
+- [Backend with a client secret](docs/recipes.md#backend-with-a-client-secret)
+- [Machine-to-machine](docs/recipes.md#machine-to-machine)
+- [Mint a token in a test](docs/recipes.md#mint-a-token-in-a-test)
+- [Fixed time for reproducible tokens](docs/recipes.md#fixed-time-for-reproducible-tokens)
+- [Random host port (Testcontainers)](docs/recipes.md#random-host-port-testcontainers), with the JVM guide [docs/testcontainers.md](docs/testcontainers.md)
+- [Simulate a provider outage](docs/recipes.md#simulate-a-provider-outage)
+- [Use with an agent](docs/recipes.md#use-with-an-agent)
 
-`generic.toml` has the public Client `spa` with the redirect URI `http://localhost:5173/`.
-Configure your OIDC library with these values:
+## Use with an AI coding agent
 
-| Setting | Value |
-| --- | --- |
-| Authority (Issuer URL) | `http://localhost:9000/generic` |
-| Client id | `spa` |
-| Redirect URI | `http://localhost:5173/` |
-| Scope | `openid profile email` (add `offline_access` for a refresh token) |
+The repo has two agent skills: [skills/fauxidc](skills/fauxidc/SKILL.md) (reference) and
+[skills/fauxidc-setup](skills/fauxidc-setup/SKILL.md) (adds fauxidc to an app project).
+Copy or symlink a skill directory into `.claude/skills/` (one project), `~/.claude/skills/` (all projects, Claude Code)
+or `~/.agents/skills/` (other agents that read it). [llms.txt](llms.txt) lists the docs.
+[docs/agents.md](docs/agents.md) has the install steps and prompts to copy, for example:
 
-A public Client needs PKCE in Strict mode. The library sends `S256` for you.
-CORS on `/token`, `/userinfo` and `/revoke` allows the Client `web_origins`, or the origins of its `redirect_uris` when `web_origins` is not set.
-With `auth0-spa-js` and `useRefreshTokens`, see the note in [docs/configuration.md](docs/configuration.md#examples).
-
-### Backend with a client secret
-
-`generic.toml` has the confidential Client `web` (secret `local`) with the redirect URI `http://localhost:3000/callback`.
-Your backend sends the browser to `/authorize`, the User picks `alice` or `bob`, and the backend exchanges the code:
-
-```sh
-curl -s http://localhost:9000/generic/token -u web:local \
-  -d grant_type=authorization_code \
-  -d code="$CODE" \
-  -d redirect_uri=http://localhost:3000/callback
+```text
+Write an integration test for GET /api/orders of our API. Start fauxidc with examples/generic.toml.
+Before the request, mint an access token with the Test API: POST http://localhost:9000/_mock/generic/token
+with {"user": "alice", "audience": "https://api.example.test"}. Send it as a Bearer token and expect 200.
 ```
-
-The Client can also send the secret in the body (`client_secret_post`) or use `private_key_jwt`.
-See [docs/features.md](docs/features.md#private_key_jwt).
-A backend that wants the code in a POST body (for example ASP.NET Core) can send `response_mode=form_post`.
-See [docs/features.md](docs/features.md#response_modeform_post).
-
-### Machine-to-machine
-
-`generic.toml` has the Client `service` with the `client_credentials` grant, the scope `api`
-and the audience `https://api.example.test`:
-
-```sh
-curl -s http://localhost:9000/generic/token -u service:local \
-  -d grant_type=client_credentials -d scope=api
-```
-
-### Mint a token in a test
-
-The Test API issues tokens without a browser. Your test code calls it before it calls your API:
-
-```sh
-curl -s http://localhost:9000/_mock/generic/token \
-  -H 'content-type: application/json' \
-  -d '{"user": "alice", "claims": {"roles": ["viewer"]}, "audience": "https://api.example.test", "expires_in": 300}'
-```
-
-Send `"sub"` in place of `"user"` for a Custom user that is not in the config.
-A negative `expires_in` gives an expired token, to test that your API rejects it.
-Rust tests can also start fauxidc in the same process with `fauxidc::Server::start(config).await`.
-The library API is unstable before 1.0.
-
-### Fixed time for reproducible tokens
-
-Set `server.fixed_time = "2020-01-21T00:00:00Z"` (or `FAUXIDC__SERVER__FIXED_TIME`).
-Then `iat`, `exp`, `auth_time` and `expires_in` are the same in every run, and fauxidc checks tokens with the same clock.
-See [docs/configuration.md](docs/configuration.md#fixed-time).
-
-### Random host port (Testcontainers)
-
-With a mapped port, set `FAUXIDC_ISSUER_FROM_HOST=true`. Then `iss` and the discovery `issuer` use the host and port of the request,
-so a client can use `http://localhost:<mapped port>/default` as its issuer. Zero config stays on.
-Tokens are then valid only through the host that minted them.
-See [docs/configuration.md](docs/configuration.md#issuer-url-and-endpoint-urls).
-For JVM tests, [docs/testcontainers.md](docs/testcontainers.md) has the `GenericContainer` setup, the wait strategy,
-a Spring Boot example and token minting from Java.
-
-### Simulate a provider outage
-
-Make the next two token requests fail with 503, then remove all Injected failures:
-
-```sh
-curl -s -X POST http://localhost:9000/_mock/generic/fail-next \
-  -H 'content-type: application/json' -d '{"endpoint": "token", "status": 503, "count": 2}'
-curl -s -X DELETE http://localhost:9000/_mock/generic/fail-next
-```
-
-Send `"delay_ms": 5000` without `status` to make an endpoint slow, not broken.
-To test key rotation, call `POST /_mock/generic/rotate-key`.
-
-### Use with an agent
-
-The repo has an agent skill, [skills/fauxidc](skills/fauxidc/SKILL.md). It tells a coding agent how to start fauxidc,
-write a config, mint tokens, inject failures and avoid the common pitfalls.
-Install it: copy or symlink the `skills/fauxidc` directory into `.claude/skills/` (one project),
-`~/.claude/skills/` (all projects, Claude Code) or `~/.agents/skills/` (other agents that read it).
-A second skill, [skills/fauxidc-setup](skills/fauxidc-setup/SKILL.md), adds fauxidc to an app project once.
-It asks a few questions and writes a config, a compose file, a wrapper script and a README. Install it the same way.
-
-```sh
-git clone https://github.com/schmas/fauxidc.git ~/src/fauxidc
-mkdir -p .claude/skills && ln -s ~/src/fauxidc/skills/fauxidc .claude/skills/fauxidc
-ln -s ~/src/fauxidc/skills/fauxidc-setup .claude/skills/fauxidc-setup
-```
-
-[llms.txt](llms.txt) lists the docs for agents that read it.
-The schema of the config file is [schema/fauxidc.schema.json](schema/fauxidc.schema.json).
 
 ## Configuration
 
@@ -192,110 +132,55 @@ fauxidc reads five sources. A later source overrides an earlier one:
 built-in defaults, config files (`--config`, `FAUXIDC_CONFIG` or `./fauxidc.toml`),
 inline config (`FAUXIDC_CONFIG_INLINE`), env vars for single keys (`FAUXIDC__SERVER__PORT=9000`) and CLI flags.
 Every source rejects unknown keys. Invalid config stops the server with exit code 2.
-
-- `fauxidc config` prints the merged config and the source of each value.
-- `fauxidc config --check` only validates the config.
-- `fauxidc config --schema` prints the JSON Schema of the config file. It reads no config.
-
-For completion and key checks in an editor with Taplo or Even Better TOML, add this first line to your config file:
-
-```toml
-#:schema https://raw.githubusercontent.com/schmas/fauxidc/main/schema/fauxidc.schema.json
-```
-
-A small config:
-
-```toml
-[issuer.app]
-issuer_url = "http://localhost:9000/app"
-
-[client.web]
-client_secret = "local"
-redirect_uris = ["http://localhost:3000/callback"]
-
-[user.alice]
-claims = { email = "alice@example.com", name = "Alice Example" }
-```
+`fauxidc config` prints the merged config, `--check` only validates it and `--schema` prints the JSON Schema.
 
 The [examples/](examples/) directory has six configs and a compose file:
 `auth0.toml`, `okta.toml`, `generic.toml`, `keycloak.toml`, `entra.toml`, `cognito.toml` and `docker-compose.yml`.
 Each one imitates the paths and claims of one provider style.
 
-[docs/configuration.md](docs/configuration.md) has the details: the sources table, Zero config, Docker,
+[docs/configuration.md](docs/configuration.md) has the details: the sources table, Zero config, a small config, the editor schema line, Docker,
 the examples, Strict and Lenient mode, the Issuer URL rules and the signing keys.
 The full key reference is [docs/spec.md](docs/spec.md), section 5.
 
 ## Test API
 
-The Test API lives under `/_mock/` and has no authentication.
+The Test API lives under `/_mock/` and has no authentication. It mints tokens, rotates keys, adds and removes Injected failures,
+changes Users and Clients, shows the running config, resets the runtime state, reloads the config files and shows the Request log.
+[docs/test-api.md](docs/test-api.md) has every route, field, status code and limit.
 
-| Route | Purpose |
-| --- | --- |
-| `POST /_mock/{issuer-id}/token` | Mint tokens for a User or a Custom user. |
-| `POST /_mock/{issuer-id}/rotate-key` | Give the Issuer a new signing key. |
-| `POST` / `DELETE /_mock/{issuer-id}/fail-next` | Add or remove Injected failures. |
-| `GET` / `PUT /_mock/{issuer-id}/login` | Show or set `show_user_list`, the login page setting. |
-| `GET` / `POST /_mock/users`, `GET` / `PUT` / `PATCH` / `DELETE /_mock/users/{user-id}` | List and change the Users of the config file. `fauxidc users` does the same without a server. |
-| `GET` / `POST /_mock/clients`, `GET` / `PUT` / `PATCH` / `DELETE /_mock/clients/{client-key}` | List and change the Clients of the config file, with secrets masked. `fauxidc clients` does the same without a server. |
-| `GET /_mock/config` | Show the running config and the source of each value. Secrets are masked. |
-| `DELETE /_mock/state` | Clear the runtime state (codes, Sessions, revocations, Injected failures, Request log) without a restart. |
-| `POST /_mock/reload` | Reload the config files at once. It returns the config errors or the restart warnings. |
-| `GET` / `DELETE /_mock/requests` | Read or clear the Request log. |
-| `GET /_mock/health` | Health check. |
+Open `http://localhost:9000/_mock/` (or `/`) in a browser for the [dashboard](docs/test-api.md#dashboard).
+It does each of these operations with a form and signs you out of an Issuer.
+Here it makes the next token request fail with 503, and the app shows the error:
 
-Open `http://localhost:9000/_mock/` (or `/`) in a browser for the [dashboard](docs/test-api.md#dashboard). It does each of these operations with a form and signs you out of an Issuer.
-[docs/test-api.md](docs/test-api.md) has every field, status code and limit.
+![The dashboard Injected failures view sets a 503 failure on the token endpoint. The app then logs in and shows "Login failed: POST /token returned 503".](docs/media/inject-failure.gif)
 
 ## Templates
 
 You can replace the login page, the error page, the signed-out page, the debugger page, the `form_post` page and the dashboard with your own templates.
 The built-in pages link one embedded stylesheet, `/_mock/static/halo.css` (plain CSS, light and dark), and need no network.
-
-The built-in login page opens on the Custom user form. The switch "Choose a configured User" shows the dropdown of the configured Users.
-The switch saves the view in the cookie `fauxidc_login_view_{issuer_id}` (`list` or `form`), and `{issuer}/endsession` clears it.
-The Issuer key `show_user_list` (default `false`) sets the view for a browser without that cookie.
-Change it with `PUT /_mock/{issuer-id}/login`, or with the Login page switch in the dashboard.
-
-For a Custom user from one username, set a claims template on the Issuer. The Custom user form
-(label "Other…" for a custom template) then shows one `username` field instead of the subject and JSON fields:
-
-```toml
-[issuer.app.custom_user]
-label = "Other…"
-[issuer.app.custom_user.claims]
-email = "{username}@example.test"
-email_verified = true
-```
-
-`sub` is the username, trimmed and in lowercase (a `sub` in Override claims wins). `{username}` is filled in every string value, nested values too.
-[docs/templates.md](docs/templates.md) has the template context (version 3) and the override rules.
+The login page opens on the Custom user form. The switch "Choose a configured User" shows the dropdown of the configured Users.
+See [docs/features.md](docs/features.md#login-page) for the login page view and the [Custom user template](docs/features.md#custom-user-template),
+and [docs/templates.md](docs/templates.md) for the template context (version 3).
 
 ## Debugger
 
 Each Issuer serves a debugger page at `{issuer}/debugger`.
 Paste a JWT to decode it and check its signature, `exp` and `iss`.
 Or click "Run login flow" to run the code flow with PKCE and see the decoded tokens.
-The dashboard Debugger view (`/_mock/#debugger/<issuer id>`) shows the same page in a frame, with an Issuer select.
-The flow uses the built-in public Client `debugger`. A configured Client with
-`client_id = "debugger"` must list `{issuer}/debugger/callback` in `redirect_uris`.
+The dashboard Debugger view (`/_mock/#debugger/<issuer id>`) shows the same page in a frame.
 See [docs/features.md](docs/features.md#debugger).
 
 ## TLS
 
-A build with the optional `tls` feature serves HTTPS from PEM files that you provide (`server.tls.cert_file` and `server.tls.key_file`).
-fauxidc does not generate certificates. The release binaries and the container image are built without the `tls` feature.
-See [docs/features.md](docs/features.md#tls).
+A build with the optional `tls` feature serves HTTPS from PEM files that you provide.
+The release binaries and the container image are built without it. See [docs/features.md](docs/features.md#tls).
 
 ## Hot reload
 
 fauxidc polls the config files every second and also reloads on SIGHUP.
 A change applies only after two polls in a row see the same new file state, so it applies 1 to 2 s after the save.
-If a change fails to load, fauxidc keeps the old config and logs the error.
-A test that edits a config file can call `POST /_mock/reload` to apply it at once and see the errors.
-SIGHUP reloads the config, so closing the terminal does not stop a foreground fauxidc; stop it with Ctrl-C or SIGTERM.
-Some `server` keys need a restart. See [docs/features.md](docs/features.md#hot-reload).
-
-Sessions, token exchange and `private_key_jwt` are in [docs/features.md](docs/features.md) too.
+`POST /_mock/reload` applies it at once. See [docs/features.md](docs/features.md#hot-reload).
+Sessions, token exchange, `private_key_jwt` and the [footprint](docs/footprint.md) are in `docs/` too.
 
 ## Conformance
 
