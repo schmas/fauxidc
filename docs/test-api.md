@@ -317,7 +317,7 @@ At a narrow width, a select box replaces the sidebar.
 | Section | What it does | Route |
 | --- | --- | --- |
 | Issuers | Shows each Issuer with its `iss`, its mode, and links to discovery, JWKS and the debugger. Resets the state of one Issuer. | `DELETE /_mock/state?issuer=` |
-| Issuers: Sign out | A link to `{issuer}/endsession`. It clears the Session and the "Remember me" (Auto-select) cookie of this browser, so the next `/authorize` shows the login page. | `/endsession` |
+| Issuers: Sign out | A link to `{issuer}/endsession`. It clears the Session, the "Remember me" (Auto-select) cookie and the saved login view of this browser, so the next `/authorize` shows the login page. | `/endsession` |
 | Keys | Shows the algorithm, the active `kid` and the key count from JWKS. Rotates the key, with or without `retire`. | `rotate-key` |
 | Users, Clients | Lists, shows, adds, changes and deletes entries in a JSON editor dialog. | `/_mock/users`, `/_mock/clients` |
 | Mint a token | Mints tokens for a User or a Custom user. A button decodes the `id_token` in the Debugger view. | `POST /_mock/{issuer-id}/token` |

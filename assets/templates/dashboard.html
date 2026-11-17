@@ -57,7 +57,7 @@
 <noscript><div class="alert alert-warning">{{ icon("warn") }}<div>The dashboard needs JavaScript for every action. The Issuer links work without it.</div></div></noscript>
 
 <section id="issuers" class="view">
-<div class="page-head"><div><h1>Issuers</h1><p class="muted">Each Issuer, its iss and its endpoints. Sign out clears the Session and the Remember me cookie in this browser.</p></div>
+<div class="page-head"><div><h1>Issuers</h1><p class="muted">Each Issuer, its iss and its endpoints. Sign out clears the Session, the Remember me cookie and the saved login view in this browser.</p></div>
 <div class="row"><button type="button" class="btn btn-outline" data-action="reload">{{ icon("refresh") }}Reload config</button></div></div>
 <div id="issuers-out" class="out" aria-live="polite"></div>
 <div class="table-wrap"><table>
@@ -66,7 +66,7 @@
 <td class="mono">{{ i.id }}</td><td class="mono">{{ i.issuer_url }}</td>
 <td>{% if i.lenient %}<span class="label label-warning">Lenient</span>{% else %}<span class="label label-success">Strict</span>{% endif %}</td>
 <td class="links"><a href="{{ i.discovery_href|href }}">Discovery</a><a href="{{ i.jwks_href|href }}" data-jwks>JWKS</a><a href="{{ i.debugger_href|href }}" data-debugger>Debugger</a></td>
-<td class="actions"><div class="row"><a class="btn btn-outline" href="{{ i.endsession_href|href }}" title="Clears the Session and the Remember me cookie in this browser">{{ icon("logout") }}Sign out</a><button type="button" class="btn btn-ghost" data-action="reset-issuer" data-issuer="{{ i.id }}">{{ icon("reset") }}Reset state</button></div></td>
+<td class="actions"><div class="row"><a class="btn btn-outline" href="{{ i.endsession_href|href }}" title="Clears the Session, the Remember me cookie and the saved login view in this browser">{{ icon("logout") }}Sign out</a><button type="button" class="btn btn-ghost" data-action="reset-issuer" data-issuer="{{ i.id }}">{{ icon("reset") }}Reset state</button></div></td>
 </tr>
 {% endfor %}</tbody></table></div>
 <div class="alert">{{ icon("info") }}<div><strong>Sign out works in this browser only</strong><span>The Remember me cookie lives on the Issuer path. Sign out opens <code>{issuer}/endsession</code>, which clears it and the Session. <code>DELETE /_mock/state</code> and the CLI cannot clear it.</span></div></div>

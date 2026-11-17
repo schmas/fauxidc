@@ -205,4 +205,4 @@ An Issuer has these fields. The hrefs are paths on this server.
 | `discovery_href` | string | The discovery document. |
 | `jwks_href` | string | The JWKS endpoint. |
 | `debugger_href` | string | The debugger page. The Debugger view shows it in the frame `#debugger-frame` with `?embed=1`. |
-| `endsession_href` | string | The `/endsession` endpoint. A browser visit signs out: it clears the Session and the Auto-select cookie. |
+| `endsession_href` | string | The `/endsession` endpoint. A browser visit signs out: it clears the Session, the Auto-select cookie and the login view cookie. |

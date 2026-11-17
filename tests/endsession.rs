@@ -162,6 +162,26 @@ async fn no_redirect_shows_signed_out_page() {
 }
 
 #[tokio::test]
+async fn endsession_clears_the_login_view_cookie() {
+    let (s, h, _) = send(&app(&LOGOUT), get("/auth0/v2/logout?client_id=example-app")).await;
+    assert_eq!(s, 200);
+    let cookie = h
+        .get_all("set-cookie")
+        .iter()
+        .map(|v| v.to_str().unwrap())
+        .find(|c| c.starts_with("fauxidc_login_view_auth0="))
+        .unwrap();
+    assert!(
+        cookie.starts_with("fauxidc_login_view_auth0=;") && cookie.contains("Max-Age=0"),
+        "{cookie}"
+    );
+    assert!(
+        cookie.contains("Path=/auth0;") && !cookie.contains("HttpOnly"),
+        "{cookie}"
+    );
+}
+
+#[tokio::test]
 async fn post_form_works() {
     let (s, h, b) = send(
         &app(&LOGOUT),
