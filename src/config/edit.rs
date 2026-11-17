@@ -196,6 +196,16 @@ pub fn prepare(
         }
         (Change::Create(_), false) => {}
     }
+    edit_file(inputs, path, |doc| apply(doc, section, id, change))
+}
+
+/// Reads the target file, changes its document with `mutate`, and loads the config with the new
+/// text.
+fn edit_file(
+    inputs: &LoadInputs,
+    path: PathBuf,
+    mutate: impl FnOnce(&mut DocumentMut) -> Result<(), String>,
+) -> Result<Edit, EditError> {
     let parse_error = |message: String| EditError::Parse {
         path: path.clone(),
         message,
@@ -204,7 +214,7 @@ pub fn prepare(
     let mut doc = old_text
         .parse::<DocumentMut>()
         .map_err(|e| parse_error(e.to_string()))?;
-    apply(&mut doc, section, id, change).map_err(parse_error)?;
+    mutate(&mut doc).map_err(parse_error)?;
     let new_text = doc.to_string();
     let loaded = load_with_file_text(inputs, &path, &new_text).map_err(EditError::Invalid)?;
     Ok(Edit {
@@ -257,22 +267,8 @@ pub fn prepare_issuer_bool(
             target: path,
         });
     }
-    let parse_error = |message: String| EditError::Parse {
-        path: path.clone(),
-        message,
-    };
-    let old_text = std::fs::read_to_string(&path).map_err(|e| parse_error(e.to_string()))?;
-    let mut doc = old_text
-        .parse::<DocumentMut>()
-        .map_err(|e| parse_error(e.to_string()))?;
-    set_issuer_bool(&mut doc, issuer_id, key, value).map_err(parse_error)?;
-    let new_text = doc.to_string();
-    let loaded = load_with_file_text(inputs, &path, &new_text).map_err(EditError::Invalid)?;
-    Ok(Edit {
-        path,
-        old_text,
-        new_text,
-        loaded,
+    edit_file(inputs, path, |doc| {
+        set_issuer_bool(doc, issuer_id, key, value)
     })
 }
 
@@ -282,23 +278,7 @@ fn set_issuer_bool(
     key: &str,
     value: bool,
 ) -> Result<(), String> {
-    let root = doc.as_table_mut();
-    if !root.contains_key("issuer") {
-        let mut table = Table::new();
-        table.set_implicit(true);
-        root.insert("issuer", Item::Table(table));
-    }
-    let slot = &mut root["issuer"];
-    if !slot.is_table() {
-        let item = std::mem::take(slot);
-        *slot = Item::Table(
-            item.into_table()
-                .map_err(|_| "`issuer` is not a table".to_owned())?,
-        );
-    }
-    let Some(issuers) = slot.as_table_mut() else {
-        return Err("`issuer` is not a table".to_owned());
-    };
+    let issuers = section_table(doc, Section::Issuer.key())?;
     if let Some(entry) = issuers.get_mut(issuer_id) {
         if !entry.is_table() {
             let item = std::mem::take(entry);
@@ -334,26 +314,29 @@ fn other_source(loaded: &Loaded, section: Section, id: &str, target: &Path) -> O
         .cloned()
 }
 
-fn apply(doc: &mut DocumentMut, section: Section, id: &str, change: Change) -> Result<(), String> {
+/// The top-level table `key`. It creates an implicit table when missing, and turns an inline
+/// value (`user = { ... }`) into a table, so an entry can be a `[user.<id>]` table.
+fn section_table<'a>(doc: &'a mut DocumentMut, key: &str) -> Result<&'a mut Table, String> {
     let root = doc.as_table_mut();
-    if !root.contains_key(section.key()) {
+    if !root.contains_key(key) {
         let mut table = Table::new();
         table.set_implicit(true);
-        root.insert(section.key(), Item::Table(table));
+        root.insert(key, Item::Table(table));
     }
-    let slot = &mut root[section.key()];
+    let slot = &mut root[key];
     if !slot.is_table() {
-        // `user = { ... }` or `user.alice = ...` as a value: turn it into a table so an entry can
-        // be a `[user.<id>]` table.
         let item = std::mem::take(slot);
         *slot = Item::Table(
             item.into_table()
-                .map_err(|_| format!("`{}` is not a table", section.key()))?,
+                .map_err(|_| format!("`{key}` is not a table"))?,
         );
     }
-    let Some(entries) = slot.as_table_mut() else {
-        return Err(format!("`{}` is not a table", section.key()));
-    };
+    slot.as_table_mut()
+        .ok_or_else(|| format!("`{key}` is not a table"))
+}
+
+fn apply(doc: &mut DocumentMut, section: Section, id: &str, change: Change) -> Result<(), String> {
+    let entries = section_table(doc, section.key())?;
     match change {
         Change::Remove => {
             entries.remove(id);
@@ -639,7 +622,6 @@ claims = { email = \"alice@example.com\" }
         );
         assert!(edit.new_text.contains("label = \"Alice\" # keep me"));
         assert!(edit.loaded.config.issuer["a"].show_user_list);
-        edit.write().unwrap();
         let (i2, _) = file_inputs(&edit.new_text);
         let edit = prepare_issuer_bool(&i2, "a", "show_user_list", false).unwrap();
         assert_eq!(edit.new_text.matches("show_user_list").count(), 1);
