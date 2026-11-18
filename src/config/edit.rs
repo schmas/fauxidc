@@ -291,7 +291,17 @@ fn set_issuer_bool(
         let Some(table) = entry.as_table_mut() else {
             return Err(format!("`issuer.{issuer_id}` is not a table"));
         };
-        table.insert(key, toml_edit::value(value));
+        match table.get_mut(key).and_then(Item::as_value_mut) {
+            // Change only the value: the key keeps the comment above it, the value its inline comment.
+            Some(old) => {
+                let decor = old.decor().clone();
+                *old = toml_edit::Value::from(value);
+                *old.decor_mut() = decor;
+            }
+            None => {
+                table.insert(key, toml_edit::value(value));
+            }
+        }
     } else {
         let mut table = Table::new();
         if issuers.iter().next().is_some() || issuers.position().is_some() {
@@ -812,6 +822,23 @@ claims = { email = \"alice@example.com\" }
         let edit = prepare_issuer_bool(&i2, "a", "show_user_list", false).unwrap();
         assert_eq!(edit.new_text.matches("show_user_list").count(), 1);
         assert!(edit.new_text.contains("show_user_list = false"));
+        assert!(!edit.loaded.config.issuer["a"].show_user_list);
+    }
+
+    #[test]
+    fn issuer_bool_keeps_the_comments_of_an_existing_key() {
+        let text = "[issuer.a]\nissuer_url = \"http://localhost:9000/a\"\n\
+                    # Open the login page on the user dropdown.\n\
+                    show_user_list = true # inline note\n";
+        let (i, _) = file_inputs(text);
+        let edit = prepare_issuer_bool(&i, "a", "show_user_list", false).unwrap();
+        assert!(
+            edit.new_text.contains(
+                "# Open the login page on the user dropdown.\nshow_user_list = false # inline note\n"
+            ),
+            "{}",
+            edit.new_text
+        );
         assert!(!edit.loaded.config.issuer["a"].show_user_list);
     }
 
