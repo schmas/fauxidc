@@ -47,6 +47,7 @@ cargo run -q -- config --schema > schema/fauxidc.schema.json   # regenerate the 
 cd e2e/spa && npm ci && npx playwright test        # SPA exit test (docs/testing/m2-exit-test.md)
 scripts/conformance.sh                             # OpenID conformance suite (conformance/README.md)
 cd website && npm ci && npm run build              # project website, pages made from docs/ (website/dist)
+scripts/readme-media.sh                            # regenerate the README media in docs/media/ (needs vhs)
 ```
 
 ## Directory Structure
@@ -61,9 +62,10 @@ cd website && npm ci && npm run build              # project website, pages made
 ├── skills/       # agent skills: fauxidc (reference), fauxidc-setup (project setup, templates/)
 ├── e2e/spa/      # SPA exit test (Node and Playwright, outside Cargo)
 ├── conformance/  # OpenID conformance suite plans and expected results
-├── scripts/      # CSS check, image build, binary check, conformance runner
+├── scripts/      # CSS check, image build, binary check, conformance runner, README media (readme-media.sh and .mjs)
 ├── website/      # project website (Astro Starlight); the docs pages come from docs/ at build time
-├── docs/         # spec.md, configuration.md, test-api.md, features.md, templates.md, testcontainers.md, adr/, testing/
+├── docs/         # spec.md, configuration.md, test-api.md, features.md, templates.md, testcontainers.md,
+│                 # recipes.md, agents.md, footprint.md, releasing.md, adr/, testing/, media/
 └── .agents/      # plans and work files, git-ignored
 ```
 
@@ -83,6 +85,14 @@ cd website && npm ci && npm run build              # project website, pages made
 - A behavior change amends `docs/spec.md` in the same commit, and the user docs (`README.md`, `docs/`).
 - The website shows every `docs/*.md` file except `releasing.md`, and `docs/adr/`. Do not copy docs into `website/`;
   `website/scripts/sync-docs.mjs` makes the pages at build time. Only the landing and comparison pages live in `website/`.
+- `scripts/readme-media.sh` rebuilds the README media in `docs/media/` (GIFs and screenshots). It needs `vhs`
+  (`gifski` is optional), runs fauxidc with `docs/media/fauxidc.toml` and sets the port with `FAUXIDC_MEDIA_PORT`.
+  `docs/media/` also holds the sources (`terminal.tape`, `fauxidc.toml`); the site publishes only the images.
+- The website is served from the root of the custom domain https://fauxidc.schmas.com/. The workflow `pages.yml`
+  builds it on every PR (job `build`) and deploys it on a push to `main`.
+- The landing page reads its prompts (`docs/agents.md`) and its numbers (`docs/footprint.md`) from `docs/`.
+  `sync-docs.mjs` fails the build if a prompt heading or its code block is missing.
+  A missing footprint row hides the numbers. Do not copy them into `website/`.
 - Plans go in `.agents/plans/<date>-<slug>/`. `.agents/` is git-ignored.
 
 ## Rules
