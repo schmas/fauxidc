@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.1](https://github.com/schmas/fauxidc/compare/v0.7.0...v0.7.1) - 2026-11-18
+
+### Fixed
+
+- *(config)* keep comments when the login setting is written ([#66](https://github.com/schmas/fauxidc/pull/66))
+
 ## [0.7.0](https://github.com/schmas/fauxidc/compare/v0.6.1...v0.7.0) - 2026-11-18
 
 ### Fixed
