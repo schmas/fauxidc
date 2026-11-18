@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0](https://github.com/schmas/fauxidc/compare/v0.6.1...v0.7.0) - 2026-11-18
+
+### Fixed
+
+- write the config file on a Docker single-file mount, handle read-only files ([#64](https://github.com/schmas/fauxidc/pull/64))
+
+### Other
+
+- build the site on every PR, add Dependabot, read landing prompts from docs ([#60](https://github.com/schmas/fauxidc/pull/60))
+
 ## [0.6.1](https://github.com/schmas/fauxidc/compare/v0.6.0...v0.6.1) - 2026-11-18
 
 ### Fixed
