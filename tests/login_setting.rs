@@ -189,6 +189,41 @@ async fn put_checks_origin_issuer_and_body() {
     assert_eq!(s, StatusCode::BAD_REQUEST);
 }
 
+/// A read-only config file (for example a `:ro` mount) keeps the value in memory, as Zero
+/// config does. The dashboard says why.
+#[tokio::test]
+async fn put_with_a_read_only_file_stays_in_memory() {
+    let (app, _, file) = file_app(&[]);
+    let before = std::fs::read_to_string(&file).unwrap();
+    set_read_only(&file);
+    let (s, v) = put(&app, "auth0", r#"{"show_user_list": true}"#).await;
+    assert_eq!(s, 200, "{v}");
+    assert_eq!(
+        v,
+        json!({"show_user_list": true, "source": "memory", "origin": null})
+    );
+    assert_eq!(std::fs::read_to_string(&file).unwrap(), before);
+    let (_, v) = read(&app, "auth0").await;
+    assert_eq!(v["source"], "memory");
+
+    let (s, _, page) = send(&app, request("GET", "/_mock/", None, &[])).await;
+    assert_eq!(s, 200);
+    assert!(page.contains(">Not saved<"), "{page}");
+    assert!(
+        page.contains("Not saved: the config file is read-only"),
+        "{page}"
+    );
+    assert!(!page.contains("Not saved: no config file"), "{page}");
+}
+
+/// A writable config file shows no read-only note.
+#[tokio::test]
+async fn dashboard_has_no_read_only_note_for_a_writable_file() {
+    let (app, _, _) = file_app(&[]);
+    let (_, _, page) = send(&app, request("GET", "/_mock/", None, &[])).await;
+    assert!(!page.contains("config file is read-only"), "{page}");
+}
+
 /// A config file found in the working directory, with no file given, is a config file for the
 /// dashboard (the Docker image runs this way).
 #[tokio::test]

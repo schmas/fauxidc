@@ -57,6 +57,9 @@ pub(crate) fn write_error(e: &WriteError) -> Response {
             | EditError::Lenient { .. } => (StatusCode::CONFLICT, "conflict"),
             EditError::Parse { .. } => (StatusCode::INTERNAL_SERVER_ERROR, "server_error"),
         },
+        // Like `NoFile`: the server has no file it can write. A retry does not help, so 409, not
+        // 503.
+        WriteError::ReadOnly { .. } => (StatusCode::CONFLICT, "conflict"),
         WriteError::Io { .. } | WriteError::Reload(_) => {
             (StatusCode::INTERNAL_SERVER_ERROR, "server_error")
         }

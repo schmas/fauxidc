@@ -217,6 +217,7 @@ A custom page that loads the script must keep them, or use its own script.
 | `issuers` | list of Issuers | Each configured Issuer, by id. |
 | `request_log` | boolean | `false` when `server.request_log_size` is 0. |
 | `config_file` | boolean | `true` when the server reads a config file (given, `FAUXIDC_CONFIG` or `./fauxidc.toml`). If `false`, a login setting change stays in memory. (Version 3.) |
+| `config_read_only` | boolean | `true` when the last config file is read-only (no write permission, or a `:ro` mount). A login setting change then stays in memory. (Version 3, added in a minor release.) |
 | `static_base` | string | URL prefix for static files, `/_mock/static`. |
 
 An Issuer has these fields. The hrefs are paths on this server.

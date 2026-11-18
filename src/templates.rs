@@ -229,6 +229,9 @@ pub struct DashboardContext {
     pub request_log: bool,
     /// `true` when the Test API can write a config file (the last config file exists).
     pub config_file: bool,
+    /// `true` when the config file is read-only (for example a `:ro` mount). A login setting
+    /// change then stays in memory.
+    pub config_read_only: bool,
     pub static_base: String,
 }
 

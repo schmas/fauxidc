@@ -390,3 +390,19 @@ async fn lenient_registered_clients_are_listed_and_read_only() {
     let (s, _, _) = call(&app, "DELETE", "/_mock/clients/new_app", None).await;
     assert_eq!(s, 204);
 }
+
+#[tokio::test]
+async fn a_read_only_config_file_answers_409_and_does_not_change() {
+    let (app, _, file) = file_app(&[]);
+    let before = std::fs::read_to_string(&file).unwrap();
+    set_read_only(&file);
+    let (s, _, e) = call(&app, "POST", "/_mock/clients", Some(&json!({"key": "svc"}))).await;
+    assert_eq!(s, 409, "{e}");
+    assert_eq!(e["error"], "conflict");
+    let description = e["error_description"].as_str().unwrap();
+    assert!(
+        description.contains("is read-only (mounted with :ro?)"),
+        "{e}"
+    );
+    assert_eq!(std::fs::read_to_string(&file).unwrap(), before);
+}

@@ -366,11 +366,15 @@ fn apply(doc: &mut DocumentMut, section: Section, id: &str, change: Change) -> R
 /// Writes `text` to a temporary file in the same directory, then renames it to `path`. The new
 /// file keeps the permissions of the old one.
 ///
+/// A file without write permission is read-only: the write is refused before the temporary
+/// file, also for root. [`is_read_only`] is `true` for the error.
+///
 /// If the rename fails with `EBUSY` or `EXDEV`, the text goes into `path` in place. Docker
 /// mounts a single config file (`-v ./fauxidc.toml:/config/fauxidc.toml`) as a mount point,
 /// and Linux refuses a rename onto a mount point with `EBUSY`. `EXDEV` is a rename across file
 /// systems. The in-place write is not atomic, but it is the only write that such a mount
-/// accepts.
+/// accepts. If the temporary file cannot be created (a read-only or not writable directory),
+/// the text also goes into `path` in place.
 pub fn write_atomic(path: &Path, text: &str) -> std::io::Result<()> {
     write_with_rename(path, text, |from, to| std::fs::rename(from, to))
 }
@@ -382,6 +386,15 @@ fn write_with_rename(
     rename: impl FnOnce(&Path, &Path) -> std::io::Result<()>,
 ) -> std::io::Result<()> {
     let old = std::fs::metadata(path).ok();
+    if old
+        .as_ref()
+        .is_some_and(|meta| meta.permissions().readonly())
+    {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::PermissionDenied,
+            "the file is read-only",
+        ));
+    }
     let dir = match path.parent() {
         Some(dir) if !dir.as_os_str().is_empty() => dir.to_path_buf(),
         _ => PathBuf::from("."),
@@ -390,7 +403,11 @@ fn write_with_rename(
         .file_name()
         .map_or_else(String::new, |n| n.to_string_lossy().into_owned());
     let tmp = dir.join(format!(".{name}.{}.tmp", uuid::Uuid::new_v4()));
-    let mut file = std::fs::File::create(&tmp)?;
+    let mut file = match std::fs::File::create(&tmp) {
+        Ok(file) => file,
+        Err(e) if old.is_some() && is_read_only(&e) => return write_in_place(path, text),
+        Err(e) => return Err(e),
+    };
     let result = (|| {
         file.write_all(text.as_bytes())?;
         file.sync_all()?;
@@ -427,6 +444,30 @@ fn write_in_place(path: &Path, text: &str) -> std::io::Result<()> {
         .open(path)?;
     file.write_all(text.as_bytes())?;
     file.sync_all()
+}
+
+/// `true` when a write failed because the file or its file system is read-only: `EROFS` (for
+/// example a `:ro` mount) or `EACCES`.
+#[must_use]
+pub fn is_read_only(error: &std::io::Error) -> bool {
+    matches!(
+        error.kind(),
+        std::io::ErrorKind::ReadOnlyFilesystem | std::io::ErrorKind::PermissionDenied
+    )
+}
+
+/// `true` when the existing file `path` cannot be written: it has no write permission, or an
+/// open for writing fails as read-only. The check does not change the file.
+#[must_use]
+pub fn file_is_read_only(path: &Path) -> bool {
+    match std::fs::metadata(path) {
+        Ok(meta) if meta.permissions().readonly() => true,
+        Ok(_) => std::fs::OpenOptions::new()
+            .write(true)
+            .open(path)
+            .is_err_and(|e| is_read_only(&e)),
+        Err(_) => false,
+    }
 }
 
 /// Converts a JSON value to a TOML value. JSON `null` has no TOML form.
@@ -695,6 +736,52 @@ claims = { email = \"alice@example.com\" }
         assert_eq!(e.to_string(), "no rename");
         assert_eq!(std::fs::read_to_string(&file).unwrap(), "old = 1\n");
         assert_eq!(names_in(&dir), vec!["fauxidc.toml".to_owned()]);
+    }
+
+    /// A file without write permission is read-only, also for root: the write is refused
+    /// before the temporary file.
+    #[test]
+    fn a_read_only_file_is_refused() {
+        let (dir, file) = file_in_dir("old = 1\n");
+        let mut permissions = std::fs::metadata(&file).unwrap().permissions();
+        permissions.set_readonly(true);
+        std::fs::set_permissions(&file, permissions).unwrap();
+        assert!(file_is_read_only(&file));
+        let e = write_atomic(&file, "new = 2\n").unwrap_err();
+        assert!(is_read_only(&e), "{e:?}");
+        assert_eq!(std::fs::read_to_string(&file).unwrap(), "old = 1\n");
+        assert_eq!(names_in(&dir), vec!["fauxidc.toml".to_owned()]);
+    }
+
+    /// A directory without write permission refuses the temporary file. A writable file in it
+    /// is written in place. Root can write any directory, so the test checks nothing as root.
+    #[cfg(unix)]
+    #[test]
+    fn a_read_only_directory_writes_the_file_in_place() {
+        use std::os::unix::fs::PermissionsExt;
+        let (dir, file) = file_in_dir("old = 1\n");
+        std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o555)).unwrap();
+        let probe = dir.join("probe");
+        if std::fs::write(&probe, "").is_ok() {
+            let _ = std::fs::remove_file(&probe);
+            std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o755)).unwrap();
+            return;
+        }
+        let result = write_atomic(&file, "new = 2\n");
+        std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o755)).unwrap();
+        result.unwrap();
+        assert_eq!(std::fs::read_to_string(&file).unwrap(), "new = 2\n");
+        assert_eq!(names_in(&dir), vec!["fauxidc.toml".to_owned()]);
+    }
+
+    #[test]
+    fn read_only_errors() {
+        use std::io::{Error, ErrorKind};
+        assert!(is_read_only(&Error::from(ErrorKind::ReadOnlyFilesystem)));
+        assert!(is_read_only(&Error::from(ErrorKind::PermissionDenied)));
+        assert!(!is_read_only(&Error::from(ErrorKind::ResourceBusy)));
+        let (_, file) = file_in_dir("old = 1\n");
+        assert!(!file_is_read_only(&file));
     }
 
     #[test]

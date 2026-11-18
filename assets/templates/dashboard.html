@@ -80,7 +80,7 @@
 <td data-login-source><div class="row">{% if i.login.source == "default" %}<span class="label">Default</span>{% elif i.login.source == "file" %}<span class="label label-info">Config file</span><span class="small muted mono">show_user_list = {% if i.login.show_user_list %}true{% else %}false{% endif %}</span>{% elif i.login.source == "memory" %}<span class="label label-warning">Not saved</span>{% else %}<span class="label">{{ i.login.source }}</span>{% if i.login.origin %}<span class="small muted mono">{{ i.login.origin }}</span>{% endif %}{% endif %}</div></td>
 </tr>
 {% endfor %}</tbody></table></div>
-{% if not config_file %}<div class="alert alert-warning">{{ icon("warn") }}<div>Not saved: no config file. A change stays in memory, and a restart returns to off.</div></div>{% endif %}
+{% if not config_file %}<div class="alert alert-warning">{{ icon("warn") }}<div>Not saved: no config file. A change stays in memory, and a restart returns to off.</div></div>{% elif config_read_only %}<div class="alert alert-warning">{{ icon("warn") }}<div>Not saved: the config file is read-only. A change stays in memory, and a restart returns to the value in the file.</div></div>{% endif %}
 </div>
 </section>
 

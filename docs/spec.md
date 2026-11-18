@@ -206,6 +206,7 @@ The Test API (`/_mock/users`, `/_mock/clients`) and `fauxidc users`, `fauxidc cl
 - The file keeps its comments and formatting (`toml_edit`). The new config is loaded and checked before the file changes. On an error the file does not change.
 - The write is atomic: a temporary file in the same directory, then a rename.
   If the rename fails with `EBUSY` (a Docker single-file mount) or `EXDEV`, the text goes into the file in place.
+- A read-only file (no write permission, or a `:ro` mount) is not changed. The Test API answers 409 `conflict`; the CLI exits with code 1.
 - On the server, the change applies at once, without the file poller. If it does not apply, the old file text is written back.
 - The CLI needs no running server. A running server applies the change with its hot reload.
 - Clients are named by their config key, not by `client_id`. Reads mask the secrets as in 5.7: `client_secret` and the private JWK members in `jwks` are `"***"`. A write adds only the fields that differ from the default.
@@ -318,7 +319,7 @@ Paths are below the Issuer path unless they start with `/_mock`.
 | `GET /_mock/requests?issuer=&path=`, `DELETE /_mock/requests` | Request log. Ring buffer of `request_log_size`, raw bodies. | M2 |
 | `POST /_mock/{issuer-id}/rotate-key` | Key rotation. A foreign `Origin` header gives 403 `access_denied` (M4). | M3, M4 |
 | `POST /_mock/{issuer-id}/fail-next` | Injected failure: `{endpoint, status, error, count, delay_ms}`. | M3 |
-| `GET /_mock/{issuer-id}/login`, `PUT /_mock/{issuer-id}/login` | The `show_user_list` setting of an Issuer. `GET` answers `{show_user_list, source, origin}`; `source` is `default`, `file`, `memory`, `env`, `inline`, `flag` or `unknown`. `PUT {"show_user_list": bool}` writes the key to the last config file and applies it at once (ADR 0008). With no config file, the value stays in memory until `DELETE /_mock/state`. A value from env, inline config or a flag gives 409 `conflict`. A foreign `Origin` header gives 403 `access_denied`; an unknown Issuer gives 404. | after M4 |
+| `GET /_mock/{issuer-id}/login`, `PUT /_mock/{issuer-id}/login` | The `show_user_list` setting of an Issuer. `GET` answers `{show_user_list, source, origin}`; `source` is `default`, `file`, `memory`, `env`, `inline`, `flag` or `unknown`. `PUT {"show_user_list": bool}` writes the key to the last config file and applies it at once (ADR 0008). With no config file, or a read-only one, the value stays in memory until `DELETE /_mock/state`. A value from env, inline config or a flag gives 409 `conflict`. A foreign `Origin` header gives 403 `access_denied`; an unknown Issuer gives 404. | after M4 |
 | `POST /_mock/reload` | Reloads the config files at once (section 11). 200 `{changed, warnings}`, 422 `invalid_config` with `errors`, 409 with no config file. A foreign `Origin` header gives 403. | after M4 |
 | `GET /_mock/config` | The running config as `{config, sources}`, with the masking of 5.7. The sources come from a new load of the config inputs. A value that the new load does not give (a restart-only key changed in a file, a change before the next poll, a server without load inputs) has the source `unknown`. A `show_user_list` value kept in memory by `PUT /_mock/{issuer-id}/login` shows in `config` with the source `memory`. `?format=toml` gives TOML without sources. | after M4 |
 

@@ -46,12 +46,18 @@ impl LoadInputs {
     /// `./fauxidc.toml` in the working directory.
     #[must_use]
     pub fn has_config_file(&self) -> bool {
+        self.last_config_file().is_some()
+    }
+
+    /// The last config file that `load` reads, the write target of the Test API.
+    #[must_use]
+    pub fn last_config_file(&self) -> Option<PathBuf> {
         let list = self
             .env
             .iter()
             .find(|(key, _)| key == "FAUXIDC_CONFIG")
             .map(|(_, value)| value.as_str());
-        !resolve_files(self, list).is_empty()
+        resolve_files(self, list).pop()
     }
 
     /// Reads the process env vars and the working directory.

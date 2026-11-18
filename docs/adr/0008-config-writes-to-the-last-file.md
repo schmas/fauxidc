@@ -44,4 +44,6 @@ The `toml` crate drops comments and formatting when it writes a document.
 - A comment inside a replaced or removed entry is lost. Comments outside it stay.
 - A User that is split across two files must be changed by hand.
 - An in-place write (issue #59) is not atomic. A crash during the write can leave a partial file.
+- A read-only file (no write permission, or a `:ro` mount) is never changed. User and Client writes give 409.
+  The login page setting stays in memory (ADR 0010).
 - `StartOptions` has a new field. Code that builds it with a struct literal needs `..Default::default()`.

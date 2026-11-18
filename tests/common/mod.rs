@@ -149,6 +149,14 @@ pub fn tmp_dir() -> PathBuf {
 }
 
 /// The `Location` header as a string.
+/// Removes the write permission of `file`, as a `:ro` mount does. Root ignores the mode for
+/// the open, but fauxidc checks the mode before a write.
+pub fn set_read_only(file: &std::path::Path) {
+    let mut permissions = std::fs::metadata(file).unwrap().permissions();
+    permissions.set_readonly(true);
+    std::fs::set_permissions(file, permissions).unwrap();
+}
+
 pub fn location(h: &HeaderMap) -> String {
     h["location"].to_str().unwrap().to_owned()
 }

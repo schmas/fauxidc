@@ -60,6 +60,8 @@ The image entrypoint is `fauxidc --bind 0.0.0.0`, in the working directory `/con
 With no mount and no env var, it starts in Zero config mode.
 Arguments to `docker run` add to the entrypoint. A later `--bind`, `--port` or `--log-format` flag wins.
 In the image, change the bind address with a `--bind` argument: the entrypoint flag overrides `server.bind` and `FAUXIDC__SERVER__BIND`.
+Dashboard and Test API config writes need a writable config file. A single-file mount (`-v ./fauxidc.toml:/config/fauxidc.toml`) works.
+With a `:ro` mount, the login page setting stays in memory, and User and Client writes give 409 `conflict`.
 The image has the example configs in `/examples/`:
 
 ```sh

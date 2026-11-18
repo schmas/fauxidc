@@ -138,6 +138,8 @@ Rules for writes:
 
 - The write target is the last config file: the last `--config`, else the last `FAUXIDC_CONFIG` file, else `./fauxidc.toml`.
   With no config file (Zero config, inline config or env vars only), a write gives 409 `conflict`.
+- A read-only config file (no write permission, or a Docker `:ro` mount) gives 409 `conflict`:
+  `config file <path> is read-only (mounted with :ro?); the change was not saved`. The file does not change.
 - A User with a value from an earlier file, inline config or a `FAUXIDC__*` env var cannot change: 409 `conflict` names the source.
 - Ids must match `[a-z0-9_]+`. Unknown fields, `null` values in a new User and an invalid config give 400 `invalid_request`. The file does not change.
 - Comments and formatting of the file stay. A comment inside a replaced or removed User is lost.
@@ -247,6 +249,8 @@ An unknown field or a value that is not a boolean gives 400 `invalid_request`.
   The Config view shows it with the source `memory`.
 - With a config file, `PUT` gives 409 `conflict` if an env var, inline config or a flag sets the key. Change that source.
 - Without a config file, `PUT` does not give 409. The value goes to memory and overrides the env value.
+- With a read-only config file (no write permission, or a Docker `:ro` mount), the value stays in memory, as without a config file.
+  The answer has the source `memory`. The server logs a warning with the file path, and the dashboard says that the file is read-only.
 - A request with a foreign `Origin` header gives 403 `access_denied`. An unknown Issuer id gives 404.
 - The dashboard Issuers view has a "Login page" section with one switch for each Issuer. It uses these routes.
 

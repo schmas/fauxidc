@@ -59,6 +59,10 @@ pub fn context(state: &Arc<AppState>, headers: &HeaderMap) -> DashboardContext {
             .config_writer
             .get()
             .is_some_and(|w| w.inputs().has_config_file()),
+        config_read_only: state
+            .config_writer
+            .get()
+            .is_some_and(crate::reload::ConfigWriter::target_read_only),
         static_base: STATIC_BASE.to_owned(),
     }
 }
