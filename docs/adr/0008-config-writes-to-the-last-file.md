@@ -22,6 +22,7 @@ The `toml` crate drops comments and formatting when it writes a document.
   A replaced entry keeps its place and the comment above it.
 - The config is loaded again with the new text before the file changes. On any error the file does not change.
 - The file is written atomically: a temporary file in the same directory, then a rename. It keeps the file permissions.
+  Issue #59: Linux refuses a rename onto a Docker single-file mount (`EBUSY`). On `EBUSY` or `EXDEV`, the text goes into the file in place.
 - On the server, a write applies the new config at once through `ReloadHandle::apply`. It does not wait for the file poller.
   If the apply fails, the old file text is written back. Writes run one at a time.
   The new config becomes the last loaded config, so the next poll sees no change.
@@ -42,4 +43,5 @@ The `toml` crate drops comments and formatting when it writes a document.
 - New dependency `toml_edit`. It shares `toml_parser`, `toml_writer` and `toml_datetime` with `toml`.
 - A comment inside a replaced or removed entry is lost. Comments outside it stay.
 - A User that is split across two files must be changed by hand.
+- An in-place write (issue #59) is not atomic. A crash during the write can leave a partial file.
 - `StartOptions` has a new field. Code that builds it with a struct literal needs `..Default::default()`.

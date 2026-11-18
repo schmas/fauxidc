@@ -8,7 +8,8 @@
 //!    config or an env var): a write to the target file would not replace it.
 //! 3. Change the target file text with `toml_edit`, so comments and formatting stay.
 //! 4. Load the config again with the new text. On an error, the file does not change.
-//! 5. [`Edit::write`] writes the new text atomically: a temporary file, then a rename.
+//! 5. [`Edit::write`] writes the new text atomically: a temporary file, then a rename. A
+//!    Docker single-file mount refuses the rename; the text then goes into the file in place.
 
 use std::io::Write as _;
 use std::path::{Path, PathBuf};
@@ -364,7 +365,23 @@ fn apply(doc: &mut DocumentMut, section: Section, id: &str, change: Change) -> R
 
 /// Writes `text` to a temporary file in the same directory, then renames it to `path`. The new
 /// file keeps the permissions of the old one.
+///
+/// If the rename fails with `EBUSY` or `EXDEV`, the text goes into `path` in place. Docker
+/// mounts a single config file (`-v ./fauxidc.toml:/config/fauxidc.toml`) as a mount point,
+/// and Linux refuses a rename onto a mount point with `EBUSY`. `EXDEV` is a rename across file
+/// systems. The in-place write is not atomic, but it is the only write that such a mount
+/// accepts.
 pub fn write_atomic(path: &Path, text: &str) -> std::io::Result<()> {
+    write_with_rename(path, text, |from, to| std::fs::rename(from, to))
+}
+
+/// [`write_atomic`] with the rename step as a parameter, so a test can make it fail.
+fn write_with_rename(
+    path: &Path,
+    text: &str,
+    rename: impl FnOnce(&Path, &Path) -> std::io::Result<()>,
+) -> std::io::Result<()> {
+    let old = std::fs::metadata(path).ok();
     let dir = match path.parent() {
         Some(dir) if !dir.as_os_str().is_empty() => dir.to_path_buf(),
         _ => PathBuf::from("."),
@@ -373,19 +390,43 @@ pub fn write_atomic(path: &Path, text: &str) -> std::io::Result<()> {
         .file_name()
         .map_or_else(String::new, |n| n.to_string_lossy().into_owned());
     let tmp = dir.join(format!(".{name}.{}.tmp", uuid::Uuid::new_v4()));
+    let mut file = std::fs::File::create(&tmp)?;
     let result = (|| {
-        let mut file = std::fs::File::create(&tmp)?;
         file.write_all(text.as_bytes())?;
         file.sync_all()?;
-        if let Ok(meta) = std::fs::metadata(path) {
+        drop(file);
+        if let Some(meta) = &old {
             std::fs::set_permissions(&tmp, meta.permissions())?;
         }
-        std::fs::rename(&tmp, path)
+        rename(&tmp, path)
     })();
-    if result.is_err() {
-        let _ = std::fs::remove_file(&tmp);
+    match result {
+        Ok(()) => Ok(()),
+        Err(e) => {
+            let _ = std::fs::remove_file(&tmp);
+            if old.is_some()
+                && matches!(
+                    e.kind(),
+                    std::io::ErrorKind::ResourceBusy | std::io::ErrorKind::CrossesDevices
+                )
+            {
+                write_in_place(path, text)
+            } else {
+                Err(e)
+            }
+        }
     }
-    result
+}
+
+/// Writes `text` into the existing file `path`: truncate, write, sync. The file keeps its
+/// inode, owner and permissions.
+fn write_in_place(path: &Path, text: &str) -> std::io::Result<()> {
+    let mut file = std::fs::OpenOptions::new()
+        .write(true)
+        .truncate(true)
+        .open(path)?;
+    file.write_all(text.as_bytes())?;
+    file.sync_all()
 }
 
 /// Converts a JSON value to a TOML value. JSON `null` has no TOML form.
@@ -596,6 +637,64 @@ claims = { email = \"alice@example.com\" }
         edit.write().unwrap();
         edit.restore().unwrap();
         assert_eq!(std::fs::read_to_string(&file).unwrap(), BASE);
+    }
+
+    /// A file `fauxidc.toml` with `text` in a new empty directory.
+    fn file_in_dir(text: &str) -> (PathBuf, PathBuf) {
+        let dir = empty_tmp_dir();
+        let file = dir.join("fauxidc.toml");
+        std::fs::write(&file, text).unwrap();
+        (dir, file)
+    }
+
+    fn names_in(dir: &Path) -> Vec<String> {
+        std::fs::read_dir(dir)
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+            .collect()
+    }
+
+    /// Docker refuses a rename onto a single-file bind mount (`EBUSY`), and a rename across
+    /// file systems fails with `EXDEV`. The write then goes into the file in place.
+    #[test]
+    fn a_busy_or_cross_device_rename_writes_the_file_in_place() {
+        for kind in [
+            std::io::ErrorKind::ResourceBusy,
+            std::io::ErrorKind::CrossesDevices,
+        ] {
+            let (dir, file) =
+                file_in_dir("old = 1\n# a long old line that the new text is shorter than\n");
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o640)).unwrap();
+            }
+            write_with_rename(&file, "new = 2\n", |_, _| Err(std::io::Error::from(kind))).unwrap();
+            assert_eq!(
+                std::fs::read_to_string(&file).unwrap(),
+                "new = 2\n",
+                "{kind:?}"
+            );
+            assert_eq!(names_in(&dir), vec!["fauxidc.toml".to_owned()], "{kind:?}");
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                let mode = std::fs::metadata(&file).unwrap().permissions().mode();
+                assert_eq!(mode & 0o777, 0o640, "{kind:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn another_rename_error_fails_and_keeps_the_file() {
+        let (dir, file) = file_in_dir("old = 1\n");
+        let e = write_with_rename(&file, "new = 2\n", |_, _| {
+            Err(std::io::Error::other("no rename"))
+        })
+        .unwrap_err();
+        assert_eq!(e.to_string(), "no rename");
+        assert_eq!(std::fs::read_to_string(&file).unwrap(), "old = 1\n");
+        assert_eq!(names_in(&dir), vec!["fauxidc.toml".to_owned()]);
     }
 
     #[test]

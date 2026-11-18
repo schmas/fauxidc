@@ -205,6 +205,7 @@ The Test API (`/_mock/users`, `/_mock/clients`) and `fauxidc users`, `fauxidc cl
 - A write to an entry fails if any value of the entry comes from another source (an earlier file, inline config or an env var). The error names the source.
 - The file keeps its comments and formatting (`toml_edit`). The new config is loaded and checked before the file changes. On an error the file does not change.
 - The write is atomic: a temporary file in the same directory, then a rename.
+  If the rename fails with `EBUSY` (a Docker single-file mount) or `EXDEV`, the text goes into the file in place.
 - On the server, the change applies at once, without the file poller. If it does not apply, the old file text is written back.
 - The CLI needs no running server. A running server applies the change with its hot reload.
 - Clients are named by their config key, not by `client_id`. Reads mask the secrets as in 5.7: `client_secret` and the private JWK members in `jwks` are `"***"`. A write adds only the fields that differ from the default.
