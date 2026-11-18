@@ -1,44 +1,31 @@
 ---
-// Shows the images of docs/media/ on the landing page: the login flow GIF first, then
-// the other screenshots and GIFs, in README order. The captions are the alt texts of
-// the README. scripts/sync-docs.mjs copies the images and lists them in
-// src/generated/site-data.json. If there are no images, this component shows nothing.
+// Shows one image of docs/media/ on the landing page, as a figure. The alt text comes
+// from the README (scripts/sync-docs.mjs lists the images in src/generated/site-data.json).
+// If the image does not exist, this component shows nothing.
 import data from '../generated/site-data.json';
 
 interface Props {
-  /** `hero`: the login flow GIF. `gallery`: the other images. */
-  part: 'hero' | 'gallery';
+  /** The file name in docs/media/, for example `login-flow.gif`. */
+  file: string;
+  /** A short caption. Without it, the figure has no caption. */
+  caption?: string;
+  /** The image size in pixels, to keep the layout stable while the image loads. */
+  width?: number;
+  height?: number;
 }
-const { part } = Astro.props;
+const { file, caption, width, height } = Astro.props;
 
 type Image = { file: string; alt: string | null };
-const HERO = ['login-flow.gif', 'hero.gif', 'hero.png'];
-// Not a screenshot: the README title graphic.
-const SKIP = ['banner.svg'];
-
-const images: Image[] = data.media.filter((m: Image) => !SKIP.includes(m.file));
-const hero = HERO.map((f) => images.find((m) => m.file === f)).find(Boolean);
-const others = images.filter((m) => m !== hero);
+const image = data.media.find((m: Image) => m.file === file) as Image | undefined;
 const base = import.meta.env.BASE_URL.replace(/\/$/, '');
-const caption = (m: Image) => {
-  if (m.alt) return m.alt;
-  const words = m.file.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ').trim();
-  return words.charAt(0).toUpperCase() + words.slice(1);
-};
+const alt = image?.alt ?? file.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ');
 ---
 
-{part === 'hero' && hero && (
-  <div class="fx-media fx-hero not-content">
-    <img src={`${base}/media/${hero.file}`} alt={caption(hero)} loading="eager" />
-  </div>
-)}
-{part === 'gallery' && others.length > 0 && (
-  <div class="fx-media fx-gallery not-content">
-    {others.map((m) => (
-      <figure>
-        <a href={`${base}/media/${m.file}`}><img src={`${base}/media/${m.file}`} alt={caption(m)} loading="lazy" /></a>
-        <figcaption>{caption(m)}</figcaption>
-      </figure>
-    ))}
-  </div>
+{image && (
+  <figure class="fx-media not-content">
+    <a href={`${base}/media/${image.file}`}>
+      <img src={`${base}/media/${image.file}`} {alt} {width} {height} loading="lazy" decoding="async" />
+    </a>
+    {caption && <figcaption>{caption}</figcaption>}
+  </figure>
 )}

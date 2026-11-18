@@ -13,6 +13,7 @@
 //   Other files there (for example `.toml` or `.tape` sources) are not published.
 // - `src/generated/site-data.json` lists the pages, their `##` headings and the images.
 //   The alt text of an image comes from its first use in the repo README.md.
+//   It also has the measured numbers of docs/footprint.md, so the landing page cannot drift.
 //
 // astro.config.mjs runs this script before each build and dev start. Run it by hand
 // with `npm run sync`.
@@ -241,6 +242,32 @@ function readmeAltTexts() {
 }
 
 /**
+ * Reads the measured numbers from the table in docs/footprint.md, for example
+ * `{ binary: '3.3 MB', target: 'aarch64-apple-darwin', image: '6.3 MB', idle: '5.6 MiB' }`.
+ * Returns null if the file or a row is missing, so the landing page shows no numbers.
+ */
+function readFootprint() {
+  const file = path.join(docsDir, 'footprint.md');
+  if (!fs.existsSync(file)) return null;
+  const rows = fs
+    .readFileSync(file, 'utf8')
+    .split('\n')
+    .filter((l) => l.startsWith('|'))
+    .map((l) => l.split('|').slice(1, -1).map((c) => c.trim()));
+  const row = (start) => rows.find((r) => r[0]?.startsWith(start));
+  // "median 5.6 MiB (5 776 KiB, 5 runs)" -> "5.6 MiB"
+  const value = (r) => r?.[1]?.replace(/^median\s+/, '').replace(/\s*\(.*$/, '').trim() || null;
+  const binary = row('Release binary');
+  const out = {
+    binary: value(binary),
+    target: binary?.[0].match(/`([^`]+)`/)?.[1] ?? null,
+    image: value(row('Container image')),
+    idle: value(row('Memory (RSS) at idle')),
+  };
+  return Object.values(out).every(Boolean) ? out : null;
+}
+
+/**
  * Writes the generated pages and media. Returns the pages, for example
  * `[{ source: 'docs/features.md', route: '/docs/features/', title: 'Features', headings: [...] }]`.
  */
@@ -287,7 +314,7 @@ export function syncDocs({ quiet = false } = {}) {
   fs.mkdirSync(OUTPUT_DIRS.data, { recursive: true });
   fs.writeFileSync(
     path.join(OUTPUT_DIRS.data, 'site-data.json'),
-    `${JSON.stringify({ pages: result, media: mediaList }, null, 2)}\n`,
+    `${JSON.stringify({ pages: result, media: mediaList, footprint: readFootprint() }, null, 2)}\n`,
   );
   if (!quiet) console.log(`sync-docs: wrote ${result.length} pages from docs/`);
   return result;
