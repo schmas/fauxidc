@@ -24,6 +24,18 @@ updates:
       website-minor-patch:
         update-types: [minor, patch]
 
+  # The SPA libraries that spa-e2e tests fauxidc against. Keep them current, so CI finds
+  # a library change that breaks fauxidc before a user does.
+  - package-ecosystem: npm
+    directory: /e2e/spa
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      e2e-spa-minor-patch:
+        update-types: [minor, patch]
+
   - package-ecosystem: github-actions
     directory: /
     schedule:
