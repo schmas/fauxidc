@@ -54,8 +54,7 @@ const docsWatcher = {
 };
 
 export default defineConfig({
-  site: 'https://schmas.github.io',
-  base: '/fauxidc',
+  site: 'https://fauxidc.schmas.com',
   trailingSlash: 'always',
   integrations: [
     starlight({

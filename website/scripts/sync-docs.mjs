@@ -29,7 +29,7 @@ export const docsDir = process.env.FAUXIDC_DOCS_DIR
   ? path.resolve(process.env.FAUXIDC_DOCS_DIR)
   : path.join(repoDir, 'docs');
 
-export const BASE = '/fauxidc';
+export const BASE = '';
 const GITHUB = 'https://github.com/schmas/fauxidc';
 
 // Generated output. All of these paths are in .gitignore.
