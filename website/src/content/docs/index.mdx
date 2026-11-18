@@ -20,7 +20,7 @@ hero:
       variant: minimal
 ---
 
-import { Card, CardGrid, Tabs, TabItem } from '@astrojs/starlight/components';
+import { Card, Tabs, TabItem } from '@astrojs/starlight/components';
 import Media from '../../components/Media.astro';
 import DocLink from '../../components/DocLink.astro';
 import Footprint from '../../components/Footprint.astro';
@@ -265,10 +265,10 @@ ln -s ~/src/fauxidc/skills/fauxidc-setup .claude/skills/fauxidc-setup
 
 ## Features
 
-<CardGrid stagger>
-  <Card title="Single binary" icon="rocket">
-    One static binary or one small container image. Start it with no config:
-    you get an Issuer, a Client and two Users.
+<div class="fx-feature-grid">
+  <Card title="Built in Rust, one binary" icon="seti:rust">
+    One static binary or one small container image, with low memory use and a fast start. <Footprint />
+    See the <DocLink doc="footprint.md" fallback={`${GH}/blob/main/docs/footprint.md`}>Footprint</DocLink> page.
   </Card>
   <Card title="No infrastructure" icon="laptop">
     No database and no other service to run. It works offline, on a laptop and in CI.
@@ -288,11 +288,7 @@ ln -s ~/src/fauxidc/skills/fauxidc-setup .claude/skills/fauxidc-setup
   <Card title="OpenID conformance in CI" icon="star">
     Each change runs the OpenID Foundation conformance suite plans "Basic OP" and "Config OP" in CI.
   </Card>
-  <Card title="Built in Rust" icon="seti:rust">
-    One static binary with low memory use and a fast start. <Footprint />
-    See the <DocLink doc="footprint.md" fallback={`${GH}/blob/main/docs/footprint.md`}>Footprint</DocLink> page.
-  </Card>
-</CardGrid>
+</div>
 
 </div>
 

@@ -147,6 +147,22 @@
 }
 
 /* The feature cards. */
+/* Feature cards: an aligned grid. All cards in a row have the same height. */
+.fx-feature-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+}
+.fx-feature-grid > .card {
+  margin: 0;
+  height: 100%;
+}
+@media (max-width: 72rem) {
+  .fx-feature-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 45rem) {
+  .fx-feature-grid { grid-template-columns: minmax(0, 1fr); }
+}
 .fx-features .card {
   border-radius: 0.75rem;
   background-color: color-mix(in srgb, var(--sl-color-black) 70%, transparent);
