@@ -1,0 +1,20 @@
+---
+// A prompt from docs/agents.md (read by scripts/sync-docs.mjs at build time, so the landing
+// page cannot drift from the docs). The build fails if the prompt is missing.
+import { Code } from '@astrojs/starlight/components';
+import data from '../generated/site-data.json';
+
+interface Props {
+  /** The key in LANDING_PROMPTS of scripts/sync-docs.mjs. */
+  id: 'spa' | 'test';
+  /** The title of the code block. */
+  title: string;
+}
+
+const { id, title } = Astro.props;
+const prompts = data.prompts as Record<string, string>;
+const code = prompts[id];
+if (!code) throw new Error(`AgentPrompt: no prompt "${id}" in site-data.json`);
+---
+
+<Code code={code} lang="text" title={title} wrap />

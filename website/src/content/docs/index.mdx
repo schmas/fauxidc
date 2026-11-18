@@ -24,6 +24,7 @@ import { Card, Tabs, TabItem } from '@astrojs/starlight/components';
 import Media from '../../components/Media.astro';
 import DocLink from '../../components/DocLink.astro';
 import Footprint from '../../components/Footprint.astro';
+import AgentPrompt from '../../components/AgentPrompt.astro';
 
 export const GH = 'https://github.com/schmas/fauxidc';
 
@@ -224,26 +225,12 @@ The repo gives your agent two skills and an `llms.txt`. Copy a prompt and change
 <div class="fx-split">
 <div>
 
-```text title="Prompt: configure a SPA" wrap
-Our single-page app uses oidc-client-ts. Make it log in against a local fauxidc in Zero config:
-start it with "docker run --rm -p 9000:9000 ghcr.io/schmas/fauxidc".
-Use the authority http://localhost:9000/default, the public Client id "test", the code flow with PKCE (S256)
-and the scope "openid profile email". Put these values in .env.development, not in the code.
-Then open the app, log in as alice on the fauxidc login page and check that the app shows her email.
-```
+<AgentPrompt id="spa" title="Prompt: configure a SPA" />
 
 </div>
 <div>
 
-```text title="Prompt: write an integration test" wrap
-Write an integration test for GET /api/orders of our API. Start fauxidc with examples/generic.toml
-(Issuer "generic" at http://localhost:9000/generic). Before the request, mint an access token with the Test API:
-POST http://localhost:9000/_mock/generic/token with the JSON body
-{"user": "alice", "audience": "https://api.example.test", "claims": {"roles": ["viewer"]}}.
-Send the access_token as a Bearer token and expect 200. Add a second test that mints a token with
-"expires_in": -60 and expects 401. Configure the API to trust the issuer http://localhost:9000/generic
-and to accept the access token header typ "at+jwt".
-```
+<AgentPrompt id="test" title="Prompt: write an integration test" />
 
 </div>
 </div>

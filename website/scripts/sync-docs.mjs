@@ -13,7 +13,8 @@
 //   Other files there (for example `.toml` or `.tape` sources) are not published.
 // - `src/generated/site-data.json` lists the pages, their `##` headings and the images.
 //   The alt text of an image comes from its first use in the repo README.md.
-//   It also has the measured numbers of docs/footprint.md, so the landing page cannot drift.
+//   It also has the measured numbers of docs/footprint.md and the landing prompts
+//   (`###` sections of docs/agents.md), so the landing page cannot drift.
 //
 // astro.config.mjs runs this script before each build and dev start. Run it by hand
 // with `npm run sync`.
@@ -267,6 +268,41 @@ function readFootprint() {
   return Object.values(out).every(Boolean) ? out : null;
 }
 
+// The landing page prompts: key -> the `###` heading of docs/agents.md that holds the prompt.
+const LANDING_PROMPTS = {
+  spa: 'Configure a SPA for local login with PKCE',
+  test: 'Write an integration test that mints a token with the Test API',
+};
+
+/**
+ * Returns the first ```text code block under each heading of LANDING_PROMPTS, as
+ * `{ spa: '...', test: '...' }`. Throws if the file, a heading or its code block is missing,
+ * so the build fails and the landing page cannot show a stale or empty prompt.
+ */
+function readPrompts() {
+  const file = path.join(docsDir, 'agents.md');
+  if (!fs.existsSync(file)) throw new Error(`sync-docs: ${file} is missing (the landing prompts come from it)`);
+  const lines = fs.readFileSync(file, 'utf8').split('\n');
+  const out = {};
+  for (const [key, heading] of Object.entries(LANDING_PROMPTS)) {
+    const at = lines.findIndex((l) => l.trim() === `### ${heading}`);
+    if (at === -1) throw new Error(`sync-docs: docs/agents.md has no "### ${heading}" heading (landing prompt "${key}")`);
+    let i = at + 1;
+    while (i < lines.length && !/^#{1,3}\s/.test(lines[i]) && lines[i].trim() !== '```text') i++;
+    if (i >= lines.length || lines[i].trim() !== '```text') {
+      throw new Error(`sync-docs: the section "### ${heading}" of docs/agents.md has no \`\`\`text code block`);
+    }
+    const start = i + 1;
+    let end = start;
+    while (end < lines.length && lines[end].trim() !== '```') end++;
+    if (end >= lines.length) throw new Error(`sync-docs: the \`\`\`text block under "### ${heading}" is not closed`);
+    const text = lines.slice(start, end).join('\n').trim();
+    if (!text) throw new Error(`sync-docs: the \`\`\`text block under "### ${heading}" is empty`);
+    out[key] = text;
+  }
+  return out;
+}
+
 /**
  * Writes the generated pages and media. Returns the pages, for example
  * `[{ source: 'docs/features.md', route: '/docs/features/', title: 'Features', headings: [...] }]`.
@@ -314,7 +350,7 @@ export function syncDocs({ quiet = false } = {}) {
   fs.mkdirSync(OUTPUT_DIRS.data, { recursive: true });
   fs.writeFileSync(
     path.join(OUTPUT_DIRS.data, 'site-data.json'),
-    `${JSON.stringify({ pages: result, media: mediaList, footprint: readFootprint() }, null, 2)}\n`,
+    `${JSON.stringify({ pages: result, media: mediaList, footprint: readFootprint(), prompts: readPrompts() }, null, 2)}\n`,
   );
   if (!quiet) console.log(`sync-docs: wrote ${result.length} pages from docs/`);
   return result;
