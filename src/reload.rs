@@ -16,7 +16,7 @@ use axum::{
 };
 use tower::ServiceExt;
 
-use crate::config::edit::{Edit, EditError};
+use crate::config::edit::{Edit, EditError, file_is_read_only, is_read_only};
 use crate::config::{Config, LoadInputs, Loaded, SourceMap, load, validate};
 use crate::error::{ConfigErrors, StartError};
 use crate::keys::restart_warning;
@@ -134,6 +134,12 @@ pub enum WriteError {
     /// The edit was refused. The file did not change.
     #[error(transparent)]
     Edit(#[from] EditError),
+    /// The config file is read-only, for example a Docker `:ro` mount. It did not change.
+    #[error(
+        "config file {} is read-only (mounted with :ro?); the change was not saved",
+        .path.display()
+    )]
+    ReadOnly { path: PathBuf },
     /// The file could not be written. It did not change.
     #[error("cannot write {}: {error}", .path.display())]
     Io {
@@ -173,6 +179,14 @@ impl ConfigWriter {
         &self.inputs
     }
 
+    /// `true` when a config file is loaded and the write target (the last file) is read-only.
+    /// The dashboard says that a login setting change stays in memory.
+    pub fn target_read_only(&self) -> bool {
+        self.inputs
+            .last_config_file()
+            .is_some_and(|path| file_is_read_only(&path))
+    }
+
     /// Prepares an edit with `prepare`, writes it and applies the new config. If the apply
     /// fails, the old file text is written back. Returns the new config.
     pub fn write(
@@ -182,9 +196,17 @@ impl ConfigWriter {
         let _writing = self.writing.lock().unwrap_or_else(PoisonError::into_inner);
         let handle = self.handle.upgrade().ok_or(WriteError::Stopped)?;
         let edit = prepare(&self.inputs)?;
-        edit.write().map_err(|error| WriteError::Io {
-            path: edit.path.clone(),
-            error,
+        edit.write().map_err(|error| {
+            if is_read_only(&error) {
+                WriteError::ReadOnly {
+                    path: edit.path.clone(),
+                }
+            } else {
+                WriteError::Io {
+                    path: edit.path.clone(),
+                    error,
+                }
+            }
         })?;
         match handle.apply(edit.loaded.config.clone()) {
             Ok(_) => {

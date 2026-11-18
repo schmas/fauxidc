@@ -34,7 +34,12 @@ Start the server with Docker:
 
 ```sh
 docker run --rm -p 9000:9000 ghcr.io/schmas/fauxidc
+# With your config file:
+docker run --rm -p 9000:9000 -v ./fauxidc.toml:/config/fauxidc.toml ghcr.io/schmas/fauxidc
 ```
+
+Dashboard and Test API config writes need a writable file.
+With a `:ro` mount, the login page setting stays in memory, and User and Client writes give 409.
 
 Or download the binary from the [GitHub releases](https://github.com/schmas/fauxidc/releases).
 The targets are `x86_64-unknown-linux-musl`, `aarch64-unknown-linux-musl`, `x86_64-apple-darwin` and `aarch64-apple-darwin`.

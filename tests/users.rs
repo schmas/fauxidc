@@ -248,3 +248,23 @@ async fn without_a_config_file_writes_answer_409() {
     let (s, _, _) = call(&app, "GET", "/_mock/users/alice", None).await;
     assert_eq!(s, 200, "reads work without a file");
 }
+
+#[tokio::test]
+async fn a_read_only_config_file_answers_409_and_does_not_change() {
+    let (app, _, file) = file_app(&[]);
+    let before = std::fs::read_to_string(&file).unwrap();
+    set_read_only(&file);
+    let (s, _, e) = call(&app, "POST", "/_mock/users", Some(&json!({"id": "carol"}))).await;
+    assert_eq!(s, 409, "{e}");
+    assert_eq!(e["error"], "conflict");
+    assert_eq!(
+        e["error_description"],
+        format!(
+            "config file {} is read-only (mounted with :ro?); the change was not saved",
+            file.display()
+        )
+    );
+    assert_eq!(std::fs::read_to_string(&file).unwrap(), before);
+    let (s, _, _) = call(&app, "GET", "/_mock/users/carol", None).await;
+    assert_eq!(s, 404);
+}

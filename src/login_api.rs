@@ -1,7 +1,8 @@
 //! The Test API for the login page setting: `GET` and `PUT /_mock/{issuer_id}/login`.
 //!
 //! The setting is `issuer.<id>.show_user_list`. A write changes the last config file when
-//! there is one (ADR 0008). Else the value stays in memory until `DELETE /_mock/state`.
+//! there is one (ADR 0008). Else, or when the file is read-only, the value stays in memory until
+//! `DELETE /_mock/state`.
 //! The routes have no authentication, the same as the rest of the Test API.
 
 use std::sync::Arc;
@@ -114,7 +115,7 @@ pub async fn get(State(state): State<Arc<AppState>>, Path(issuer_id): Path<Strin
 }
 
 /// `PUT /_mock/{issuer_id}/login`: sets `show_user_list`. Writes the config file, or keeps the
-/// value in memory when there is no file.
+/// value in memory when there is no file or the file is read-only.
 pub async fn put(
     State(state): State<Arc<AppState>>,
     Path(issuer_id): Path<String>,
@@ -146,6 +147,14 @@ pub async fn put(
             no_store(Json(answer))
         }
         Err(WriteError::Edit(EditError::NoFile)) => keep_in_memory(&state, &issuer_id, value),
+        Err(WriteError::ReadOnly { path }) => {
+            tracing::warn!(
+                issuer = %issuer_id,
+                file = %path.display(),
+                "config file is read-only; login setting kept in memory"
+            );
+            keep_in_memory(&state, &issuer_id, value)
+        }
         Err(e) => write_error(&e),
     }
 }
